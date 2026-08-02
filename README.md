@@ -59,7 +59,7 @@ ctest --test-dir build --output-on-failure
 覆盖：单位换算、仿真关节模型、CANopen MIT 帧编解码。
 
 ## 使用
-1. 启动 → 选总线（仿真/EtherCAT/CANopen）→ 填参数 → 连接
+1. 启动 → 选总线（仿真/EtherCAT/CANopen）→ 填参数 → 连接；检测到多个从站后，用"控制从站"下拉选择要控制的从站（监控面板每从站一个标签页）
 2. 勾选"已确认现场安全"→ 使能
 3. 填目标值 → 下发目标（CSP/CSV/CST/力矩位置混合）
 4. 急停/故障复位按需
