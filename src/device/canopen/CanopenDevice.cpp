@@ -52,7 +52,7 @@ bool CanopenDevice::readMitLimits(quint16 slave)
     l.tMin = v * 0.001f;
     if (canopen_readDirectory(kDevIndex, slave, 0x2169, 0x00, canopen_DataType_int32, &v) != CANOPEN_SUCCESS) return false;
     l.tMax = v * 0.001f;
-    codec_.setLimits(l);
+    limitsBySlave_.insert(slave, l);
     return true;
 }
 
@@ -75,22 +75,35 @@ bool CanopenDevice::open(const AppConfig& cfg)
     if (canopen_initDLL(canopen_DeviceType_Canable, kDevIndex, baud) != CANOPEN_SUCCESS)
         return false;
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    ready_ = readMitLimits(slaveId_);
-    if (ready_) slaveList_ = { slaveId_ };   // M2 升级为节点探测
-    if (!ready_) {
-        canopen_freeDLL(kDevIndex);   // 避免 initDLL 成功但读限值失败时泄漏 DLL
+
+    // 节点探测：1..127 短超时查询在线状态，在线节点读 MIT 限幅后纳入列表
+    slaveList_.clear();
+    canopen_NodeState st = canopen_NodeState_Unknown_state;
+    for (quint16 id = 1; id <= 127; ++id) {
+        if (canopen_getNodeState(kDevIndex, id, &st, 20) == CANOPEN_SUCCESS
+            && readMitLimits(id)) {
+            slaveList_.append(id);
+        }
     }
-    return ready_;
+    ready_ = !slaveList_.isEmpty();
+    if (!ready_) {
+        canopen_freeDLL(kDevIndex);
+        return false;
+    }
+    return true;
 }
 
 void CanopenDevice::close()
 {
     if (ready_) {
-        // 先尽力失能，避免断连时电机仍带电保持目标（教学安全）
-        canopen_setControlword(kDevIndex, slaveId_, 0x07);
-        canopen_setControlword(kDevIndex, slaveId_, 0x00);
+        // 先对全部在线节点尽力失能，避免断连时电机仍带电保持目标（教学安全）
+        for (quint16 s : slaveList_) {
+            canopen_setControlword(kDevIndex, s, 0x07);
+            canopen_setControlword(kDevIndex, s, 0x00);
+        }
         canopen_freeDLL(kDevIndex);
         ready_ = false;
+        slaveList_.clear();   // 保持 slaveCount()/slaveList() 与连接状态一致
     }
 }
 
@@ -168,6 +181,8 @@ bool CanopenDevice::setOperateMode(quint16 slave, Joint::OperateMode mode)
 bool CanopenDevice::setTarget(quint16 slave, const Joint::TargetCommand& cmd)
 {
     if (!ready_) return false;
+    if (!limitsBySlave_.contains(slave)) return false;
+    codec_.setLimits(limitsBySlave_.value(slave));
     uint8_t frame[8] = {0};
     // UI 为 deg 系，MIT 帧为 rad 系
     codec_.pack(UnitConverter::degToRad(cmd.positionDeg),

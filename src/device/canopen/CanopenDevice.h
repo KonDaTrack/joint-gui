@@ -1,6 +1,7 @@
 #pragma once
 #include "device/JointDevice.h"
 #include "device/canopen/MitFrameCodec.h"
+#include <QHash>
 #include <chrono>
 
 class CanopenDevice : public JointDevice
@@ -33,4 +34,5 @@ private:
     quint16 slaveId_ = 0;
     bool ready_ = false;
     QList<quint16> slaveList_;
+    QHash<quint16, MitLimits> limitsBySlave_;   // 每节点 MIT 限幅
 };
