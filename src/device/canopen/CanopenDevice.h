@@ -29,10 +29,12 @@ public:
 
 private:
     bool readMitLimits(quint16 slave);
+    void readDeviceParams(quint16 slave);
 
     MitFrameCodec codec_;
     quint16 slaveId_ = 0;
     bool ready_ = false;
     QList<quint16> slaveList_;
-    QHash<quint16, MitLimits> limitsBySlave_;   // 每节点 MIT 限幅
+    QHash<quint16, MitLimits> limitsBySlave_;      // 每节点 MIT 限幅
+    QHash<quint16, Joint::DeviceParams> paramsBySlave_;   // 每节点自动读取的参数
 };

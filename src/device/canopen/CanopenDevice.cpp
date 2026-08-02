@@ -56,6 +56,27 @@ bool CanopenDevice::readMitLimits(quint16 slave)
     return true;
 }
 
+// 读取单个节点的参数（专用 getter + 0x608F 编码器分辨率）；失败字段保持 0。
+// CANopen 换算用不到这些（rad 系），仅作信息用途存储供后续显示/日志。
+void CanopenDevice::readDeviceParams(quint16 slave)
+{
+    Joint::DeviceParams p;
+    huint32 v = 0;
+    if (canopen_getMotorRatedTorque(kDevIndex, slave, &v) == CANOPEN_SUCCESS)
+        p.ratedTorqueNm = v;   // 假定 N·m；实机验证单位
+    huint32 mr = 0, sr = 0;
+    if (canopen_getGearRatioMotorRevolutions(kDevIndex, slave, &mr) == CANOPEN_SUCCESS
+        && canopen_getGearRatioShaftRevolutions(kDevIndex, slave, &sr) == CANOPEN_SUCCESS) {
+        p.gearRatio = sr > 0 ? (double)mr / sr : 0.0;
+    }
+    huint32 inc = 0, rev = 0;
+    if (canopen_readDirectory(kDevIndex, slave, 0x608F, 0x01, canopen_DataType_uint32, &inc) == CANOPEN_SUCCESS
+        && canopen_readDirectory(kDevIndex, slave, 0x608F, 0x02, canopen_DataType_uint32, &rev) == CANOPEN_SUCCESS) {
+        p.encoderPulsesPerRev = rev > 0 ? (double)inc / rev : (double)inc;
+    }
+    paramsBySlave_.insert(slave, p);
+}
+
 bool CanopenDevice::open(const AppConfig& cfg)
 {
     // 将 UI 选择的波特率（kbps）映射到 SDK 枚举（枚举值即 kbps 数值）
@@ -86,6 +107,7 @@ bool CanopenDevice::open(const AppConfig& cfg)
         if (canopen_getNodeState(kDevIndex, id, &st, 20) == CANOPEN_SUCCESS
             && readMitLimits(id)) {
             slaveList_.append(id);
+            readDeviceParams(id);
             if (slaveList_.size() >= 3) break;
         }
     }
@@ -109,6 +131,7 @@ void CanopenDevice::close()
         ready_ = false;
         slaveList_.clear();        // 保持 slaveCount()/slaveList() 与连接状态一致
         limitsBySlave_.clear();    // 清掉上一会话的每节点限幅
+        paramsBySlave_.clear();    // 清掉上一会话的每节点参数
     }
 }
 
