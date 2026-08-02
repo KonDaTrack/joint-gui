@@ -6,6 +6,9 @@
 ControlWorker::ControlWorker(QObject* parent)
     : QObject(parent)
 {
+    // 关键：定时器必须作为子对象随 moveToThread 一起迁移到工作线程，
+    // 否则它停留在创建线程（UI 线程），start/stop 变成跨线程调用且周期退化。
+    cycleTimer_.setParent(this);
     connect(&cycleTimer_, &QTimer::timeout, this, &ControlWorker::onCycle);
 }
 
@@ -40,7 +43,6 @@ bool ControlWorker::tryOpen(const AppConfig& c)
     cfg_ = c;
     connected_ = true;
     lastTelemetryMs_ = QDateTime::currentMSecsSinceEpoch();
-    cyclesSinceRead_ = 0;
     cycleTimer_.setInterval(cfg_.controlCycleMs());
     cycleTimer_.start();
     emit connectionChanged(true, Joint::busTypeName(cfg_.busType),
@@ -95,7 +97,6 @@ void ControlWorker::onCycle()
     Joint::Telemetry t;
     if (device_->readTelemetry(cfg_.slaveId, t)) {
         lastTelemetryMs_ = QDateTime::currentMSecsSinceEpoch();
-        cyclesSinceRead_ = 0;
         emit telemetryUpdated(t);
         return;
     }
@@ -106,6 +107,7 @@ void ControlWorker::onCycle()
         connected_ = false;
         cycleTimer_.stop();
         device_->close();
+        device_.reset();   // 释放设备，避免重连时对已关闭设备二次 close
         emit faultDetected(QStringLiteral("遥测超时，连接已断开"));
         emit connectionChanged(false, QString(), 0, QStringLiteral("遥测超时"));
     }

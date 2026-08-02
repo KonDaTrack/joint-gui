@@ -41,5 +41,4 @@ private:
     AppConfig cfg_;
     bool connected_ = false;
     qint64 lastTelemetryMs_ = 0;
-    int cyclesSinceRead_ = 0;
 };
