@@ -25,6 +25,8 @@ add_executable(joint_gui
     src/ui/MainWindow.h
     src/ui/ConnectionDialog.cpp
     src/ui/ConnectionDialog.h
+    src/ui/MonitorPanel.cpp
+    src/ui/MonitorPanel.h
     src/device/JointTypes.cpp
     src/device/JointTypes.h
     src/core/AppConfig.cpp
