@@ -23,6 +23,8 @@ add_executable(joint_gui
     src/main.cpp
     src/ui/MainWindow.cpp
     src/ui/MainWindow.h
+    src/device/JointTypes.cpp
+    src/device/JointTypes.h
 )
 # 统一按 src 相对路径包含头文件（"ui/..."、"core/..."、"device/..."）。
 # 后续新增 target（如 unit_tests）必须复用此变量，否则找不到头文件。
