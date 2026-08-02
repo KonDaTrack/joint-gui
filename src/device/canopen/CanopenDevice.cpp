@@ -77,7 +77,9 @@ bool CanopenDevice::open(const AppConfig& cfg)
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
     // 节点探测：1..127 短超时查询在线状态，在线节点读 MIT 限幅后纳入列表；
-    // 硬件上限 3 个从站，找到 3 个即提前结束以控制探测耗时
+    // 硬件上限 3 个从站，找到 3 个即提前结束以控制探测耗时。
+    // 实机注意：若 canopen_getNodeState 对真实节点不可靠（启动后才有响应），
+    // 可改为直接以 readMitLimits(id) 成功作为在线判据（一次探测即证明节点可控且是关节）。
     slaveList_.clear();
     canopen_NodeState st = canopen_NodeState_Unknown_state;
     for (quint16 id = 1; id <= 127; ++id) {
