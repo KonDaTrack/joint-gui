@@ -3,6 +3,9 @@
 #include "eu_ethercat.h"
 #include <QDateTime>
 
+// 0x6076 额定扭矩原始值 → N·m 的换算系数；假定 1.0（实机若为 mN·m 改 0.001）
+static constexpr double kRatedTorqueNmScale = 1.0;
+
 EthercatDevice::~EthercatDevice()
 {
     close();
@@ -11,16 +14,22 @@ EthercatDevice::~EthercatDevice()
 // 逐从站按标准 CiA402 对象读取参数；失败字段保持 0
 void EthercatDevice::readDeviceParams()
 {
+    paramsBySlave_.clear();   // 避免重连残留旧从站参数
     for (quint16 s : slaveList()) {
         Joint::DeviceParams p;
+        // 0x6076 额定扭矩；单位假定 N·m（×kRatedTorqueNmScale），实机验证（可能 mN·m → scale=0.001）
         hint32 t = 0;
         if (eth_readSDO(s, 0x6076, 0x00, &t, eth_DataType_int32, 20) == ETH_SUCCESS)
-            p.ratedTorqueNm = t;   // 假定 N·m；实机验证单位（可能 mN·m 需 /1000）
-        huint32 v1 = 0, v2 = 0;
-        if (eth_readSDO(s, 0x608F, 0x01, &v1, eth_DataType_uint32, 20) == ETH_SUCCESS
-            && eth_readSDO(s, 0x608F, 0x02, &v2, eth_DataType_uint32, 20) == ETH_SUCCESS) {
+            p.ratedTorqueNm = t * kRatedTorqueNmScale;
+        // 0x608F 标准为 sub0 单值（每转编码器增量）；部分厂商用 sub1/2 分子分母，作回退
+        huint32 v0 = 0, v1 = 0, v2 = 0;
+        if (eth_readSDO(s, 0x608F, 0x00, &v0, eth_DataType_uint32, 20) == ETH_SUCCESS && v0 > 0) {
+            p.encoderPulsesPerRev = v0;
+        } else if (eth_readSDO(s, 0x608F, 0x01, &v1, eth_DataType_uint32, 20) == ETH_SUCCESS
+                   && eth_readSDO(s, 0x608F, 0x02, &v2, eth_DataType_uint32, 20) == ETH_SUCCESS) {
             p.encoderPulsesPerRev = v2 > 0 ? (double)v1 / v2 : (double)v1;
         }
+        // 0x6090 减速比（电机转数/轴转数）
         v1 = v2 = 0;
         if (eth_readSDO(s, 0x6090, 0x01, &v1, eth_DataType_uint32, 20) == ETH_SUCCESS
             && eth_readSDO(s, 0x6090, 0x02, &v2, eth_DataType_uint32, 20) == ETH_SUCCESS) {
