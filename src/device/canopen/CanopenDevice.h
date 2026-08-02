@@ -29,5 +29,6 @@ private:
     bool readMitLimits(quint16 slave);
 
     MitFrameCodec codec_;
+    quint16 slaveId_ = 0;
     bool ready_ = false;
 };

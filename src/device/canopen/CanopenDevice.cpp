@@ -71,16 +71,23 @@ bool CanopenDevice::open(const AppConfig& cfg)
     case 1000: baud = canopen_Baudrate_1000; break;
     default:   baud = canopen_Baudrate_1000; break;
     }
+    slaveId_ = cfg.slaveId;
     if (canopen_initDLL(canopen_DeviceType_Canable, kDevIndex, baud) != CANOPEN_SUCCESS)
         return false;
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    ready_ = readMitLimits(cfg.slaveId);
+    ready_ = readMitLimits(slaveId_);
+    if (!ready_) {
+        canopen_freeDLL(kDevIndex);   // 避免 initDLL 成功但读限值失败时泄漏 DLL
+    }
     return ready_;
 }
 
 void CanopenDevice::close()
 {
     if (ready_) {
+        // 先尽力失能，避免断连时电机仍带电保持目标（教学安全）
+        canopen_setControlword(kDevIndex, slaveId_, 0x07);
+        canopen_setControlword(kDevIndex, slaveId_, 0x00);
         canopen_freeDLL(kDevIndex);
         ready_ = false;
     }
@@ -141,8 +148,10 @@ bool CanopenDevice::quickStop(quint16 slave)
 bool CanopenDevice::faultReset(quint16 slave)
 {
     if (!ready_) return false;
-    // 故障复位：控制字 bit4 0→1 上升沿（对齐示例持续置位 0x1F 的用法）
-    canopen_setControlword(kDevIndex, slave, 0x1F);
+    // CiA402 故障复位：控制字 bit7 (0x80) 上升沿 0→1→0
+    canopen_setControlword(kDevIndex, slave, 0x0F);
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    canopen_setControlword(kDevIndex, slave, 0x8F);
     std::this_thread::sleep_for(std::chrono::milliseconds(20));
     canopen_setControlword(kDevIndex, slave, 0x0F);
     return true;
@@ -194,7 +203,8 @@ bool CanopenDevice::readTelemetry(quint16 slave, Joint::Telemetry& out)
     huint8 errReg = 0;
     if (canopen_getErrorRegister(kDevIndex, slave, &errReg) == CANOPEN_SUCCESS && errReg) {
         huint32 err = 0;
-        out.errorCode = (canopen_getErrorField(kDevIndex, slave, 0, &err) == CANOPEN_SUCCESS)
+        // subIndex 1 = 首个错误码（subIndex 0 是错误计数）
+        out.errorCode = (canopen_getErrorField(kDevIndex, slave, 1, &err) == CANOPEN_SUCCESS)
                         ? static_cast<quint16>(err) : 0x1000;
     }
     out.operateMode = static_cast<Joint::OperateMode>(mode);

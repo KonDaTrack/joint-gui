@@ -14,6 +14,7 @@ bool EthercatDevice::open(const AppConfig& cfg)
     gearRatio_ = cfg.gearRatio;
     ratedNm_ = cfg.ratedTorqueNm;
     cycleMs_ = cfg.ethCycleMs;
+    slaveId_ = cfg.slaveId;
 
     int slaveCnt = 0;
     if (eth_initDLL(cfg.ethInterface.toUtf8().constData(), cycleMs_, &slaveCnt) != ETH_SUCCESS) {
@@ -29,6 +30,8 @@ bool EthercatDevice::open(const AppConfig& cfg)
 void EthercatDevice::close()
 {
     if (inited_) {
+        // 先尽力失能，避免断连时电机仍带电保持目标（教学安全）
+        eth_disable(slaveId_);
         eth_freeDLL();
         inited_ = false;
         slaveCount_ = 0;

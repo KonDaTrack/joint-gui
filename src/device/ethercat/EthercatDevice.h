@@ -27,6 +27,7 @@ private:
     bool inited_ = false;   // eth_initDLL 成功即置位，close 时必须 eth_freeDLL 释放网卡
     int slaveCount_ = 0;
     int cycleMs_ = 2;
+    quint16 slaveId_ = 0;
     double pulsesPerRev_ = 65536;
     double gearRatio_ = 1.0;
     double ratedNm_ = 1.0;
