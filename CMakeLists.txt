@@ -29,6 +29,8 @@ add_executable(joint_gui
     src/ui/MonitorPanel.h
     src/ui/ControlPanel.cpp
     src/ui/ControlPanel.h
+    src/ui/CurvePanel.cpp
+    src/ui/CurvePanel.h
     src/device/JointTypes.cpp
     src/device/JointTypes.h
     src/core/AppConfig.cpp
