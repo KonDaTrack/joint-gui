@@ -76,6 +76,7 @@ bool CanopenDevice::open(const AppConfig& cfg)
         return false;
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
     ready_ = readMitLimits(slaveId_);
+    if (ready_) slaveList_ = { slaveId_ };   // M2 升级为节点探测
     if (!ready_) {
         canopen_freeDLL(kDevIndex);   // 避免 initDLL 成功但读限值失败时泄漏 DLL
     }

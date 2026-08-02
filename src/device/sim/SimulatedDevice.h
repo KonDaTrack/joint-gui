@@ -9,6 +9,7 @@ public:
     bool open(const AppConfig& cfg) override;
     void close() override;
     int slaveCount() const override { return 1; }
+    QList<quint16> slaveList() const override { return {1}; }
 
     bool enable(quint16 slave) override { Q_UNUSED(slave); model_.enable(); return true; }
     bool disable(quint16 slave) override { Q_UNUSED(slave); model_.disable(); return true; }

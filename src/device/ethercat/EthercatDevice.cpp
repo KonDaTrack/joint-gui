@@ -27,11 +27,19 @@ bool EthercatDevice::open(const AppConfig& cfg)
     return slaveCount_ > 0;
 }
 
+QList<quint16> EthercatDevice::slaveList() const
+{
+    QList<quint16> list;
+    for (int i = 1; i <= slaveCount_; ++i) list.append(static_cast<quint16>(i));
+    return list;
+}
+
 void EthercatDevice::close()
 {
     if (inited_) {
-        // 先尽力失能，避免断连时电机仍带电保持目标（教学安全）
-        eth_disable(slaveId_);
+        // 多从站安全：断开前对全部从站尽力失能
+        const QList<quint16> slaves = slaveList();
+        for (quint16 s : slaves) eth_disable(s);
         eth_freeDLL();
         inited_ = false;
         slaveCount_ = 0;

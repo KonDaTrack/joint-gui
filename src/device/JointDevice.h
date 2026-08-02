@@ -1,4 +1,5 @@
 #pragma once
+#include <QList>
 #include "device/JointTypes.h"
 #include "core/AppConfig.h"
 
@@ -10,6 +11,9 @@ public:
     virtual bool open(const AppConfig& cfg) = 0;
     virtual void close() = 0;
     virtual int slaveCount() const = 0;
+
+    // 返回实际从站地址列表（EtherCAT: 1..N；CANopen: 探测到的在线节点 ID；仿真: {1}）
+    virtual QList<quint16> slaveList() const = 0;
 
     virtual bool enable(quint16 slave) = 0;
     virtual bool disable(quint16 slave) = 0;

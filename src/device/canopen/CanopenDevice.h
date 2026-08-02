@@ -10,7 +10,8 @@ public:
 
     bool open(const AppConfig& cfg) override;
     void close() override;
-    int slaveCount() const override { return ready_ ? 1 : 0; }
+    int slaveCount() const override { return ready_ ? slaveList_.size() : 0; }
+    QList<quint16> slaveList() const override { return slaveList_; }
 
     bool enable(quint16 slave) override;
     bool disable(quint16 slave) override;
@@ -31,4 +32,5 @@ private:
     MitFrameCodec codec_;
     quint16 slaveId_ = 0;
     bool ready_ = false;
+    QList<quint16> slaveList_;
 };
