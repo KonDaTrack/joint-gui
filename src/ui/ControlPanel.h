@@ -14,6 +14,8 @@ class ControlPanel : public QWidget
     Q_OBJECT
 public:
     explicit ControlPanel(QWidget* parent = nullptr);
+    // CANopen 仅支持力矩位置混合，限制模式下拉避免下发零刚度 MIT 帧
+    void setBusType(Joint::BusType type);
 
 signals:
     void enableRequested();

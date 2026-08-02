@@ -91,6 +91,17 @@ Joint::OperateMode ControlPanel::currentMode() const
     return static_cast<Joint::OperateMode>(modeCombo_->currentData().toInt());
 }
 
+void ControlPanel::setBusType(Joint::BusType type)
+{
+    if (type == Joint::BusType::CanOpen) {
+        const int idx = modeCombo_->findData((int)Joint::OperateMode::TorquePositionFixed);
+        if (idx >= 0) modeCombo_->setCurrentIndex(idx);
+        modeCombo_->setEnabled(false);
+    } else {
+        modeCombo_->setEnabled(true);
+    }
+}
+
 void ControlPanel::onEnableClicked()
 {
     emit operateModeChanged(currentMode());

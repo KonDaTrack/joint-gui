@@ -91,6 +91,9 @@ void MainWindow::onConnectionChanged(bool connected, QString busName,
     if (connected) {
         statusBar()->showMessage(QStringLiteral("%1 已连接，从站数 %2")
                                  .arg(busName).arg(slaveCount));
+        // CANopen 仅支持力矩位置混合，限制模式下拉避免下发零刚度 MIT 帧
+        control_->setBusType(busName == Joint::busTypeName(Joint::BusType::CanOpen)
+                             ? Joint::BusType::CanOpen : Joint::BusType::EtherCat);
     } else if (!error.isEmpty()) {
         statusBar()->showMessage(QStringLiteral("连接失败：%1").arg(error));
     } else {
