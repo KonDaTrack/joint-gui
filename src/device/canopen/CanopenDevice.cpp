@@ -76,13 +76,15 @@ bool CanopenDevice::open(const AppConfig& cfg)
         return false;
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-    // 节点探测：1..127 短超时查询在线状态，在线节点读 MIT 限幅后纳入列表
+    // 节点探测：1..127 短超时查询在线状态，在线节点读 MIT 限幅后纳入列表；
+    // 硬件上限 3 个从站，找到 3 个即提前结束以控制探测耗时
     slaveList_.clear();
     canopen_NodeState st = canopen_NodeState_Unknown_state;
     for (quint16 id = 1; id <= 127; ++id) {
         if (canopen_getNodeState(kDevIndex, id, &st, 20) == CANOPEN_SUCCESS
             && readMitLimits(id)) {
             slaveList_.append(id);
+            if (slaveList_.size() >= 3) break;
         }
     }
     ready_ = !slaveList_.isEmpty();
@@ -103,7 +105,8 @@ void CanopenDevice::close()
         }
         canopen_freeDLL(kDevIndex);
         ready_ = false;
-        slaveList_.clear();   // 保持 slaveCount()/slaveList() 与连接状态一致
+        slaveList_.clear();        // 保持 slaveCount()/slaveList() 与连接状态一致
+        limitsBySlave_.clear();    // 清掉上一会话的每节点限幅
     }
 }
 
