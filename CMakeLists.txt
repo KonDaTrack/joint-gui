@@ -24,4 +24,6 @@ add_executable(joint_gui
     src/ui/MainWindow.cpp
     src/ui/MainWindow.h
 )
+# 统一按 src 相对路径包含头文件（"ui/..."、"core/..."、"device/..."）
+target_include_directories(joint_gui PRIVATE src)
 target_link_libraries(joint_gui PRIVATE Qt5::Widgets)
