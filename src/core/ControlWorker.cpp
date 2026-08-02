@@ -42,11 +42,15 @@ bool ControlWorker::tryOpen(const AppConfig& c)
     }
     cfg_ = c;
     connected_ = true;
+    const QList<quint16> slaves = device_->slaveList();
+    activeSlave_ = slaves.contains(c.slaveId) ? c.slaveId
+                  : (slaves.isEmpty() ? 1 : slaves.first());
     lastTelemetryMs_ = QDateTime::currentMSecsSinceEpoch();
     cycleTimer_.setInterval(cfg_.controlCycleMs());
     cycleTimer_.start();
     emit connectionChanged(true, Joint::busTypeName(cfg_.busType),
                            device_->slaveCount(), QString());
+    emit slavesDetected(slaves, activeSlave_);
     return true;
 }
 
@@ -80,6 +84,12 @@ void ControlWorker::detectAndConnect()
     }
 }
 
+void ControlWorker::selectSlave(quint16 address)
+{
+    activeSlave_ = address;
+    lastTelemetryMs_ = QDateTime::currentMSecsSinceEpoch();   // 重置看门狗计时
+}
+
 void ControlWorker::disconnectDevice()
 {
     cycleTimer_.stop();
@@ -94,20 +104,36 @@ void ControlWorker::onCycle()
 {
     if (!device_ || !connected_) return;
 
-    Joint::Telemetry t;
-    if (device_->readTelemetry(cfg_.slaveId, t)) {
+    QList<Joint::Telemetry> list;
+    bool activeOk = false;
+    Joint::Telemetry activeT;
+    for (quint16 s : device_->slaveList()) {
+        Joint::Telemetry t;
+        if (device_->readTelemetry(s, t)) {
+            list.append(t);
+            if (s == activeSlave_) { activeOk = true; activeT = t; }
+        } else {
+            Joint::Telemetry fail;
+            fail.slave = s;
+            fail.connected = false;
+            list.append(fail);
+        }
+    }
+    emit telemetryUpdatedAll(list);
+
+    if (activeOk) {
         lastTelemetryMs_ = QDateTime::currentMSecsSinceEpoch();
-        emit telemetryUpdated(t);
+        emit telemetryUpdated(activeT);   // 临时保留，M5 移除
         return;
     }
 
-    // 读失败/超时看门狗：连续失败超 500ms 判定连接异常
+    // 看门狗：activeSlave 读失败超 500ms
     const qint64 now = QDateTime::currentMSecsSinceEpoch();
     if (lastTelemetryMs_ && (now - lastTelemetryMs_) > 500) {
         connected_ = false;
         cycleTimer_.stop();
         device_->close();
-        device_.reset();   // 释放设备，避免重连时对已关闭设备二次 close
+        device_.reset();
         emit faultDetected(QStringLiteral("遥测超时，连接已断开"));
         emit connectionChanged(false, QString(), 0, QStringLiteral("遥测超时"));
     }
@@ -115,25 +141,25 @@ void ControlWorker::onCycle()
 
 void ControlWorker::enableRequested()
 {
-    if (device_) device_->enable(cfg_.slaveId);
+    if (device_) device_->enable(activeSlave_);
 }
 void ControlWorker::disableRequested()
 {
-    if (device_) device_->disable(cfg_.slaveId);
+    if (device_) device_->disable(activeSlave_);
 }
 void ControlWorker::quickStopRequested()
 {
-    if (device_) device_->quickStop(cfg_.slaveId);
+    if (device_) device_->quickStop(activeSlave_);
 }
 void ControlWorker::faultResetRequested()
 {
-    if (device_) device_->faultReset(cfg_.slaveId);
+    if (device_) device_->faultReset(activeSlave_);
 }
 void ControlWorker::setOperateModeRequested(Joint::OperateMode mode)
 {
-    if (device_) device_->setOperateMode(cfg_.slaveId, mode);
+    if (device_) device_->setOperateMode(activeSlave_, mode);
 }
 void ControlWorker::setTargetRequested(const Joint::TargetCommand& cmd)
 {
-    if (device_) device_->setTarget(cfg_.slaveId, cmd);
+    if (device_) device_->setTarget(activeSlave_, cmd);
 }

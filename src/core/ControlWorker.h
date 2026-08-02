@@ -1,6 +1,7 @@
 #pragma once
 #include <QObject>
 #include <QTimer>
+#include <QList>
 #include <memory>
 #include "device/JointDevice.h"
 #include "core/AppConfig.h"
@@ -16,6 +17,7 @@ public:
 public slots:
     void connectDevice(const AppConfig& cfg);
     void disconnectDevice();
+    void selectSlave(quint16 address);      // 切换控制从站
     void enableRequested();
     void disableRequested();
     void quickStopRequested();
@@ -25,7 +27,9 @@ public slots:
 
 signals:
     void connectionChanged(bool connected, QString busName, int slaveCount, QString error);
-    void telemetryUpdated(const Joint::Telemetry& telemetry);
+    void telemetryUpdated(const Joint::Telemetry& telemetry);           // 临时保留，M5 移除
+    void telemetryUpdatedAll(const QList<Joint::Telemetry>& list);      // 批量遥测
+    void slavesDetected(const QList<quint16>& slaves, quint16 activeSlave);
     void faultDetected(QString message);
     void detectionMessage(QString message);   // 自动检测过程提示（显示在状态栏）
 
@@ -40,5 +44,6 @@ private:
     QTimer cycleTimer_;
     AppConfig cfg_;
     bool connected_ = false;
+    quint16 activeSlave_ = 1;
     qint64 lastTelemetryMs_ = 0;
 };
