@@ -17,7 +17,7 @@ if(NOT DEFINED JOINT_ARCH)
 endif()
 message(STATUS "joint_gui target arch: ${JOINT_ARCH}")
 
-find_package(Qt5 REQUIRED COMPONENTS Widgets)
+find_package(Qt5 REQUIRED COMPONENTS Widgets Network)
 
 add_executable(joint_gui
     src/main.cpp
@@ -27,6 +27,8 @@ add_executable(joint_gui
     src/device/JointTypes.h
     src/core/AppConfig.cpp
     src/core/AppConfig.h
+    src/core/ControlWorker.cpp
+    src/core/ControlWorker.h
     src/device/JointDevice.h
     src/device/DeviceFactory.cpp
     src/device/DeviceFactory.h
@@ -39,7 +41,7 @@ add_executable(joint_gui
 # 后续新增 target（如 unit_tests）必须复用此变量，否则找不到头文件。
 set(JOINT_GUI_INCLUDE_DIRS src)
 target_include_directories(joint_gui PRIVATE ${JOINT_GUI_INCLUDE_DIRS})
-target_link_libraries(joint_gui PRIVATE Qt5::Widgets)
+target_link_libraries(joint_gui PRIVATE Qt5::Widgets Qt5::Network)
 
 find_package(Qt5 REQUIRED COMPONENTS Test)
 enable_testing()
