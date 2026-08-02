@@ -79,6 +79,21 @@ bool EthercatDevice::setTarget(quint16 slave, const Joint::TargetCommand& cmd)
                 cmd.torqueNm, ratedNm_));
         }
         return true;
+    case Joint::OperateMode::TorquePositionFixed:
+        // 力矩位置混合：位置/速度/力矩三个寄存器同时下发（SDK 无独立 MIT 函数）
+        if (cmd.hasPosition) {
+            eth_setTargetPosition(slave, (hint32)UnitConverter::degToPulses(
+                cmd.positionDeg, pulsesPerRev_, gearRatio_));
+        }
+        if (cmd.hasVelocity) {
+            eth_setTargetVelocity(slave, (hint32)UnitConverter::degToPulses(
+                cmd.velocityDps, pulsesPerRev_, gearRatio_));
+        }
+        if (cmd.hasTorque) {
+            eth_setTargetTorque(slave, (hint32)UnitConverter::nmToPermille(
+                cmd.torqueNm, ratedNm_));
+        }
+        return true;
     default:
         return true;
     }
