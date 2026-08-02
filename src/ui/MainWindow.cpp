@@ -3,8 +3,6 @@
 #include "ui/ControlPanel.h"
 #include "ui/CurvePanel.h"
 #include "ui/ConnectionDialog.h"
-#include <QHBoxLayout>
-#include <QLabel>
 #include <QMessageBox>
 #include <QScrollArea>
 #include <QSplitter>
@@ -67,7 +65,12 @@ MainWindow::~MainWindow()
         // 在 Worker 线程内安全关闭设备，再退出线程
         QMetaObject::invokeMethod(worker_, "disconnectDevice", Qt::BlockingQueuedConnection);
         thread_.quit();
-        thread_.wait(2000);
+        if (!thread_.wait(2000)) {
+            // 真实设备 close() 可能阻塞（Task 15/16 接入后），超时则强制终止以免删除活动线程
+            qWarning("Worker thread did not stop within 2s; terminating");
+            thread_.terminate();
+            thread_.wait();
+        }
         delete worker_;
     }
 }
