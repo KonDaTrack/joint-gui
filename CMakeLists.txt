@@ -73,19 +73,22 @@ target_link_libraries(joint_gui PRIVATE Qt5::Widgets Qt5::Network)
 # 部署时 .so 与可执行文件同目录，避免依赖 LD_LIBRARY_PATH
 set_target_properties(joint_gui PROPERTIES INSTALL_RPATH "$ORIGIN")
 
-find_package(Qt5 REQUIRED COMPONENTS Test)
-enable_testing()
+# 单元测试只在非交叉编译时注册：交叉构建产出的 aarch64 二进制无法在 x86 主机上执行
+if(NOT CMAKE_CROSSCOMPILING)
+    find_package(Qt5 REQUIRED COMPONENTS Test)
+    enable_testing()
 
-add_executable(unit_tests
-    tests/TestMain.cpp
-    tests/TestUnitConverter.cpp
-    tests/TestJointModel.cpp
-    tests/TestMitFrameCodec.cpp
-    src/core/UnitConverter.cpp
-    src/device/sim/JointModel.cpp
-    src/device/JointTypes.cpp   # TestJointModel 依赖 Joint::mapDriveState
-    src/device/canopen/MitFrameCodec.cpp
-)
-target_include_directories(unit_tests PRIVATE ${JOINT_GUI_INCLUDE_DIRS})
-target_link_libraries(unit_tests PRIVATE Qt5::Test Qt5::Core)
-add_test(NAME unit_tests COMMAND unit_tests)
+    add_executable(unit_tests
+        tests/TestMain.cpp
+        tests/TestUnitConverter.cpp
+        tests/TestJointModel.cpp
+        tests/TestMitFrameCodec.cpp
+        src/core/UnitConverter.cpp
+        src/device/sim/JointModel.cpp
+        src/device/JointTypes.cpp   # TestJointModel 依赖 Joint::mapDriveState
+        src/device/canopen/MitFrameCodec.cpp
+    )
+    target_include_directories(unit_tests PRIVATE ${JOINT_GUI_INCLUDE_DIRS})
+    target_link_libraries(unit_tests PRIVATE Qt5::Test Qt5::Core)
+    add_test(NAME unit_tests COMMAND unit_tests)
+endif()
