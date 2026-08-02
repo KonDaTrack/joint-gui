@@ -101,6 +101,8 @@ void ControlPanel::onEstopClicked()
 {
     emit quickStopRequested();
     emit disableRequested();
+    // 急停后复位安全确认勾选，再次使能必须重新确认现场安全
+    readyCheck_->setChecked(false);
 }
 
 void ControlPanel::onFaultResetClicked()

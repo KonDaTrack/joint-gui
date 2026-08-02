@@ -8,7 +8,7 @@ class QLineEdit;
 class QPushButton;
 
 // 控制面板：急停/使能/失能/故障复位/模式/目标值。
-// 使能需先勾选“确认已就绪”。
+// 使能需先勾选“已确认现场安全”。
 class ControlPanel : public QWidget
 {
     Q_OBJECT
