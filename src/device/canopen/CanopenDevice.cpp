@@ -6,6 +6,9 @@
 
 static const int kDevIndex = 0;
 
+// 0x6076 额定扭矩原始值 → N·m 的换算系数；假定 1.0（实机若为 mN·m 改 0.001）
+static constexpr double kRatedTorqueNmScale = 1.0;
+
 // 写控制字并轮询状态字直到达到期望状态（对齐示例 transitionAndWait）
 static bool driveTransition(quint16 slave, huint16 controlWord, quint16 wantState)
 {
@@ -61,17 +64,22 @@ bool CanopenDevice::readMitLimits(quint16 slave)
 void CanopenDevice::readDeviceParams(quint16 slave)
 {
     Joint::DeviceParams p;
+    // 0x6076 额定扭矩；单位假定 N·m（×kRatedTorqueNmScale），实机验证（可能 mN·m → scale=0.001）
     huint32 v = 0;
     if (canopen_getMotorRatedTorque(kDevIndex, slave, &v) == CANOPEN_SUCCESS)
-        p.ratedTorqueNm = v;   // 假定 N·m；实机验证单位
+        p.ratedTorqueNm = v * kRatedTorqueNmScale;
     huint32 mr = 0, sr = 0;
     if (canopen_getGearRatioMotorRevolutions(kDevIndex, slave, &mr) == CANOPEN_SUCCESS
         && canopen_getGearRatioShaftRevolutions(kDevIndex, slave, &sr) == CANOPEN_SUCCESS) {
         p.gearRatio = sr > 0 ? (double)mr / sr : 0.0;
     }
-    huint32 inc = 0, rev = 0;
-    if (canopen_readDirectory(kDevIndex, slave, 0x608F, 0x01, canopen_DataType_uint32, &inc) == CANOPEN_SUCCESS
-        && canopen_readDirectory(kDevIndex, slave, 0x608F, 0x02, canopen_DataType_uint32, &rev) == CANOPEN_SUCCESS) {
+    // 0x608F 标准为 sub0 单值（每转编码器增量）；部分厂商用 sub1/2 分子分母，作回退
+    huint32 v0 = 0, inc = 0, rev = 0;
+    if (canopen_readDirectory(kDevIndex, slave, 0x608F, 0x00, canopen_DataType_uint32, &v0) == CANOPEN_SUCCESS
+        && v0 > 0) {
+        p.encoderPulsesPerRev = v0;
+    } else if (canopen_readDirectory(kDevIndex, slave, 0x608F, 0x01, canopen_DataType_uint32, &inc) == CANOPEN_SUCCESS
+               && canopen_readDirectory(kDevIndex, slave, 0x608F, 0x02, canopen_DataType_uint32, &rev) == CANOPEN_SUCCESS) {
         p.encoderPulsesPerRev = rev > 0 ? (double)inc / rev : (double)inc;
     }
     paramsBySlave_.insert(slave, p);
