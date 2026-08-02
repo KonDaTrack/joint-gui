@@ -25,6 +25,7 @@ void CurvePanel::push(QVector<double>& buf, double v)
 void CurvePanel::onTelemetry(const QList<Joint::Telemetry>& list)
 {
     for (const Joint::Telemetry& t : list) {
+        if (!t.connected) continue;   // 断开条目不下发，避免把故障画成归零冲断曲线
         if (t.slave == activeSlave_) {
             push(pos_, t.positionDeg);
             push(vel_, t.velocityDps);
