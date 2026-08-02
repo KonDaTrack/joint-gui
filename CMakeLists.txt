@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 project(joint_gui LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
@@ -24,6 +24,8 @@ add_executable(joint_gui
     src/ui/MainWindow.cpp
     src/ui/MainWindow.h
 )
-# 统一按 src 相对路径包含头文件（"ui/..."、"core/..."、"device/..."）
-target_include_directories(joint_gui PRIVATE src)
+# 统一按 src 相对路径包含头文件（"ui/..."、"core/..."、"device/..."）。
+# 后续新增 target（如 unit_tests）必须复用此变量，否则找不到头文件。
+set(JOINT_GUI_INCLUDE_DIRS src)
+target_include_directories(joint_gui PRIVATE ${JOINT_GUI_INCLUDE_DIRS})
 target_link_libraries(joint_gui PRIVATE Qt5::Widgets)
