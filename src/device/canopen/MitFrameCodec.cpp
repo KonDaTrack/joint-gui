@@ -3,9 +3,10 @@
 
 int MitFrameCodec::floatToUint(float x, float xMin, float xMax, int bits)
 {
-    x = std::clamp(x, xMin, xMax);
+    // 先判退化区间：xMin > xMax 时 std::clamp 前置条件不满足（UB）
     const float span = xMax - xMin;
     if (span <= 0.0f) return 0;
+    x = std::clamp(x, xMin, xMax);
     return (int)((x - xMin) * ((1U << bits) - 1) / span);
 }
 
