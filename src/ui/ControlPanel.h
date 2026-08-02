@@ -1,5 +1,6 @@
 #pragma once
 #include <QWidget>
+#include <QList>
 #include "device/JointTypes.h"
 
 class QCheckBox;
@@ -16,6 +17,8 @@ public:
     explicit ControlPanel(QWidget* parent = nullptr);
     // CANopen 仅支持力矩位置混合，限制模式下拉避免下发零刚度 MIT 帧
     void setBusType(Joint::BusType type);
+    void setSlaves(const QList<quint16>& slaves);
+    void setActiveSlave(quint16 address);
 
 signals:
     void enableRequested();
@@ -24,6 +27,7 @@ signals:
     void faultResetRequested();
     void operateModeChanged(Joint::OperateMode mode);
     void targetRequested(const Joint::TargetCommand& cmd);
+    void activeSlaveChanged(quint16 address);
 
 private slots:
     void onEnableClicked();
@@ -40,6 +44,7 @@ private:
     QPushButton* enableBtn_;
     QPushButton* disableBtn_;
     QPushButton* faultResetBtn_;
+    QComboBox* slaveCombo_;
     QComboBox* modeCombo_;
     QLineEdit* posEdit_;
     QLineEdit* velEdit_;

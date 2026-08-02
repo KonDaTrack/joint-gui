@@ -50,6 +50,8 @@ MainWindow::MainWindow(QWidget* parent)
             [this](const QList<quint16>& slaves, quint16 active) {
                 monitor_->setSlaves(slaves);
                 monitor_->setActiveSlave(active);
+                control_->setSlaves(slaves);
+                control_->setActiveSlave(active);
                 curve_->setActiveSlave(active);
             });
 
@@ -59,6 +61,8 @@ MainWindow::MainWindow(QWidget* parent)
     connect(control_, &ControlPanel::faultResetRequested, worker_, &ControlWorker::faultResetRequested);
     connect(control_, &ControlPanel::operateModeChanged, worker_, &ControlWorker::setOperateModeRequested);
     connect(control_, &ControlPanel::targetRequested, worker_, &ControlWorker::setTargetRequested);
+    connect(control_, &ControlPanel::activeSlaveChanged, worker_, &ControlWorker::selectSlave);
+    connect(control_, &ControlPanel::activeSlaveChanged, curve_, &CurvePanel::setActiveSlave);
 
     statusBar()->showMessage(QStringLiteral("未连接"));
 

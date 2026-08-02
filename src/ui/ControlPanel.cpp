@@ -8,11 +8,25 @@
 #include <QLineEdit>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QSignalBlocker>
 #include <QVBoxLayout>
 
 ControlPanel::ControlPanel(QWidget* parent)
     : QWidget(parent)
 {
+    // 控制从站下拉：连接前禁用（占位 "--" data 0），检测到从站后由 setSlaves 填充
+    slaveCombo_ = new QComboBox(this);
+    slaveCombo_->addItem(QStringLiteral("--"), 0);
+    slaveCombo_->setEnabled(false);
+    connect(slaveCombo_, qOverload<int>(&QComboBox::currentIndexChanged), this,
+            [this](int) {
+                emit activeSlaveChanged(static_cast<quint16>(slaveCombo_->currentData().toInt()));
+            });
+
+    QHBoxLayout* slaveRow = new QHBoxLayout;
+    slaveRow->addWidget(new QLabel(tr("控制从站"), this));
+    slaveRow->addWidget(slaveCombo_, 1);
+
     // 急停按钮：最显眼
     estopBtn_ = new QPushButton(QStringLiteral("急停 ESTOP"), this);
     estopBtn_->setStyleSheet(QStringLiteral(
@@ -78,6 +92,7 @@ ControlPanel::ControlPanel(QWidget* parent)
     targetRow->addWidget(stopBtn_);
 
     QVBoxLayout* root = new QVBoxLayout(this);
+    root->addLayout(slaveRow);
     root->addLayout(estopRow);
     root->addLayout(btnRow);
     root->addWidget(new QLabel(tr("目标设定"), this));
@@ -99,6 +114,26 @@ void ControlPanel::setBusType(Joint::BusType type)
         modeCombo_->setEnabled(false);
     } else {
         modeCombo_->setEnabled(true);
+    }
+}
+
+void ControlPanel::setSlaves(const QList<quint16>& slaves)
+{
+    const quint16 cur = static_cast<quint16>(slaveCombo_->currentData().toInt());
+    slaveCombo_->clear();
+    for (quint16 s : slaves)
+        slaveCombo_->addItem(QStringLiteral("从站 %1").arg(s), s);
+    slaveCombo_->setEnabled(!slaves.isEmpty());
+    if (slaveCombo_->findData(cur) < 0 && slaveCombo_->count() > 0)
+        slaveCombo_->setCurrentIndex(0);
+}
+
+void ControlPanel::setActiveSlave(quint16 address)
+{
+    const int idx = slaveCombo_->findData(address);
+    if (idx >= 0) {
+        QSignalBlocker b(slaveCombo_);
+        slaveCombo_->setCurrentIndex(idx);
     }
 }
 
