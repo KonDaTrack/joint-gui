@@ -15,6 +15,7 @@ public:
 public slots:
     void onTelemetry(const QList<Joint::Telemetry>& list);
     void setSlaves(const QList<quint16>& slaves);
+    void setActiveSlave(quint16 address);
 
 private:
     struct Page {
@@ -31,4 +32,5 @@ private:
 
     QTabWidget* tabs_;
     QHash<quint16, Page> pages_;
+    QList<quint16> order_;   // 从站顺序，用于按 active 切换标签页
 };

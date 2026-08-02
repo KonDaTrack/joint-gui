@@ -46,6 +46,7 @@ void MonitorPanel::setSlaves(const QList<quint16>& slaves)
         delete w;   // 页内 QLabel 随页释放
     }
     pages_.clear();
+    order_ = slaves;
     for (quint16 s : slaves) {
         Page p = makePage(s);
         pages_.insert(s, p);
@@ -54,6 +55,12 @@ void MonitorPanel::setSlaves(const QList<quint16>& slaves)
     if (slaves.isEmpty()) {
         tabs_->addTab(new QLabel(QStringLiteral("未连接"), tabs_), QStringLiteral("--"));
     }
+}
+
+void MonitorPanel::setActiveSlave(quint16 address)
+{
+    const int idx = order_.indexOf(address);
+    if (idx >= 0) tabs_->setCurrentIndex(idx);
 }
 
 void MonitorPanel::onTelemetry(const QList<Joint::Telemetry>& list)

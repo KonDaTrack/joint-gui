@@ -48,8 +48,8 @@ MainWindow::MainWindow(QWidget* parent)
             [this](const QString& m) { statusBar()->showMessage(m); });
     connect(worker_, &ControlWorker::slavesDetected, this,
             [this](const QList<quint16>& slaves, quint16 active) {
-                Q_UNUSED(active);
                 monitor_->setSlaves(slaves);
+                monitor_->setActiveSlave(active);
             });
 
     connect(control_, &ControlPanel::enableRequested, worker_, &ControlWorker::enableRequested);
