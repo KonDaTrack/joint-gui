@@ -33,3 +33,14 @@ add_executable(joint_gui
 set(JOINT_GUI_INCLUDE_DIRS src)
 target_include_directories(joint_gui PRIVATE ${JOINT_GUI_INCLUDE_DIRS})
 target_link_libraries(joint_gui PRIVATE Qt5::Widgets)
+
+find_package(Qt5 REQUIRED COMPONENTS Test)
+enable_testing()
+
+add_executable(unit_tests
+    tests/TestUnitConverter.cpp
+    src/core/UnitConverter.cpp
+)
+target_include_directories(unit_tests PRIVATE ${JOINT_GUI_INCLUDE_DIRS})
+target_link_libraries(unit_tests PRIVATE Qt5::Test Qt5::Core)
+add_test(NAME unit_tests COMMAND unit_tests)
