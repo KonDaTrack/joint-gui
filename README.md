@@ -64,5 +64,8 @@ ctest --test-dir build --output-on-failure
 3. 填目标值 → 下发目标（CSP/CSV/CST/力矩位置混合）
 4. 急停/故障复位按需
 
+## 使用说明
+界面布局、操作流程、操作模式与安全功能的使用文档见 [`USAGE.md`](USAGE.md)。
+
 ## 部署教程
 完整的分步部署教程见 [`DEPLOY.md`](DEPLOY.md)：本机构建、ARM 交叉编译、目标板部署、权限与常见问题。
