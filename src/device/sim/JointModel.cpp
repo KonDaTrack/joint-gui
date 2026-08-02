@@ -3,7 +3,11 @@
 #include <algorithm>
 
 void JointModel::setCycleMs(int ms) { cycleMs_ = ms > 0 ? ms : 1; }
-void JointModel::reset(double startDeg) { posDeg_ = startDeg; velDps_ = 0; torqueNm_ = 0; tempC_ = 25; }
+void JointModel::reset(double startDeg)
+{
+    posDeg_ = startDeg; velDps_ = 0; torqueNm_ = 0; tempC_ = 25;
+    enabled_ = false; fault_ = false; errorCode_ = 0;
+}
 void JointModel::enable() { if (!fault_) enabled_ = true; }
 void JointModel::disable() { enabled_ = false; velDps_ = 0; torqueNm_ = 0; }
 void JointModel::quickStop() { enabled_ = false; velDps_ = 0; torqueNm_ = 0; }
