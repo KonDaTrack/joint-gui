@@ -85,6 +85,7 @@ if(NOT CMAKE_CROSSCOMPILING)
         tests/TestUnitConverter.cpp
         tests/TestJointModel.cpp
         tests/TestMitFrameCodec.cpp
+        tests/TestDeviceParams.cpp
         src/core/UnitConverter.cpp
         src/device/sim/JointModel.cpp
         src/device/JointTypes.cpp   # TestJointModel 依赖 Joint::mapDriveState

@@ -4,6 +4,7 @@
 int runUnitConverterTests(int argc, char *argv[]);
 int runJointModelTests(int argc, char *argv[]);
 int runMitFrameCodecTests(int argc, char *argv[]);
+int runDeviceParamsTests(int argc, char *argv[]);
 
 int main(int argc, char *argv[])
 {
@@ -11,5 +12,6 @@ int main(int argc, char *argv[])
     status |= runUnitConverterTests(argc, argv);
     status |= runJointModelTests(argc, argv);
     status |= runMitFrameCodecTests(argc, argv);
+    status |= runDeviceParamsTests(argc, argv);
     return status;
 }

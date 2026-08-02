@@ -64,6 +64,16 @@ struct TargetCommand {
     double kd = 0.0;
 };
 
+// 从站参数（自动读取；字段 0 = 未读到，valid() 三参数齐全才算有效）
+struct DeviceParams {
+    double encoderPulsesPerRev = 0;  // 编码器分辨率（脉冲/圈）
+    double gearRatio = 0;            // 减速比（电机转数/输出轴转数）
+    double ratedTorqueNm = 0;        // 额定扭矩 (N·m)
+    bool valid() const {
+        return encoderPulsesPerRev > 0 && gearRatio > 0 && ratedTorqueNm > 0;
+    }
+};
+
 QString busTypeName(BusType t);
 
 // CiA402 状态字 → DriveState
