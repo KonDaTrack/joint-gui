@@ -86,6 +86,8 @@ void ControlWorker::detectAndConnect()
 
 void ControlWorker::selectSlave(quint16 address)
 {
+    // 忽略不在从站列表里的地址，避免命令发给不存在的从站并触发整总线断连
+    if (device_ && !device_->slaveList().contains(address)) return;
     activeSlave_ = address;
     lastTelemetryMs_ = QDateTime::currentMSecsSinceEpoch();   // 重置看门狗计时
 }
