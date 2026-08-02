@@ -33,6 +33,7 @@ MonitorPanel::Page MonitorPanel::makePage(quint16 slave)
 {
     Page p;
     QWidget* w = new QWidget(tabs_);
+    w->setObjectName(QStringLiteral("pageWidget"));   // 对应 QSS 限定选择器，透明底
     QFormLayout* form = new QFormLayout(w);
     form->setHorizontalSpacing(16);
     form->setVerticalSpacing(8);
@@ -119,8 +120,11 @@ void MonitorPanel::updatePage(Page& p, const Joint::Telemetry& t)
 
     p.err->setText(t.errorCode ? QStringLiteral("0x%1").arg(t.errorCode, 4, 16, QLatin1Char('0'))
                                : QStringLiteral("无"));
-    p.err->setStyleSheet(t.errorCode ? QStringLiteral("color: #FF5252; font-weight: bold;")
-                                     : QStringLiteral("color: #00C853;"));
+    // 断开时中性色，避免"离线"旁显示绿色"无"造成误导
+    p.err->setStyleSheet(t.connected
+                         ? (t.errorCode ? QStringLiteral("color: #FF5252; font-weight: bold;")
+                                        : QStringLiteral("color: #00C853;"))
+                         : QStringLiteral("color: #D0D6DD;"));
 
     p.conn->setText(t.connected ? QStringLiteral("在线") : QStringLiteral("离线"));
     p.conn->setStyleSheet(t.connected ? QStringLiteral("color: #00C853; font-weight: bold;")

@@ -22,8 +22,9 @@ QWidget {
 }
 QMainWindow { background-color: #1A1D21; }
 QWidget#centralRoot { background-color: #1A1D21; }
-/* 标签页内部容器透明，露出 QTabWidget::pane 的统一卡片底色 */
-QTabWidget QWidget { background: transparent; }
+/* 标签页内部容器透明，露出 QTabWidget::pane 的统一卡片底色。
+   用 #pageWidget 限定，避免未来标签页内的交互控件（下拉/输入框）被透明覆盖丢背景。 */
+QTabWidget QWidget#pageWidget { background: transparent; }
 
 QLabel {
     background: transparent;
