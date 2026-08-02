@@ -20,6 +20,8 @@ void TestDeviceParams::validOnlyWhenAllSet()
 
 void TestDeviceParams::invalidWhenAnyZero()
 {
+    Joint::DeviceParams d;   // 默认全 0 = 未读到，应无效
+    QVERIFY(!d.valid());
     Joint::DeviceParams a, b, c;
     a.encoderPulsesPerRev = 65536; a.gearRatio = 100.0;   // ratedTorqueNm 缺
     b.encoderPulsesPerRev = 65536; b.ratedTorqueNm = 2.0; // gearRatio 缺
