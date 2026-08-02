@@ -56,7 +56,7 @@ CANopen USB-CAN 适配器需对应驱动与权限。
 ```
 ctest --test-dir build --output-on-failure
 ```
-覆盖：单位换算、仿真关节模型、CANopen MIT 帧编解码。
+覆盖：单位换算、仿真关节模型、CANopen MIT 帧编解码、从站参数有效性（DeviceParams）。
 
 ## 使用
 1. 启动 → 选总线（仿真/EtherCAT/CANopen）→ 填参数 → 连接；检测到多个从站后，用"控制从站"下拉选择要控制的从站（监控面板每从站一个标签页）

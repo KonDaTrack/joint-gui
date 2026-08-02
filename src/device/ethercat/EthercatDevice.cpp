@@ -88,6 +88,7 @@ void EthercatDevice::close()
         eth_freeDLL();
         inited_ = false;
         slaveCount_ = 0;
+        paramsBySlave_.clear();   // 与 CANopen 一致，断开后清掉从站参数
     }
 }
 
