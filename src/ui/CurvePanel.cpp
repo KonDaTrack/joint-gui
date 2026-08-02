@@ -22,11 +22,23 @@ void CurvePanel::push(QVector<double>& buf, double v)
     if (buf.size() > bufferSize_) buf.remove(0, buf.size() - bufferSize_);
 }
 
-void CurvePanel::onTelemetry(const Joint::Telemetry& t)
+void CurvePanel::onTelemetry(const QList<Joint::Telemetry>& list)
 {
-    push(pos_, t.positionDeg);
-    push(vel_, t.velocityDps);
-    push(tor_, t.torqueNm);
+    for (const Joint::Telemetry& t : list) {
+        if (t.slave == activeSlave_) {
+            push(pos_, t.positionDeg);
+            push(vel_, t.velocityDps);
+            push(tor_, t.torqueNm);
+            update();
+            return;
+        }
+    }
+}
+
+void CurvePanel::setActiveSlave(quint16 address)
+{
+    activeSlave_ = address;
+    pos_.clear(); vel_.clear(); tor_.clear();
     update();
 }
 

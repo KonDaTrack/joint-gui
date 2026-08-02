@@ -108,12 +108,11 @@ void ControlWorker::onCycle()
 
     QList<Joint::Telemetry> list;
     bool activeOk = false;
-    Joint::Telemetry activeT;
     for (quint16 s : device_->slaveList()) {
         Joint::Telemetry t;
         if (device_->readTelemetry(s, t)) {
             list.append(t);
-            if (s == activeSlave_) { activeOk = true; activeT = t; }
+            if (s == activeSlave_) { activeOk = true; }
         } else {
             Joint::Telemetry fail;
             fail.slave = s;
@@ -125,7 +124,6 @@ void ControlWorker::onCycle()
 
     if (activeOk) {
         lastTelemetryMs_ = QDateTime::currentMSecsSinceEpoch();
-        emit telemetryUpdated(activeT);   // 临时保留，M5 移除
         return;
     }
 

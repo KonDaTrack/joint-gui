@@ -41,7 +41,7 @@ MainWindow::MainWindow(QWidget* parent)
     setCentralWidget(center);
 
     connect(worker_, &ControlWorker::telemetryUpdatedAll, monitor_, &MonitorPanel::onTelemetry);
-    connect(worker_, &ControlWorker::telemetryUpdated, curve_, &CurvePanel::onTelemetry);
+    connect(worker_, &ControlWorker::telemetryUpdatedAll, curve_, &CurvePanel::onTelemetry);
     connect(worker_, &ControlWorker::connectionChanged, this, &MainWindow::onConnectionChanged);
     connect(worker_, &ControlWorker::faultDetected, this, &MainWindow::onFaultDetected);
     connect(worker_, &ControlWorker::detectionMessage, this,
@@ -50,6 +50,7 @@ MainWindow::MainWindow(QWidget* parent)
             [this](const QList<quint16>& slaves, quint16 active) {
                 monitor_->setSlaves(slaves);
                 monitor_->setActiveSlave(active);
+                curve_->setActiveSlave(active);
             });
 
     connect(control_, &ControlPanel::enableRequested, worker_, &ControlWorker::enableRequested);

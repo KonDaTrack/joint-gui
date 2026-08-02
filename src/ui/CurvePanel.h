@@ -12,7 +12,8 @@ public:
     void setBufferSize(int n);
 
 public slots:
-    void onTelemetry(const Joint::Telemetry& t);
+    void onTelemetry(const QList<Joint::Telemetry>& list);
+    void setActiveSlave(quint16 address);
 
 protected:
     void paintEvent(QPaintEvent* e) override;
@@ -22,5 +23,6 @@ private:
     void drawTrace(QPainter& p, const QVector<double>& buf, const QColor& c, int yPad);
 
     QVector<double> pos_, vel_, tor_;
+    quint16 activeSlave_ = 1;
     int bufferSize_ = 300;
 };

@@ -27,7 +27,6 @@ public slots:
 
 signals:
     void connectionChanged(bool connected, QString busName, int slaveCount, QString error);
-    void telemetryUpdated(const Joint::Telemetry& telemetry);           // 临时保留，M5 移除
     void telemetryUpdatedAll(const QList<Joint::Telemetry>& list);      // 批量遥测
     void slavesDetected(const QList<quint16>& slaves, quint16 activeSlave);
     void faultDetected(QString message);
