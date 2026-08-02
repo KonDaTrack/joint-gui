@@ -120,6 +120,7 @@ void ControlPanel::setBusType(Joint::BusType type)
 void ControlPanel::setSlaves(const QList<quint16>& slaves)
 {
     const quint16 cur = static_cast<quint16>(slaveCombo_->currentData().toInt());
+    QSignalBlocker b(slaveCombo_);   // 重建期间抑制信号，避免误发 activeSlaveChanged 覆盖 worker 的 active
     slaveCombo_->clear();
     for (quint16 s : slaves)
         slaveCombo_->addItem(QStringLiteral("从站 %1").arg(s), s);
