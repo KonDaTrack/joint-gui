@@ -33,8 +33,12 @@ cd joint-gui
 
 ## 3. 部署到 ARM 板
 ### 3.1 拷贝程序与 SDK 库
+> `target` 是占位符，替换为目标板地址，例如 `user@192.168.1.10`（或已配置的 ssh 别名）。
+> `/opt` 属 root 所有，scp 不会自动创建父目录，先在板上建目录：
+
 在开发机上把以下文件拷到目标板同一目录（例如 `/opt/joint-gui/`）：
 ```bash
+ssh target 'sudo mkdir -p /opt/joint-gui'
 scp build-arm/joint_gui target:/opt/joint-gui/
 scp -r ../eyou_ethercat_phu_sdk_aarch64_linux_gnu_20260708/lib target:/opt/joint-gui/eth_lib/
 scp -r ../eyou_canopen_sdk_PHU_aarch64_linux_gnu_20260710/lib target:/opt/joint-gui/can_lib/
@@ -48,15 +52,21 @@ sudo apt install libqt5widgets5 libqt5gui5 libqt5core5a libqt5network5
 ```
 
 ### 3.3 运行
+> 注意：**不要用 `sudo ./joint_gui`**——sudo 默认会清空 `LD_LIBRARY_PATH`，导致找不到 SDK `.so`。
+> 普通用户直接运行即可；EtherCAT 若需权限，先按 3.4 执行 setcap。
+
 ```bash
 cd /opt/joint-gui
 export LD_LIBRARY_PATH=$PWD/eth_lib:$PWD/can_lib
-sudo ./joint_gui
+./joint_gui
 ```
+若确需 root 运行，用 `sudo env LD_LIBRARY_PATH=$PWD/eth_lib:$PWD/can_lib ./joint_gui`。
 
 ### 3.4 权限
-- **EtherCAT**：SOEM 主站需要 root 或 `CAP_NET_RAW`，用 `sudo` 启动
-  （更规范做法：`sudo setcap cap_net_raw+ep joint_gui` 后普通用户也可运行）
+- **EtherCAT**：SOEM 主站需要 root 或 `CAP_NET_RAW` 访问网卡。推荐用 setcap 让普通用户也可运行（否则每次启动都要 root）：
+  ```bash
+  sudo setcap cap_net_raw+ep /opt/joint-gui/joint_gui
+  ```
 - **CANopen**：USB-CAN 适配器需对应驱动；拔插后确认设备节点存在
   ```bash
   ls /dev/ttyACM* /dev/can* 2>/dev/null   # Canable/SocketCAN 类设备
@@ -71,8 +81,9 @@ sudo ./joint_gui
 ## 5. 常见问题（FAQ）
 | 现象 | 排查 |
 |------|------|
-| 自动检测一直落到仿真，但明明接了 EtherCAT | `ip link` 确认网卡名与直连；网卡需独立专用；用 `sudo` 运行 |
+| 自动检测一直落到仿真，但明明接了 EtherCAT | `ip link` 确认网卡名与直连；网卡需独立专用；EtherCAT 需 root/CAP_NET_RAW（见 3.4 setcap），否则检测会跳过该网卡 |
 | 交叉编译找不到 Qt5 | 确认装了 `qtbase5-dev:arm64`；toolchain 使用 `cmake/aarch64-linux-gnu.cmake` |
-| 运行时报找不到 .so | 检查 LD_LIBRARY_PATH 是否包含 SDK lib 目录；`ldd joint_gui` 看缺失项 |
-| CANopen 无设备 | 确认适配器插入且节点 ID 与界面从站 ID 一致；换 `candump` 工具看 CAN 报文 |
+| 运行时报找不到 .so | 检查 LD_LIBRARY_PATH 是否包含 SDK lib 目录；`ldd joint_gui` 看缺失项；Qt 库缺失则装 `libqt5network5` 等运行库 |
+| 用 sudo 启动后找不到 SDK .so | sudo 会清空 LD_LIBRARY_PATH；改用 `./joint_gui`（先 setcap）或 `sudo env LD_LIBRARY_PATH=... ./joint_gui`（见 3.3） |
+| CANopen 无设备 | 确认适配器插入且节点 ID 与界面从站 ID 一致；Canable/SocketCAN 接口可用 `candump can0` 看报文 |
 | 使能后不动 | 检查操作模式是否支持；MIT 模式下目标范围需在 SDK 读到的限制内（±12.5 rad 量级） |
