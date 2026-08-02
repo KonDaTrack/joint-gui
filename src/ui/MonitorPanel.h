@@ -1,9 +1,11 @@
 #pragma once
 #include <QWidget>
 #include <QLabel>
+#include <QHash>
+#include <QTabWidget>
 #include "device/JointTypes.h"
 
-// 实时监控面板：位置/速度/力矩/温度/状态字/驱动状态/故障码/刷新率。
+// 实时监控面板：每从站一个标签页，显示位置/速度/力矩/温度/状态字/驱动状态/故障码/连接/刷新率。
 class MonitorPanel : public QWidget
 {
     Q_OBJECT
@@ -11,12 +13,22 @@ public:
     explicit MonitorPanel(QWidget* parent = nullptr);
 
 public slots:
-    void onTelemetry(const Joint::Telemetry& t);
+    void onTelemetry(const QList<Joint::Telemetry>& list);
+    void setSlaves(const QList<quint16>& slaves);
 
 private:
-    QLabel* value(const QString& name);
-    QLabel* pos_, *vel_, *tor_, *temp_, *status_, *state_, *err_, *conn_, *freq_;
-    int samples_ = 0;
-    qint64 lastFreqMs_ = 0;
-    double freqHz_ = 0.0;  // 实测刷新率（freq_ 已被 QLabel 占用）
+    struct Page {
+        QWidget* page = nullptr;
+        QLabel *pos = nullptr, *vel = nullptr, *tor = nullptr, *temp = nullptr,
+               *status = nullptr, *state = nullptr, *err = nullptr, *conn = nullptr, *freq = nullptr;
+        int samples = 0;
+        qint64 lastFreqMs = 0;
+        double freqHz = 0.0;
+    };
+    QLabel* value();
+    Page makePage(quint16 slave);
+    void updatePage(Page& p, const Joint::Telemetry& t);
+
+    QTabWidget* tabs_;
+    QHash<quint16, Page> pages_;
 };

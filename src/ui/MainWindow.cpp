@@ -40,12 +40,17 @@ MainWindow::MainWindow(QWidget* parent)
     lay->addWidget(curve_, 2);
     setCentralWidget(center);
 
-    connect(worker_, &ControlWorker::telemetryUpdated, monitor_, &MonitorPanel::onTelemetry);
+    connect(worker_, &ControlWorker::telemetryUpdatedAll, monitor_, &MonitorPanel::onTelemetry);
     connect(worker_, &ControlWorker::telemetryUpdated, curve_, &CurvePanel::onTelemetry);
     connect(worker_, &ControlWorker::connectionChanged, this, &MainWindow::onConnectionChanged);
     connect(worker_, &ControlWorker::faultDetected, this, &MainWindow::onFaultDetected);
     connect(worker_, &ControlWorker::detectionMessage, this,
             [this](const QString& m) { statusBar()->showMessage(m); });
+    connect(worker_, &ControlWorker::slavesDetected, this,
+            [this](const QList<quint16>& slaves, quint16 active) {
+                Q_UNUSED(active);
+                monitor_->setSlaves(slaves);
+            });
 
     connect(control_, &ControlPanel::enableRequested, worker_, &ControlWorker::enableRequested);
     connect(control_, &ControlPanel::disableRequested, worker_, &ControlWorker::disableRequested);

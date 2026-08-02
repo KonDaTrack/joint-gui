@@ -3,7 +3,7 @@
 #include <QFormLayout>
 #include <QVBoxLayout>
 
-QLabel* MonitorPanel::value(const QString& name)
+QLabel* MonitorPanel::value()
 {
     QLabel* lab = new QLabel(QStringLiteral("--"), this);
     lab->setMinimumWidth(160);
@@ -13,38 +13,65 @@ QLabel* MonitorPanel::value(const QString& name)
 MonitorPanel::MonitorPanel(QWidget* parent)
     : QWidget(parent)
 {
-    pos_   = value(tr("位置"));
-    vel_   = value(tr("速度"));
-    tor_   = value(tr("力矩"));
-    temp_  = value(tr("温度"));
-    status_= value(tr("状态字"));
-    state_ = value(tr("驱动状态"));
-    err_   = value(tr("故障码"));
-    conn_  = value(tr("连接"));
-    freq_  = value(tr("刷新率"));
-
-    QFormLayout* form = new QFormLayout;
-    form->addRow(tr("位置 (deg)"), pos_);
-    form->addRow(tr("速度 (deg/s)"), vel_);
-    form->addRow(tr("力矩 (N·m)"), tor_);
-    form->addRow(tr("驱动器温度 (°C)"), temp_);
-    form->addRow(tr("状态字 (hex)"), status_);
-    form->addRow(tr("驱动状态"), state_);
-    form->addRow(tr("故障码"), err_);
-    form->addRow(tr("连接状态"), conn_);
-    form->addRow(tr("刷新率"), freq_);
-
-    setLayout(form);
+    tabs_ = new QTabWidget(this);
+    QVBoxLayout* lay = new QVBoxLayout(this);
+    lay->setContentsMargins(0, 0, 0, 0);
+    lay->addWidget(tabs_);
 }
 
-void MonitorPanel::onTelemetry(const Joint::Telemetry& t)
+MonitorPanel::Page MonitorPanel::makePage(quint16 slave)
 {
-    pos_->setText(QString::number(t.positionDeg, 'f', 2));
-    vel_->setText(QString::number(t.velocityDps, 'f', 2));
-    tor_->setText(QString::number(t.torqueNm, 'f', 3));
-    temp_->setText(t.temperatureC > 0 ? QString::number(t.temperatureC, 'f', 1)
-                                      : QStringLiteral("N/A"));
-    status_->setText(QStringLiteral("0x%1").arg(t.statusWord, 4, 16, QLatin1Char('0')));
+    Page p;
+    QWidget* w = new QWidget(tabs_);
+    QFormLayout* form = new QFormLayout(w);
+    p.pos    = value();  form->addRow(tr("位置 (deg)"), p.pos);
+    p.vel    = value();  form->addRow(tr("速度 (deg/s)"), p.vel);
+    p.tor    = value();  form->addRow(tr("力矩 (N·m)"), p.tor);
+    p.temp   = value();  form->addRow(tr("驱动器温度 (°C)"), p.temp);
+    p.status = value();  form->addRow(tr("状态字 (hex)"), p.status);
+    p.state  = value();  form->addRow(tr("驱动状态"), p.state);
+    p.err    = value();  form->addRow(tr("故障码"), p.err);
+    p.conn   = value();  form->addRow(tr("连接状态"), p.conn);
+    p.freq   = value();  form->addRow(tr("刷新率"), p.freq);
+    p.page = w;
+    Q_UNUSED(slave);
+    return p;
+}
+
+void MonitorPanel::setSlaves(const QList<quint16>& slaves)
+{
+    while (tabs_->count() > 0) {
+        QWidget* w = tabs_->widget(0);
+        tabs_->removeTab(0);
+        delete w;   // 页内 QLabel 随页释放
+    }
+    pages_.clear();
+    for (quint16 s : slaves) {
+        Page p = makePage(s);
+        pages_.insert(s, p);
+        tabs_->addTab(p.page, QStringLiteral("从站 %1").arg(s));
+    }
+    if (slaves.isEmpty()) {
+        tabs_->addTab(new QLabel(QStringLiteral("未连接"), tabs_), QStringLiteral("--"));
+    }
+}
+
+void MonitorPanel::onTelemetry(const QList<Joint::Telemetry>& list)
+{
+    for (const Joint::Telemetry& t : list) {
+        auto it = pages_.find(t.slave);
+        if (it != pages_.end()) updatePage(*it, t);
+    }
+}
+
+void MonitorPanel::updatePage(Page& p, const Joint::Telemetry& t)
+{
+    p.pos->setText(QString::number(t.positionDeg, 'f', 2));
+    p.vel->setText(QString::number(t.velocityDps, 'f', 2));
+    p.tor->setText(QString::number(t.torqueNm, 'f', 3));
+    p.temp->setText(t.temperatureC > 0 ? QString::number(t.temperatureC, 'f', 1)
+                                       : QStringLiteral("N/A"));
+    p.status->setText(QStringLiteral("0x%1").arg(t.statusWord, 4, 16, QLatin1Char('0')));
 
     const char* stateStr = "未知";
     switch (t.driveState) {
@@ -58,20 +85,20 @@ void MonitorPanel::onTelemetry(const Joint::Telemetry& t)
     case Joint::DriveState::Fault:              stateStr = "故障"; break;
     case Joint::DriveState::Unknown: break;
     }
-    state_->setText(QString::fromUtf8(stateStr));
-    err_->setText(t.errorCode ? QStringLiteral("0x%1").arg(t.errorCode, 4, 16, QLatin1Char('0'))
-                              : QStringLiteral("无"));
-    conn_->setText(t.connected ? QStringLiteral("在线") : QStringLiteral("离线"));
-    conn_->setStyleSheet(t.connected ? QStringLiteral("color: green;")
-                                     : QStringLiteral("color: red;"));
+    p.state->setText(QString::fromUtf8(stateStr));
+    p.err->setText(t.errorCode ? QStringLiteral("0x%1").arg(t.errorCode, 4, 16, QLatin1Char('0'))
+                               : QStringLiteral("无"));
+    p.conn->setText(t.connected ? QStringLiteral("在线") : QStringLiteral("离线"));
+    p.conn->setStyleSheet(t.connected ? QStringLiteral("color: green;")
+                                      : QStringLiteral("color: red;"));
 
-    ++samples_;
-    if (lastFreqMs_ == 0) lastFreqMs_ = QDateTime::currentMSecsSinceEpoch();
+    ++p.samples;
+    if (p.lastFreqMs == 0) p.lastFreqMs = QDateTime::currentMSecsSinceEpoch();
     const qint64 now = QDateTime::currentMSecsSinceEpoch();
-    if (samples_ >= 20) {
-        freqHz_ = 1000.0 * samples_ / (now - lastFreqMs_);
-        samples_ = 0;
-        lastFreqMs_ = now;
-        freq_->setText(QStringLiteral("%1 Hz").arg(freqHz_, 0, 'f', 1));
+    if (p.samples >= 20) {
+        p.freqHz = 1000.0 * p.samples / (now - p.lastFreqMs);
+        p.samples = 0;
+        p.lastFreqMs = now;
+        p.freq->setText(QStringLiteral("%1 Hz").arg(p.freqHz, 0, 'f', 1));
     }
 }
