@@ -40,7 +40,7 @@ void CurvePanel::drawTrace(QPainter& p, const QVector<double>& buf, const QColor
     const double span = qMax(1e-6, hi - lo);
     lo -= span * 0.1;   // ±10% 余量，避免贴边
     hi += span * 0.1;
-    const double range = qMax(1e-6, hi - lo);
+    const double range = hi - lo;   // 加余量后恒 > 0，不能再 clamp（否则空闲轨迹贴底）
 
     p.setPen(QPen(c, 1.5));
     QPainterPath path;
