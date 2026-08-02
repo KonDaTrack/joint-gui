@@ -14,6 +14,9 @@
 ControlPanel::ControlPanel(QWidget* parent)
     : QWidget(parent)
 {
+    setObjectName(QStringLiteral("PanelCard"));
+    setAttribute(Qt::WA_StyledBackground, true);
+
     // 控制从站下拉：连接前禁用（占位 "--" data 0），检测到从站后由 setSlaves 填充
     slaveCombo_ = new QComboBox(this);
     slaveCombo_->addItem(QStringLiteral("--"), 0);
@@ -27,15 +30,14 @@ ControlPanel::ControlPanel(QWidget* parent)
     slaveRow->addWidget(new QLabel(tr("控制从站"), this));
     slaveRow->addWidget(slaveCombo_, 1);
 
-    // 急停按钮：最显眼
+    // 急停按钮：最显眼（全局 QSS #dangerButton 红色醒目样式）
     estopBtn_ = new QPushButton(QStringLiteral("急停 ESTOP"), this);
-    estopBtn_->setStyleSheet(QStringLiteral(
-        "background:#c0392b;color:white;font-size:20px;font-weight:bold;"
-        "min-height:56px;border-radius:8px;"));
+    estopBtn_->setObjectName(QStringLiteral("dangerButton"));
     connect(estopBtn_, &QPushButton::clicked, this, &ControlPanel::onEstopClicked);
 
     readyCheck_ = new QCheckBox(QStringLiteral("已确认现场安全"), this);
     enableBtn_ = new QPushButton(QStringLiteral("使能"), this);
+    enableBtn_->setObjectName(QStringLiteral("primaryButton"));
     enableBtn_->setEnabled(false);
     connect(readyCheck_, &QCheckBox::toggled, enableBtn_, &QPushButton::setEnabled);
     connect(enableBtn_, &QPushButton::clicked, this, &ControlPanel::onEnableClicked);
@@ -44,6 +46,7 @@ ControlPanel::ControlPanel(QWidget* parent)
     connect(disableBtn_, &QPushButton::clicked, this, &ControlPanel::disableRequested);
 
     faultResetBtn_ = new QPushButton(QStringLiteral("故障复位"), this);
+    faultResetBtn_->setObjectName(QStringLiteral("warningButton"));
     connect(faultResetBtn_, &QPushButton::clicked, this, &ControlPanel::onFaultResetClicked);
 
     modeCombo_ = new QComboBox(this);
@@ -62,9 +65,11 @@ ControlPanel::ControlPanel(QWidget* parent)
     kdEdit_    = new QLineEdit(QStringLiteral("2"), this);
 
     sendBtn_ = new QPushButton(QStringLiteral("下发目标"), this);
+    sendBtn_->setObjectName(QStringLiteral("primaryButton"));
     connect(sendBtn_, &QPushButton::clicked, this, &ControlPanel::onSendTarget);
 
     stopBtn_ = new QPushButton(QStringLiteral("停止运动"), this);
+    stopBtn_->setObjectName(QStringLiteral("warningButton"));
     connect(stopBtn_, &QPushButton::clicked, this, &ControlPanel::onStopMotion);
 
     QHBoxLayout* estopRow = new QHBoxLayout;
@@ -91,11 +96,16 @@ ControlPanel::ControlPanel(QWidget* parent)
     targetRow->addWidget(sendBtn_);
     targetRow->addWidget(stopBtn_);
 
+    QLabel* targetTitle = new QLabel(tr("目标设定"), this);
+    targetTitle->setObjectName(QStringLiteral("sectionTitle"));
+
     QVBoxLayout* root = new QVBoxLayout(this);
+    root->setContentsMargins(16, 16, 16, 16);
+    root->setSpacing(10);
     root->addLayout(slaveRow);
     root->addLayout(estopRow);
     root->addLayout(btnRow);
-    root->addWidget(new QLabel(tr("目标设定"), this));
+    root->addWidget(targetTitle);
     root->addLayout(form);
     root->addLayout(targetRow);
     root->addStretch();

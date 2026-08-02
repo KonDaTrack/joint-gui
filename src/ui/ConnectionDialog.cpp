@@ -3,6 +3,7 @@
 #include <QDialogButtonBox>
 #include <QFormLayout>
 #include <QHBoxLayout>
+#include <QLabel>
 #include <QLineEdit>
 #include <QVBoxLayout>
 
@@ -10,6 +11,10 @@ ConnectionDialog::ConnectionDialog(QWidget* parent)
     : QDialog(parent)
 {
     setWindowTitle(QStringLiteral("连接关节模组"));
+    setMinimumWidth(460);
+
+    QLabel* title = new QLabel(QStringLiteral("连接关节模组总线"), this);
+    title->setObjectName(QStringLiteral("dialogTitle"));
 
     busCombo_ = new QComboBox(this);
     busCombo_->addItem(QStringLiteral("自动检测"), (int)Joint::BusType::Auto);
@@ -30,6 +35,8 @@ ConnectionDialog::ConnectionDialog(QWidget* parent)
     ratedTorqueEdit_ = new QLineEdit(QStringLiteral("1"), this);
 
     QFormLayout* form = new QFormLayout;
+    form->setHorizontalSpacing(14);
+    form->setVerticalSpacing(10);
     form->addRow(QStringLiteral("总线类型"), busCombo_);
     form->addRow(QStringLiteral("EtherCAT 网卡"), ifEdit_);
     form->addRow(QStringLiteral("从站 ID"), slaveEdit_);
@@ -44,6 +51,8 @@ ConnectionDialog::ConnectionDialog(QWidget* parent)
     connect(buttons_, &QDialogButtonBox::rejected, this, &QDialog::reject);
 
     QVBoxLayout* root = new QVBoxLayout(this);
+    root->setSpacing(14);
+    root->addWidget(title);
     root->addLayout(form);
     root->addWidget(buttons_);
 

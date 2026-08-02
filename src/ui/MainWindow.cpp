@@ -14,7 +14,7 @@ MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
 {
     setWindowTitle(QStringLiteral("关节模组监控台"));
-    resize(1100, 700);
+    resize(1680, 940);   // 适配 1080p 屏摄，保持可缩放
 
     worker_ = new ControlWorker;
     worker_->moveToThread(&thread_);
@@ -25,18 +25,26 @@ MainWindow::MainWindow(QWidget* parent)
     curve_ = new CurvePanel(this);
 
     QSplitter* splitter = new QSplitter(Qt::Horizontal, this);
+    splitter->setHandleWidth(8);
     splitter->addWidget(monitor_);
-    // ControlPanel 较高（约 480px），放入滚动区防止在 ~420px 分栏高度下被裁剪。
+    // ControlPanel 较高（约 480px），放入滚动区防止在 ~540px 分栏高度下被裁剪。
     QScrollArea* ctrlScroll = new QScrollArea(this);
     ctrlScroll->setWidget(control_);
     ctrlScroll->setWidgetResizable(true);
     ctrlScroll->setFrameShape(QFrame::NoFrame);
+    ctrlScroll->viewport()->setAutoFillBackground(false);
     splitter->addWidget(ctrlScroll);
-    splitter->setSizes({420, 380});
+    splitter->setStretchFactor(0, 3);   // 监控 : 控制 ≈ 3:2
+    splitter->setStretchFactor(1, 2);
+    splitter->setSizes({660, 420});
 
     QWidget* center = new QWidget(this);
+    center->setObjectName(QStringLiteral("centralRoot"));
+    center->setAttribute(Qt::WA_StyledBackground, true);
     QVBoxLayout* lay = new QVBoxLayout(center);
-    lay->addWidget(splitter, 3);
+    lay->setContentsMargins(12, 12, 12, 12);
+    lay->setSpacing(10);
+    lay->addWidget(splitter, 3);   // 上区(监控+控制) : 曲线 ≈ 3:2
     lay->addWidget(curve_, 2);
     setCentralWidget(center);
 

@@ -6,6 +6,8 @@
 CurvePanel::CurvePanel(QWidget* parent)
     : QWidget(parent)
 {
+    setObjectName(QStringLiteral("PanelCard"));
+    setAttribute(Qt::WA_StyledBackground, true);
     setMinimumHeight(180);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 }
@@ -69,19 +71,20 @@ void CurvePanel::paintEvent(QPaintEvent* e)
 {
     Q_UNUSED(e);
     QPainter p(this);
-    p.fillRect(rect(), QColor(0x20, 0x20, 0x20));
-    p.setPen(QColor(0x50, 0x50, 0x50));
+    // 内部绘图区略深，与外层卡片（#242830 边框）形成层次；留 1px 让 QSS 边框可见
+    p.fillRect(rect().adjusted(1, 1, -1, -1), QColor(0x1A, 0x1D, 0x21));
+    p.setPen(QColor(0x3A, 0x40, 0x46));
     for (int i = 1; i < 4; ++i) {
         const int y = height() * i / 4;
-        p.drawLine(0, y, width(), y);
+        p.drawLine(1, y, width() - 1, y);
     }
 
     p.setRenderHint(QPainter::Antialiasing);
-    const int pad = 8;
+    const int pad = 10;
     drawTrace(p, pos_, QColor(0x4f, 0xc3, 0xf7), pad);   // 蓝 位置
     drawTrace(p, vel_, QColor(0x2e, 0xcc, 0x71), pad);   // 绿 速度
     drawTrace(p, tor_, QColor(0xf3, 0x9c, 0x12), pad);   // 橙 力矩
 
-    p.setPen(Qt::white);
-    p.drawText(8, 16, tr("位置(蓝) 速度(绿) 力矩(橙)"));
+    p.setPen(QColor(0xD0, 0xD6, 0xDD));
+    p.drawText(10, 18, tr("位置(蓝) 速度(绿) 力矩(橙)"));
 }

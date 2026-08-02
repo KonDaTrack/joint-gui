@@ -1,21 +1,31 @@
 #include "ui/MonitorPanel.h"
 #include <QDateTime>
 #include <QFormLayout>
+#include <QStyle>
 #include <QVBoxLayout>
 
-QLabel* MonitorPanel::value()
+QLabel* MonitorPanel::value(const char* objectName)
 {
     QLabel* lab = new QLabel(QStringLiteral("--"), this);
-    lab->setMinimumWidth(160);
+    lab->setMinimumWidth(200);
+    lab->setMinimumHeight(26);
+    if (objectName && *objectName) {
+        lab->setObjectName(QString::fromLatin1(objectName));
+        lab->style()->unpolish(lab);
+        lab->style()->polish(lab);
+    }
     return lab;
 }
 
 MonitorPanel::MonitorPanel(QWidget* parent)
     : QWidget(parent)
 {
+    setObjectName(QStringLiteral("PanelCard"));
+    setAttribute(Qt::WA_StyledBackground, true);
+
     tabs_ = new QTabWidget(this);
     QVBoxLayout* lay = new QVBoxLayout(this);
-    lay->setContentsMargins(0, 0, 0, 0);
+    lay->setContentsMargins(8, 8, 8, 8);
     lay->addWidget(tabs_);
 }
 
@@ -24,15 +34,18 @@ MonitorPanel::Page MonitorPanel::makePage(quint16 slave)
     Page p;
     QWidget* w = new QWidget(tabs_);
     QFormLayout* form = new QFormLayout(w);
-    p.pos    = value();  form->addRow(tr("位置 (deg)"), p.pos);
-    p.vel    = value();  form->addRow(tr("速度 (deg/s)"), p.vel);
-    p.tor    = value();  form->addRow(tr("力矩 (N·m)"), p.tor);
-    p.temp   = value();  form->addRow(tr("驱动器温度 (°C)"), p.temp);
-    p.status = value();  form->addRow(tr("状态字 (hex)"), p.status);
-    p.state  = value();  form->addRow(tr("驱动状态"), p.state);
-    p.err    = value();  form->addRow(tr("故障码"), p.err);
-    p.conn   = value();  form->addRow(tr("连接状态"), p.conn);
-    p.freq   = value();  form->addRow(tr("刷新率"), p.freq);
+    form->setHorizontalSpacing(16);
+    form->setVerticalSpacing(8);
+    // 位置/速度/力矩为实时核心数据：大字号 + 科技青 + 等宽数字字体
+    p.pos    = value("bigValue");  form->addRow(tr("位置 (deg)"), p.pos);
+    p.vel    = value("bigValue");  form->addRow(tr("速度 (deg/s)"), p.vel);
+    p.tor    = value("bigValue");  form->addRow(tr("力矩 (N·m)"), p.tor);
+    p.temp   = value();            form->addRow(tr("驱动器温度 (°C)"), p.temp);
+    p.status = value();            form->addRow(tr("状态字 (hex)"), p.status);
+    p.state  = value();            form->addRow(tr("驱动状态"), p.state);
+    p.err    = value();            form->addRow(tr("故障码"), p.err);
+    p.conn   = value();            form->addRow(tr("连接状态"), p.conn);
+    p.freq   = value();            form->addRow(tr("刷新率"), p.freq);
     p.page = w;
     Q_UNUSED(slave);
     return p;
@@ -93,11 +106,25 @@ void MonitorPanel::updatePage(Page& p, const Joint::Telemetry& t)
     case Joint::DriveState::Unknown: break;
     }
     p.state->setText(QString::fromUtf8(stateStr));
+    // 驱动状态按工业状态色着色：运行使能→绿 / 故障→红 / 故障反应·快速停机→黄
+    const char* stateColor = "#D0D6DD";
+    switch (t.driveState) {
+    case Joint::DriveState::OperationEnabled:  stateColor = "#00C853"; break;
+    case Joint::DriveState::Fault:             stateColor = "#FF5252"; break;
+    case Joint::DriveState::FaultReactionActive:
+    case Joint::DriveState::QuickStopActive:   stateColor = "#FFAB00"; break;
+    default: break;
+    }
+    p.state->setStyleSheet(QStringLiteral("color: %1; font-weight: bold;").arg(stateColor));
+
     p.err->setText(t.errorCode ? QStringLiteral("0x%1").arg(t.errorCode, 4, 16, QLatin1Char('0'))
                                : QStringLiteral("无"));
+    p.err->setStyleSheet(t.errorCode ? QStringLiteral("color: #FF5252; font-weight: bold;")
+                                     : QStringLiteral("color: #00C853;"));
+
     p.conn->setText(t.connected ? QStringLiteral("在线") : QStringLiteral("离线"));
-    p.conn->setStyleSheet(t.connected ? QStringLiteral("color: green;")
-                                      : QStringLiteral("color: red;"));
+    p.conn->setStyleSheet(t.connected ? QStringLiteral("color: #00C853; font-weight: bold;")
+                                      : QStringLiteral("color: #FF5252; font-weight: bold;"));
 
     ++p.samples;
     if (p.lastFreqMs == 0) p.lastFreqMs = QDateTime::currentMSecsSinceEpoch();

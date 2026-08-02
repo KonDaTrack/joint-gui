@@ -26,7 +26,7 @@ private:
         qint64 lastFreqMs = 0;
         double freqHz = 0.0;
     };
-    QLabel* value();
+    QLabel* value(const char* objectName = nullptr);
     Page makePage(quint16 slave);
     void updatePage(Page& p, const Joint::Telemetry& t);
 
