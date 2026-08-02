@@ -38,5 +38,9 @@ void TestUnitConverter::radToDeg()
     QVERIFY(qAbs(UnitConverter::degToRad(180.0) - 3.14159265358979323846) < 1e-9);
 }
 
-QTEST_APPLESS_MAIN(TestUnitConverter)
+int runUnitConverterTests(int argc, char *argv[])
+{
+    TestUnitConverter t;
+    return QTest::qExec(&t, argc, argv);
+}
 #include "TestUnitConverter.moc"

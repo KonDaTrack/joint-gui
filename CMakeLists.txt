@@ -41,8 +41,12 @@ find_package(Qt5 REQUIRED COMPONENTS Test)
 enable_testing()
 
 add_executable(unit_tests
+    tests/TestMain.cpp
     tests/TestUnitConverter.cpp
+    tests/TestJointModel.cpp
     src/core/UnitConverter.cpp
+    src/device/sim/JointModel.cpp
+    src/device/JointTypes.cpp   # TestJointModel 依赖 Joint::mapDriveState
 )
 target_include_directories(unit_tests PRIVATE ${JOINT_GUI_INCLUDE_DIRS})
 target_link_libraries(unit_tests PRIVATE Qt5::Test Qt5::Core)
