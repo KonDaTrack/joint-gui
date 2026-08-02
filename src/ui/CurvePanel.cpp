@@ -31,15 +31,22 @@ void CurvePanel::onTelemetry(const Joint::Telemetry& t)
 }
 
 void CurvePanel::drawTrace(QPainter& p, const QVector<double>& buf, const QColor& c,
-                           double min, double max, int yPad)
+                           int yPad)
 {
     if (buf.isEmpty()) return;
-    const double range = qMax(1e-6, max - min);
+    // 每条轨迹独立自动缩放（量级差异大的位置/速度/力矩共用缩放会压平小信号）
+    double lo = buf[0], hi = buf[0];
+    for (const auto& v : buf) { lo = qMin(lo, v); hi = qMax(hi, v); }
+    const double span = qMax(1e-6, hi - lo);
+    lo -= span * 0.1;   // ±10% 余量，避免贴边
+    hi += span * 0.1;
+    const double range = qMax(1e-6, hi - lo);
+
     p.setPen(QPen(c, 1.5));
     QPainterPath path;
     for (int i = 0; i < buf.size(); ++i) {
         const double x = (double)i / (bufferSize_ - 1) * (width() - 2 * yPad) + yPad;
-        const double y = height() - yPad - (buf[i] - min) / range * (height() - 2 * yPad);
+        const double y = height() - yPad - (buf[i] - lo) / range * (height() - 2 * yPad);
         if (i == 0) path.moveTo(x, y); else path.lineTo(x, y);
     }
     p.drawPath(path);
@@ -56,15 +63,11 @@ void CurvePanel::paintEvent(QPaintEvent* e)
         p.drawLine(0, y, width(), y);
     }
 
-    double min = 0, max = 1;
-    for (const auto& v : pos_) { min = qMin(min, v); max = qMax(max, v); }
-    for (const auto& v : vel_) { min = qMin(min, v); max = qMax(max, v); }
-    for (const auto& v : tor_) { min = qMin(min, v); max = qMax(max, v); }
-
+    p.setRenderHint(QPainter::Antialiasing);
     const int pad = 8;
-    drawTrace(p, pos_, QColor(0x4f, 0xc3, 0xf7), min, max, pad);   // 蓝 位置
-    drawTrace(p, vel_, QColor(0x2e, 0xcc, 0x71), min, max, pad);   // 绿 速度
-    drawTrace(p, tor_, QColor(0xf3, 0x9c, 0x12), min, max, pad);   // 橙 力矩
+    drawTrace(p, pos_, QColor(0x4f, 0xc3, 0xf7), pad);   // 蓝 位置
+    drawTrace(p, vel_, QColor(0x2e, 0xcc, 0x71), pad);   // 绿 速度
+    drawTrace(p, tor_, QColor(0xf3, 0x9c, 0x12), pad);   // 橙 力矩
 
     p.setPen(Qt::white);
     p.drawText(8, 16, tr("位置(蓝) 速度(绿) 力矩(橙)"));

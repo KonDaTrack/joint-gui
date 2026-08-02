@@ -19,8 +19,7 @@ protected:
 
 private:
     void push(QVector<double>& buf, double v);
-    void drawTrace(QPainter& p, const QVector<double>& buf, const QColor& c,
-                   double min, double max, int yPad);
+    void drawTrace(QPainter& p, const QVector<double>& buf, const QColor& c, int yPad);
 
     QVector<double> pos_, vel_, tor_;
     int bufferSize_ = 300;
