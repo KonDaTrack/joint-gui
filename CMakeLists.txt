@@ -35,6 +35,7 @@ add_executable(joint_gui
     src/device/JointTypes.h
     src/core/AppConfig.cpp
     src/core/AppConfig.h
+    src/core/UnitConverter.cpp   # EthercatDevice 依赖脉冲↔角度/力矩换算
     src/core/ControlWorker.cpp
     src/core/ControlWorker.h
     src/device/JointDevice.h
@@ -44,12 +45,23 @@ add_executable(joint_gui
     src/device/sim/SimulatedDevice.h
     src/device/sim/JointModel.cpp
     src/device/sim/JointModel.h
+    src/device/ethercat/EthercatDevice.cpp
+    src/device/ethercat/EthercatDevice.h
 )
 # 统一按 src 相对路径包含头文件（"ui/..."、"core/..."、"device/..."）。
 # 后续新增 target（如 unit_tests）必须复用此变量，否则找不到头文件。
 set(JOINT_GUI_INCLUDE_DIRS src)
+
+# EtherCAT SDK（eyou_ethercat_phu_sdk_${JOINT_ARCH}_linux_gnu_20260708）
+set(EY_ETHERCAT_SDK_DIR "${CMAKE_SOURCE_DIR}/../eyou_ethercat_phu_sdk_${JOINT_ARCH}_linux_gnu_20260708")
+target_include_directories(joint_gui PRIVATE "${EY_ETHERCAT_SDK_DIR}/include")
+target_link_directories(joint_gui PRIVATE "${EY_ETHERCAT_SDK_DIR}/lib")
+target_link_libraries(joint_gui PRIVATE eu_ethercat)
+
 target_include_directories(joint_gui PRIVATE ${JOINT_GUI_INCLUDE_DIRS})
 target_link_libraries(joint_gui PRIVATE Qt5::Widgets Qt5::Network)
+# 部署时 .so 与可执行文件同目录，避免依赖 LD_LIBRARY_PATH
+set_target_properties(joint_gui PROPERTIES INSTALL_RPATH "$ORIGIN")
 
 find_package(Qt5 REQUIRED COMPONENTS Test)
 enable_testing()
