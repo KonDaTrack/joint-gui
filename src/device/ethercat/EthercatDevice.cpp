@@ -8,6 +8,41 @@ EthercatDevice::~EthercatDevice()
     close();
 }
 
+// 逐从站按标准 CiA402 对象读取参数；失败字段保持 0
+void EthercatDevice::readDeviceParams()
+{
+    for (quint16 s : slaveList()) {
+        Joint::DeviceParams p;
+        hint32 t = 0;
+        if (eth_readSDO(s, 0x6076, 0x00, &t, eth_DataType_int32, 20) == ETH_SUCCESS)
+            p.ratedTorqueNm = t;   // 假定 N·m；实机验证单位（可能 mN·m 需 /1000）
+        huint32 v1 = 0, v2 = 0;
+        if (eth_readSDO(s, 0x608F, 0x01, &v1, eth_DataType_uint32, 20) == ETH_SUCCESS
+            && eth_readSDO(s, 0x608F, 0x02, &v2, eth_DataType_uint32, 20) == ETH_SUCCESS) {
+            p.encoderPulsesPerRev = v2 > 0 ? (double)v1 / v2 : (double)v1;
+        }
+        v1 = v2 = 0;
+        if (eth_readSDO(s, 0x6090, 0x01, &v1, eth_DataType_uint32, 20) == ETH_SUCCESS
+            && eth_readSDO(s, 0x6090, 0x02, &v2, eth_DataType_uint32, 20) == ETH_SUCCESS) {
+            p.gearRatio = v2 > 0 ? (double)v1 / v2 : 0.0;
+        }
+        paramsBySlave_.insert(s, p);
+    }
+}
+
+// 某从站参数：读到的有效则用，否则回退到 cfg 手动值
+// （pulsesPerRev_/gearRatio_/ratedNm_ 已在 open() 从 cfg 赋值）
+Joint::DeviceParams EthercatDevice::paramsFor(quint16 slave) const
+{
+    auto it = paramsBySlave_.find(slave);
+    if (it != paramsBySlave_.end() && it->valid()) return *it;
+    Joint::DeviceParams p;
+    p.encoderPulsesPerRev = pulsesPerRev_;
+    p.gearRatio = gearRatio_;
+    p.ratedTorqueNm = ratedNm_;
+    return p;
+}
+
 bool EthercatDevice::open(const AppConfig& cfg)
 {
     pulsesPerRev_ = cfg.encoderPulsesPerRev;
@@ -23,6 +58,7 @@ bool EthercatDevice::open(const AppConfig& cfg)
     }
     inited_ = true;
     slaveCount_ = slaveCnt;
+    if (slaveCount_ > 0) readDeviceParams();
     // 即使 0 从站也要返回 false（自动检测会跳过此网卡），但网卡需由 close 释放
     return slaveCount_ > 0;
 }
@@ -60,49 +96,50 @@ bool EthercatDevice::setOperateMode(quint16 slave, Joint::OperateMode mode)
 
 bool EthercatDevice::setTarget(quint16 slave, const Joint::TargetCommand& cmd)
 {
+    const Joint::DeviceParams p = paramsFor(slave);
     switch (mode_) {
     case Joint::OperateMode::CyclicSyncPosition:
     case Joint::OperateMode::ProfilePosition:
     case Joint::OperateMode::InterpolatedPosition:
         if (cmd.hasPosition) {
             eth_setTargetPosition(slave, (hint32)UnitConverter::degToPulses(
-                cmd.positionDeg, pulsesPerRev_, gearRatio_));
+                cmd.positionDeg, p.encoderPulsesPerRev, p.gearRatio));
         }
         eth_setProfileVelocity(slave, (huint32)UnitConverter::degToPulses(
-            cmd.profileVelocity, pulsesPerRev_, gearRatio_));
+            cmd.profileVelocity, p.encoderPulsesPerRev, p.gearRatio));
         eth_setProfileAcceleration(slave, (huint32)UnitConverter::degToPulses(
-            cmd.profileAcceleration, pulsesPerRev_, gearRatio_));
+            cmd.profileAcceleration, p.encoderPulsesPerRev, p.gearRatio));
         eth_setProfileDeceleration(slave, (huint32)UnitConverter::degToPulses(
-            cmd.profileDeceleration, pulsesPerRev_, gearRatio_));
+            cmd.profileDeceleration, p.encoderPulsesPerRev, p.gearRatio));
         return true;
     case Joint::OperateMode::CyclicSyncVelocity:
     case Joint::OperateMode::ProfileVelocity:
     case Joint::OperateMode::Velocity:
         if (cmd.hasVelocity) {
             eth_setTargetVelocity(slave, (hint32)UnitConverter::degToPulses(
-                cmd.velocityDps, pulsesPerRev_, gearRatio_));
+                cmd.velocityDps, p.encoderPulsesPerRev, p.gearRatio));
         }
         return true;
     case Joint::OperateMode::CyclicSyncTorque:
     case Joint::OperateMode::ProfileTorque:
         if (cmd.hasTorque) {
             eth_setTargetTorque(slave, (hint32)UnitConverter::nmToPermille(
-                cmd.torqueNm, ratedNm_));
+                cmd.torqueNm, p.ratedTorqueNm));
         }
         return true;
     case Joint::OperateMode::TorquePositionFixed:
         // 力矩位置混合：位置/速度/力矩三个寄存器同时下发（SDK 无独立 MIT 函数）
         if (cmd.hasPosition) {
             eth_setTargetPosition(slave, (hint32)UnitConverter::degToPulses(
-                cmd.positionDeg, pulsesPerRev_, gearRatio_));
+                cmd.positionDeg, p.encoderPulsesPerRev, p.gearRatio));
         }
         if (cmd.hasVelocity) {
             eth_setTargetVelocity(slave, (hint32)UnitConverter::degToPulses(
-                cmd.velocityDps, pulsesPerRev_, gearRatio_));
+                cmd.velocityDps, p.encoderPulsesPerRev, p.gearRatio));
         }
         if (cmd.hasTorque) {
             eth_setTargetTorque(slave, (hint32)UnitConverter::nmToPermille(
-                cmd.torqueNm, ratedNm_));
+                cmd.torqueNm, p.ratedTorqueNm));
         }
         return true;
     default:
@@ -112,6 +149,7 @@ bool EthercatDevice::setTarget(quint16 slave, const Joint::TargetCommand& cmd)
 
 bool EthercatDevice::readTelemetry(quint16 slave, Joint::Telemetry& out)
 {
+    const Joint::DeviceParams p = paramsFor(slave);
     hint32 pos = 0, vel = 0, temp = 0;
     hint16 tor = 0;
     huint16 sw = 0, err = 0;
@@ -130,9 +168,9 @@ bool EthercatDevice::readTelemetry(quint16 slave, Joint::Telemetry& out)
 
     out.slave = slave;
     out.connected = true;
-    out.positionDeg = UnitConverter::pulsesToDeg(pos, pulsesPerRev_, gearRatio_);
-    out.velocityDps = UnitConverter::pulsesToDeg(vel, pulsesPerRev_, gearRatio_); // 假定脉冲/s
-    out.torqueNm = UnitConverter::permilleToNm(tor, ratedNm_);
+    out.positionDeg = UnitConverter::pulsesToDeg(pos, p.encoderPulsesPerRev, p.gearRatio);
+    out.velocityDps = UnitConverter::pulsesToDeg(vel, p.encoderPulsesPerRev, p.gearRatio); // 假定脉冲/s
+    out.torqueNm = UnitConverter::permilleToNm(tor, p.ratedTorqueNm);
     out.temperatureC = temp;
     out.statusWord = sw;
     out.driveState = Joint::mapDriveState(sw);

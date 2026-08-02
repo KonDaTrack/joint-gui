@@ -1,5 +1,6 @@
 #pragma once
 #include "device/JointDevice.h"
+#include <QHash>
 
 class EthercatDevice : public JointDevice
 {
@@ -33,4 +34,7 @@ private:
     double gearRatio_ = 1.0;
     double ratedNm_ = 1.0;
     Joint::OperateMode mode_ = Joint::OperateMode::CyclicSyncPosition;
+    QHash<quint16, Joint::DeviceParams> paramsBySlave_;   // 每从站自动读取的参数
+    void readDeviceParams();
+    Joint::DeviceParams paramsFor(quint16 slave) const;   // 有效参数或 cfg 回退
 };
