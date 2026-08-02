@@ -11,8 +11,11 @@
 ```
 sudo apt install qtbase5-dev cmake g++
 ./build.sh
-./build/joint_gui            # 仿真模式可直接运行
+./run.sh                     # 运行（自动设置 SDK 库的 LD_LIBRARY_PATH）
 ```
+> SDK 库自身带厂商构建机路径的 DT_RUNPATH，直接运行 `./build/joint_gui` 会找不到
+> 传递依赖（`libsoem.so`/`libcyhcs_log.so` 等）。用 `./run.sh` 或
+> `LD_LIBRARY_PATH=../eyou_*_sdk_*_linux_gnu_*/lib ./build/joint_gui` 均可。
 
 ## ARM 交叉构建（在 x86 上产出 aarch64 可执行文件）
 ```
