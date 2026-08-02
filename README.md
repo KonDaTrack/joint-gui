@@ -18,8 +18,8 @@ sudo apt install qtbase5-dev cmake g++
 ```
 sudo dpkg --add-architecture arm64
 sudo apt update
-sudo apt install gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
-                 qtbase5-dev-tools qtbase5-dev:arm64 libqt5test5:arm64
+sudo apt install cmake gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
+                 qtbase5-dev-tools qtbase5-dev:arm64
 ./build.sh arm
 # 产出 build-arm/joint_gui（aarch64 原生二进制）
 ```
@@ -33,7 +33,7 @@ sudo apt install qtbase5-dev cmake g++ pkg-config
 ## 部署到 ARM 板
 板上仅需 Qt 运行库，无需开发环境：
 ```
-sudo apt install libqt5widgets5 libqt5gui5 libqt5core5a
+sudo apt install libqt5widgets5 libqt5gui5 libqt5core5a libqt5network5
 ```
 将 `build-arm/joint_gui` 与所需 SDK `.so` 一并拷贝到板上，然后设置
 `LD_LIBRARY_PATH` 指向 SDK 的 `lib/` 目录再运行：
