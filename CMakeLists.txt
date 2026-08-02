@@ -47,6 +47,10 @@ add_executable(joint_gui
     src/device/sim/JointModel.h
     src/device/ethercat/EthercatDevice.cpp
     src/device/ethercat/EthercatDevice.h
+    src/device/canopen/CanopenDevice.cpp
+    src/device/canopen/CanopenDevice.h
+    src/device/canopen/MitFrameCodec.cpp
+    src/device/canopen/MitFrameCodec.h
 )
 # 统一按 src 相对路径包含头文件（"ui/..."、"core/..."、"device/..."）。
 # 后续新增 target（如 unit_tests）必须复用此变量，否则找不到头文件。
@@ -57,6 +61,12 @@ set(EY_ETHERCAT_SDK_DIR "${CMAKE_SOURCE_DIR}/../eyou_ethercat_phu_sdk_${JOINT_AR
 target_include_directories(joint_gui PRIVATE "${EY_ETHERCAT_SDK_DIR}/include")
 target_link_directories(joint_gui PRIVATE "${EY_ETHERCAT_SDK_DIR}/lib")
 target_link_libraries(joint_gui PRIVATE eu_ethercat)
+
+# CANopen SDK（eyou_canopen_sdk_PHU_${JOINT_ARCH}_linux_gnu_20260710）
+set(EY_CANOPEN_SDK_DIR "${CMAKE_SOURCE_DIR}/../eyou_canopen_sdk_PHU_${JOINT_ARCH}_linux_gnu_20260710")
+target_include_directories(joint_gui PRIVATE "${EY_CANOPEN_SDK_DIR}/include")
+target_link_directories(joint_gui PRIVATE "${EY_CANOPEN_SDK_DIR}/lib")
+target_link_libraries(joint_gui PRIVATE eu_canopen eu_eds eu_candrv eu_log eu_resources)
 
 target_include_directories(joint_gui PRIVATE ${JOINT_GUI_INCLUDE_DIRS})
 target_link_libraries(joint_gui PRIVATE Qt5::Widgets Qt5::Network)
