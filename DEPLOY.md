@@ -7,7 +7,23 @@
 - 关节模组与相应总线硬件：
   - EtherCAT：目标机网卡直连关节 EtherCAT 口（网卡建议独立专用，勿用主管理网口）
   - CANopen：USB-CAN 适配器（Canable/ControlCAN 类）插入目标机
-- 仓库内对应架构的 SDK 目录已拷贝到目标机（或从开发机打包）
+- 对应架构的 SDK 目录（不在 git 仓库内，需单独放置到 `joint-gui` 的上一级）
+
+## 0.1 从 GitHub 拉取代码（git 工作流）
+- 代码仓库：https://github.com/KonDaTrack/joint-gui（公开仓库，拉取免认证）
+- **首次克隆**（在目标机）：
+  ```bash
+  git clone https://github.com/KonDaTrack/joint-gui.git
+  # 把对应架构的 aarch64 SDK 目录放到克隆出的 joint-gui 上一级（同级）：
+  cp -r /路径/eyou_ethercat_phu_sdk_aarch64_linux_gnu_20260708 ../joint-gui/../
+  cp -r /路径/eyou_canopen_sdk_PHU_aarch64_linux_gnu_20260710 ../joint-gui/../
+  cd joint-gui && chmod +x build.sh run.sh && ./build.sh
+  ```
+- **日常更新**（只拉代码，SDK 在板子上不受影响）：
+  ```bash
+  cd joint-gui && git pull
+  ```
+- **开发机推送**：`git add . && git commit -m "..." && git push`（已配 SSH 免密）
 
 ## 1. 开发机（x86）本机构建与调试
 ```bash
