@@ -5,7 +5,15 @@
 ## 依赖
 - Qt5 Widgets 开发包（`qtbase5-dev`）
 - CMake ≥ 3.16、g++（C++17）
-- 仓库内两套 SDK（EtherCAT / CANopen，x86_64 或 aarch64）
+- 两套 SDK（EtherCAT / CANopen，x86_64 或 aarch64）
+
+> **git clone 注意**：SDK 不在本仓库内。clone 后需把对应架构的 SDK 目录放到 `joint-gui` 的**上一级**（CMake 用 `../eyou_*_sdk_*_linux_gnu_*/` 查找），即：
+> ```
+> <父目录>/
+> ├── joint-gui/
+> ├── eyou_ethercat_phu_sdk_<arch>_linux_gnu_20260708/
+> └── eyou_canopen_sdk_PHU_<arch>_linux_gnu_20260710/
+> ```
 
 ## x86 本机构建
 ```
