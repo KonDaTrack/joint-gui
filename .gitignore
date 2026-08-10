@@ -1,4 +1,22 @@
+# 构建产物（本机构建 build/、交叉构建 build-arm/）
 build*/
+CMakeCache.txt
+CMakeFiles/
 *.o
+*.a
 *.moc
+*.prl
+
+# Qt 工程临时文件
 *.user
+.qmake.stash
+
+# 编辑器/系统文件
+.vscode/
+.idea/
+*~
+*.swp
+.directory
+.DS_Store
+
+# 说明：SDK（eyou_*_sdk_*）不在此仓库，需单独放到本目录的上一级（../eyou_*_sdk_*_linux_gnu_*/）
