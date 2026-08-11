@@ -5,25 +5,18 @@
 #include <thread>
 #include <chrono>
 
-// 0x6076 额定扭矩原始值 → N·m 的换算系数；实机 PHU 报 250（mN·m）→ 0.25 N·m
-static constexpr double kRatedTorqueNmScale = 0.001;
-
 EthercatDevice::~EthercatDevice()
 {
     close();
 }
 
-// 逐从站读取设备参数。PHU 关节用厂商 OD 布局（实机 0x608F:1/2=524288/1、0x6091:1/2=1/1），
-// 与 CANopen 版一致；标准 0x608F:0 / 0x6090 在本驱动不可用。读取失败字段保持 0。
+// 逐从站读取设备参数。本驱动 OD 的减速比(0x6091=1/1，实物 101)与额定扭矩(0x6076 单位不明)
+// 均不可靠，只自动读取编码器分辨率（0x608F:1/2=524288/1，与 19 位编码器一致）。
 void EthercatDevice::readDeviceParams()
 {
     paramsBySlave_.clear();   // 避免重连残留旧从站参数
     for (quint16 s : slaveList()) {
         Joint::DeviceParams p;
-        // 0x6076 额定扭矩；单位假定 mN·m（×kRatedTorqueNmScale），实机 PHU 报 250 → 0.25 N·m
-        hint32 t = 0;
-        if (eth_readSDO(s, 0x6076, 0x00, &t, eth_DataType_int32, 1000) == ETH_SUCCESS)
-            p.ratedTorqueNm = t * kRatedTorqueNmScale;
         // 编码器分辨率：优先 0x608F:1/2（分子/分母，PHU 用 524288/1）；sub0 单值作回退
         huint32 v1 = 0, v2 = 0;
         if (eth_readSDO(s, 0x608F, 0x01, &v1, eth_DataType_uint32, 1000) == ETH_SUCCESS
@@ -34,14 +27,13 @@ void EthercatDevice::readDeviceParams()
             if (eth_readSDO(s, 0x608F, 0x00, &v0, eth_DataType_uint32, 1000) == ETH_SUCCESS && v0 > 0)
                 p.encoderPulsesPerRev = v0;
         }
-        // 减速比：不自动读取。实机 0x6091:1/2 报 1/1，但手册实物减速比为 101，
-        // OD 值不可靠，必须以连接对话框手动设置为准。
+        // 减速比、额定扭矩：不自动读取，一律以连接对话框手动设置（cfg）为准
         paramsBySlave_.insert(s, p);
     }
 }
 
-// 某从站参数：编码器分辨率/额定扭矩用自动读取值；减速比一律用 cfg 手动值
-// （0x6091 实测不可靠，PHU 双绝对关节实物减速比 101）。cfg 值在 open() 已从对话框赋值。
+// 某从站参数：编码器分辨率用自动读取值；减速比、额定扭矩用 cfg 手动值。
+// 本驱动 0x6091(减速比=1/1 实物 101)与 0x6076(额定扭矩单位不明)不可靠。
 Joint::DeviceParams EthercatDevice::paramsFor(quint16 slave) const
 {
     Joint::DeviceParams p;
@@ -49,11 +41,8 @@ Joint::DeviceParams EthercatDevice::paramsFor(quint16 slave) const
     p.gearRatio = gearRatio_;
     p.ratedTorqueNm = ratedNm_;
     const auto it = paramsBySlave_.find(slave);
-    if (it != paramsBySlave_.end()) {
-        if (it->encoderPulsesPerRev > 0) p.encoderPulsesPerRev = it->encoderPulsesPerRev;
-        if (it->ratedTorqueNm > 0) p.ratedTorqueNm = it->ratedTorqueNm;
-        // gearRatio 保持 cfg 值
-    }
+    if (it != paramsBySlave_.end() && it->encoderPulsesPerRev > 0)
+        p.encoderPulsesPerRev = it->encoderPulsesPerRev;
     return p;
 }
 
