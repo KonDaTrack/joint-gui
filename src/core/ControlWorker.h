@@ -24,6 +24,7 @@ public slots:
     void faultResetRequested();
     void setOperateModeRequested(Joint::OperateMode mode);
     void setTargetRequested(const Joint::TargetCommand& cmd);
+    void homingRequested();
 
 signals:
     void connectionChanged(bool connected, QString busName, int slaveCount, QString error);
@@ -31,6 +32,7 @@ signals:
     void slavesDetected(const QList<quint16>& slaves, quint16 activeSlave);
     void faultDetected(QString message);
     void detectionMessage(QString message);   // 自动检测过程提示（显示在状态栏）
+    void homingFinished(bool ok);             // 归航完成（ok=false 表示失败/超时）
 
 private slots:
     void onCycle();

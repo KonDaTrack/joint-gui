@@ -49,6 +49,11 @@ ControlPanel::ControlPanel(QWidget* parent)
     faultResetBtn_->setObjectName(QStringLiteral("warningButton"));
     connect(faultResetBtn_, &QPushButton::clicked, this, &ControlPanel::onFaultResetClicked);
 
+    homeBtn_ = new QPushButton(QStringLiteral("归零"), this);
+    homeBtn_->setEnabled(false);
+    connect(homeBtn_, &QPushButton::clicked, this, &ControlPanel::homingRequested);
+    connect(readyCheck_, &QCheckBox::toggled, homeBtn_, &QPushButton::setEnabled);
+
     modeCombo_ = new QComboBox(this);
     // 轮廓模式：驱动内部生成平滑轨迹，主站一发目标即可（对齐官方 PP/PV/PT 例程）
     modeCombo_->addItem(QStringLiteral("轮廓位置 PP"), (int)Joint::OperateMode::ProfilePosition);
@@ -79,6 +84,7 @@ ControlPanel::ControlPanel(QWidget* parent)
     btnRow->addWidget(enableBtn_);
     btnRow->addWidget(disableBtn_);
     btnRow->addWidget(faultResetBtn_);
+    btnRow->addWidget(homeBtn_);
 
     form_ = new QFormLayout;
     form_->addRow(tr("操作模式"), modeCombo_);

@@ -141,6 +141,42 @@ bool EthercatDevice::setOperateMode(quint16 slave, Joint::OperateMode mode)
     return ok;
 }
 
+// 归航：参考官方 test_zero.cpp。归航方法 0x6098=35，进入 Homing 模式后控制字 bit4 启动，
+// 轮询状态字 bit12(归航到位) 完成，写 0x2130 保存参数，最后恢复原操作模式。
+bool EthercatDevice::homing(quint16 slave)
+{
+    hint32 pos = 0;
+    if (eth_getActualPosition(slave, &pos) != ETH_SUCCESS) return false;
+    if (pos > -20 && pos < 20) return true;   // 已在零位
+
+    huint8 homeMode = 35;
+    eth_writeSDO(slave, 0x6098, 0x00, &homeMode, eth_DataType_uint8, 200);
+
+    const Joint::OperateMode prev = mode_;   // 归航后恢复原模式
+    eth_setOperateMode(slave, eth_OperateMode_Homing);
+    eth_setControlWord(slave, 0x06);
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    eth_setControlWord(slave, 0x07);
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    eth_setControlWord(slave, 0x0F);
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    eth_setControlWord(slave, 0x0F | 0x10);   // 启动归航（bit4 上升沿，保持 bit0=1）
+
+    // 轮询等待归航完成，超时 10s
+    const qint64 deadline = QDateTime::currentMSecsSinceEpoch() + 10000;
+    while (QDateTime::currentMSecsSinceEpoch() < deadline) {
+        huint16 sw = 0;
+        if (eth_getStatusWord(slave, &sw) == ETH_SUCCESS && (sw & 0x1000))
+            break;   // bit12 homing attained
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    }
+    huint8 store = 1;
+    eth_writeSDO(slave, 0x2130, 0x00, &store, eth_DataType_uint8, 200);   // 保存 home offset
+    eth_setOperateMode(slave, static_cast<eth_OperateMode>(prev));
+    mode_ = prev;
+    return true;
+}
+
 bool EthercatDevice::setTarget(quint16 slave, const Joint::TargetCommand& cmd)
 {
     const Joint::DeviceParams p = paramsFor(slave);

@@ -71,6 +71,11 @@ MainWindow::MainWindow(QWidget* parent)
     connect(control_, &ControlPanel::targetRequested, worker_, &ControlWorker::setTargetRequested);
     connect(control_, &ControlPanel::activeSlaveChanged, worker_, &ControlWorker::selectSlave);
     connect(control_, &ControlPanel::activeSlaveChanged, curve_, &CurvePanel::setActiveSlave);
+    connect(control_, &ControlPanel::homingRequested, worker_, &ControlWorker::homingRequested);
+    connect(worker_, &ControlWorker::homingFinished, this, [this](bool ok) {
+        statusBar()->showMessage(ok ? QStringLiteral("归零完成") : QStringLiteral("归零失败"),
+                                 5000);
+    });
 
     statusBar()->showMessage(QStringLiteral("未连接"));
 

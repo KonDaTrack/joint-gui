@@ -22,6 +22,8 @@ public:
     virtual bool setOperateMode(quint16 slave, Joint::OperateMode mode) = 0;
     virtual bool setTarget(quint16 slave, const Joint::TargetCommand& cmd) = 0;
     virtual bool readTelemetry(quint16 slave, Joint::Telemetry& out) = 0;
+    // 归航/归零（默认不支持；EtherCAT 实现）
+    virtual bool homing(quint16) { return false; }
 
     // SDO/OD 访问（预留；dt 为 0x02~0x09 数据类型码）
     virtual bool readSDO(quint16 slave, quint16 index, quint8 subIndex,

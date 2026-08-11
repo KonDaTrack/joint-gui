@@ -28,6 +28,7 @@ signals:
     void operateModeChanged(Joint::OperateMode mode);
     void targetRequested(const Joint::TargetCommand& cmd);
     void activeSlaveChanged(quint16 address);
+    void homingRequested();
 
 private slots:
     void onEnableClicked();
@@ -45,6 +46,7 @@ private:
     QPushButton* enableBtn_;
     QPushButton* disableBtn_;
     QPushButton* faultResetBtn_;
+    QPushButton* homeBtn_;
     QComboBox* slaveCombo_;
     QComboBox* modeCombo_;
     QLineEdit* posEdit_;

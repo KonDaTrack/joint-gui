@@ -165,3 +165,14 @@ void ControlWorker::setTargetRequested(const Joint::TargetCommand& cmd)
 {
     if (device_) device_->setTarget(activeSlave_, cmd);
 }
+void ControlWorker::homingRequested()
+{
+    if (!device_ || !connected_) return;
+    emit detectionMessage(QStringLiteral("归航中，请稍候..."));
+    // 归航是阻塞操作：期间暂停看门狗（lastTelemetryMs_ 归零复位），结束后恢复，
+    // 避免归航耗时长于 500ms 时被误判为遥测超时而断开
+    lastTelemetryMs_ = QDateTime::currentMSecsSinceEpoch();
+    const bool ok = device_->homing(activeSlave_);
+    lastTelemetryMs_ = QDateTime::currentMSecsSinceEpoch();
+    emit homingFinished(ok);
+}

@@ -19,6 +19,7 @@ public:
     bool setOperateMode(quint16 slave, Joint::OperateMode mode) override;
     bool setTarget(quint16 slave, const Joint::TargetCommand& cmd) override;
     bool readTelemetry(quint16 slave, Joint::Telemetry& out) override;
+    bool homing(quint16 slave) override;
 
     bool readSDO(quint16 slave, quint16 index, quint8 subIndex,
                  void* value, int dataType, int timeout) override;
