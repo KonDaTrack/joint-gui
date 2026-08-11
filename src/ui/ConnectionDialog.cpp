@@ -30,9 +30,9 @@ ConnectionDialog::ConnectionDialog(QWidget* parent)
     ifEdit_ = new QLineEdit(QStringLiteral("enx00e0bc4915ec"), this);
     slaveEdit_ = new QLineEdit(QStringLiteral("1"), this);
     cycleEdit_ = new QLineEdit(QStringLiteral("2"), this);
-    pulsesEdit_ = new QLineEdit(QStringLiteral("65536"), this);
-    gearEdit_ = new QLineEdit(QStringLiteral("1"), this);
-    ratedTorqueEdit_ = new QLineEdit(QStringLiteral("1"), this);
+    pulsesEdit_ = new QLineEdit(QStringLiteral("524288"), this);
+    gearEdit_ = new QLineEdit(QStringLiteral("101"), this);
+    ratedTorqueEdit_ = new QLineEdit(QStringLiteral("85"), this);
 
     QFormLayout* form = new QFormLayout;
     form->setHorizontalSpacing(14);

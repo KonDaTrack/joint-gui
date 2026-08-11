@@ -14,9 +14,9 @@ struct AppConfig {
     int canBaudrateKbps = 1000;
 
     // 单位换算（EtherCAT 必需；CANopen/仿真可忽略）
-    double encoderPulsesPerRev = 65536;  // 编码器分辨率
-    double gearRatio = 1.0;              // 减速比
-    double ratedTorqueNm = 1.0;          // 额定力矩 N·m
+    double encoderPulsesPerRev = 524288;  // 编码器分辨率（本关节 19 位 = 524288）
+    double gearRatio = 101.0;             // 减速比（本关节 101:1）
+    double ratedTorqueNm = 85.0;          // 额定力矩 N·m（本关节）
 
     int controlCycleMs() const;          // 工作周期
 };
