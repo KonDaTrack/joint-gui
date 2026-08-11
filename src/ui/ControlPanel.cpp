@@ -51,6 +51,7 @@ ControlPanel::ControlPanel(QWidget* parent)
 
     modeCombo_ = new QComboBox(this);
     modeCombo_->addItem(QStringLiteral("同步位置 CSP"), (int)Joint::OperateMode::CyclicSyncPosition);
+    modeCombo_->addItem(QStringLiteral("轮廓位置 PP"), (int)Joint::OperateMode::ProfilePosition);
     modeCombo_->addItem(QStringLiteral("同步速度 CSV"), (int)Joint::OperateMode::CyclicSyncVelocity);
     modeCombo_->addItem(QStringLiteral("同步力矩 CST"), (int)Joint::OperateMode::CyclicSyncTorque);
     modeCombo_->addItem(QStringLiteral("力矩位置混合"), (int)Joint::OperateMode::TorquePositionFixed);
