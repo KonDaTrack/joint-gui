@@ -151,6 +151,14 @@ bool EthercatDevice::setTarget(quint16 slave, const Joint::TargetCommand& cmd)
                 cmdPosPulses_[slave] = curPos;
             // 先发当前命令位置（斜坡起点），后续由 readTelemetry 周期推进
             eth_setTargetPosition(slave, (hint32)cmdPosPulses_[slave]);
+        } else if (cmd.hasVelocity && cmd.velocityDps == 0.0) {
+            // "停止运动"：位置模式保持当前位置（目标设为当前实际位置）
+            hint32 curPos = 0;
+            if (eth_getActualPosition(slave, &curPos) == ETH_SUCCESS) {
+                goalPosPulses_[slave] = curPos;
+                cmdPosPulses_[slave] = curPos;
+                eth_setTargetPosition(slave, curPos);
+            }
         }
         eth_setProfileVelocity(slave, (huint32)UnitConverter::degToPulses(
             cmd.profileVelocity, p.encoderPulsesPerRev, p.gearRatio));
@@ -172,6 +180,8 @@ bool EthercatDevice::setTarget(quint16 slave, const Joint::TargetCommand& cmd)
         if (cmd.hasTorque) {
             eth_setTargetTorque(slave, (hint32)UnitConverter::nmToPermille(
                 cmd.torqueNm, p.ratedTorqueNm));
+        } else if (cmd.hasVelocity && cmd.velocityDps == 0.0) {
+            eth_setTargetTorque(slave, 0);   // "停止运动"：力矩归零
         }
         return true;
     case Joint::OperateMode::TorquePositionFixed:
