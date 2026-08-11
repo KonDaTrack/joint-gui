@@ -159,6 +159,7 @@ bool EthercatDevice::setTarget(quint16 slave, const Joint::TargetCommand& cmd)
             cmd.profileDeceleration, p.encoderPulsesPerRev, p.gearRatio));
         return true;
     case Joint::OperateMode::ProfilePosition:
+    {
         // PP：驱动内部生成平滑轮廓，一次设目标 + 触发新设定点即可，不抖、不报 8611
         if (cmd.hasPosition) {
             eth_setTargetPosition(slave, (hint32)UnitConverter::degToPulses(
@@ -177,6 +178,7 @@ bool EthercatDevice::setTarget(quint16 slave, const Joint::TargetCommand& cmd)
         cw = 0x0F;
         eth_writeSDO(slave, 0x6040, 0, &cw, eth_DataType_uint16, 200);
         return true;
+    }
     case Joint::OperateMode::CyclicSyncVelocity:
     case Joint::OperateMode::ProfileVelocity:
     case Joint::OperateMode::Velocity:
