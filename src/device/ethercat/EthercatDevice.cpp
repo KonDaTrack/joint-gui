@@ -251,12 +251,13 @@ bool EthercatDevice::readTelemetry(quint16 slave, Joint::Telemetry& out)
     }
     lastPosPulses_[slave] = pos;
     lastPosTimeMs_[slave] = now;
-    // 位置斜坡：每周期把命令位置朝目标渐进（限速），CSP 平滑移动避免 0x8611 跟随误差
+    // 位置斜坡：每周期把命令位置朝目标渐进（固定步长，命令速度恒定 → 平滑，对齐厂商 CSP 示例）。
+    // 用名义周期 cycleMs_（而非实测 dt）算步长，避免周期抖动导致命令速度抖动 → 电机抖。
     const auto itGoal = goalPosPulses_.find(slave);
     if (itGoal != goalPosPulses_.end()) {
         double cmd = cmdPosPulses_.value(slave, (double)pos);
         const double rampVel = rampVelPulses_.value(slave, 1.0);
-        const double maxStep = rampVel * dtMs / 1000.0;   // dtMs 毫秒 → 脉冲步长
+        const double maxStep = rampVel * qMax(1, cycleMs_) / 1000.0;   // 固定步长（名义周期）
         const double d = itGoal.value() - cmd;
         cmd = (std::fabs(d) > maxStep) ? cmd + (d > 0 ? maxStep : -maxStep) : itGoal.value();
         cmdPosPulses_[slave] = cmd;
