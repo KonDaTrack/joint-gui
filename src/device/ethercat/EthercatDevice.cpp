@@ -132,7 +132,8 @@ bool EthercatDevice::setTarget(quint16 slave, const Joint::TargetCommand& cmd)
     switch (mode_) {
     case Joint::OperateMode::CyclicSyncPosition:
     case Joint::OperateMode::InterpolatedPosition:
-        // CSP/IP：主站斜坡推进（CSP 用 SDO 每周期写目标会抖，PP 更稳）
+    case Joint::OperateMode::ProfilePosition:
+        // 位置类模式：主站斜坡推进，避免跳变触发 0x8611
         if (cmd.hasPosition) {
             hint32 curPos = 0;
             eth_getActualPosition(slave, &curPos);
@@ -158,27 +159,6 @@ bool EthercatDevice::setTarget(quint16 slave, const Joint::TargetCommand& cmd)
         eth_setProfileDeceleration(slave, (huint32)UnitConverter::degToPulses(
             cmd.profileDeceleration, p.encoderPulsesPerRev, p.gearRatio));
         return true;
-    case Joint::OperateMode::ProfilePosition:
-    {
-        // PP：驱动内部生成平滑轮廓，一次设目标 + 触发新设定点即可，不抖、不报 8611
-        if (cmd.hasPosition) {
-            eth_setTargetPosition(slave, (hint32)UnitConverter::degToPulses(
-                cmd.positionDeg, p.encoderPulsesPerRev, p.gearRatio));
-        }
-        eth_setProfileVelocity(slave, (huint32)UnitConverter::degToPulses(
-            cmd.profileVelocity, p.encoderPulsesPerRev, p.gearRatio));
-        eth_setProfileAcceleration(slave, (huint32)UnitConverter::degToPulses(
-            cmd.profileAcceleration, p.encoderPulsesPerRev, p.gearRatio));
-        eth_setProfileDeceleration(slave, (huint32)UnitConverter::degToPulses(
-            cmd.profileDeceleration, p.encoderPulsesPerRev, p.gearRatio));
-        // 触发新设定点：控制字 bit4 上升沿（0x1F → 0x0F），SDO 直写避开状态等待
-        huint16 cw = 0x1F;
-        eth_writeSDO(slave, 0x6040, 0, &cw, eth_DataType_uint16, 200);
-        std::this_thread::sleep_for(std::chrono::milliseconds(20));
-        cw = 0x0F;
-        eth_writeSDO(slave, 0x6040, 0, &cw, eth_DataType_uint16, 200);
-        return true;
-    }
     case Joint::OperateMode::CyclicSyncVelocity:
     case Joint::OperateMode::ProfileVelocity:
     case Joint::OperateMode::Velocity:
