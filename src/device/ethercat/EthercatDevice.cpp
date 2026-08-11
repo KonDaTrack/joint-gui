@@ -2,6 +2,8 @@
 #include "core/UnitConverter.h"
 #include "eu_ethercat.h"
 #include <QDateTime>
+#include <thread>
+#include <chrono>
 
 // 0x6076 额定扭矩原始值 → N·m 的换算系数；实机 PHU 报 250（mN·m）→ 0.25 N·m
 static constexpr double kRatedTorqueNmScale = 0.001;
@@ -106,7 +108,21 @@ void EthercatDevice::close()
 
 bool EthercatDevice::enable(quint16 slave)  { return eth_enable(slave) == ETH_SUCCESS; }
 bool EthercatDevice::disable(quint16 slave) { return eth_disable(slave) == ETH_SUCCESS; }
-bool EthercatDevice::faultReset(quint16 slave) { return eth_faultReset(slave) == ETH_SUCCESS; }
+bool EthercatDevice::faultReset(quint16 slave)
+{
+    if (eth_faultReset(slave) == ETH_SUCCESS) return true;
+    // 手册推荐：控制字 bit7 上升沿复位（0x0F→0x8F→0x0F）。
+    // 用 SDO 直写 0x6040，绕过 eth_setControlWord 在故障态的状态等待。
+    huint16 cw = 0x0F;
+    eth_writeSDO(slave, 0x6040, 0, &cw, eth_DataType_uint16, 200);
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    cw = 0x8F;
+    eth_writeSDO(slave, 0x6040, 0, &cw, eth_DataType_uint16, 200);
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    cw = 0x0F;
+    eth_writeSDO(slave, 0x6040, 0, &cw, eth_DataType_uint16, 200);
+    return true;
+}
 bool EthercatDevice::quickStop(quint16 slave)  { return eth_quickStop(slave) == ETH_SUCCESS; }
 
 bool EthercatDevice::setOperateMode(quint16 slave, Joint::OperateMode mode)
