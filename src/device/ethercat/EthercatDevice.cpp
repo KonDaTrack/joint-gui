@@ -188,14 +188,15 @@ bool EthercatDevice::setTarget(quint16 slave, const Joint::TargetCommand& cmd)
 bool EthercatDevice::readTelemetry(quint16 slave, Joint::Telemetry& out)
 {
     const Joint::DeviceParams p = paramsFor(slave);
-    hint32 pos = 0, vel = 0, temp = 0;
+    hint32 pos = 0, temp = 0;
     hint16 tor = 0;
     huint16 sw = 0, err = 0;
     eth_OperateMode mode = eth_OperateMode_Reserve;
 
+    // 速度寄存器(0x606C)在静止时读数不稳（实测静止报 16000），改由位置差分计算；
+    // 位置(0x6064)读数经验证稳定。
     const bool ok =
         eth_getActualPosition(slave, &pos) == ETH_SUCCESS &&
-        eth_getActualVelocity(slave, &vel) == ETH_SUCCESS &&
         eth_getActualTorque(slave, &tor) == ETH_SUCCESS &&
         eth_getStatusWord(slave, &sw) == ETH_SUCCESS &&
         eth_getOperateMode(slave, &mode) == ETH_SUCCESS &&
@@ -207,7 +208,25 @@ bool EthercatDevice::readTelemetry(quint16 slave, Joint::Telemetry& out)
     out.slave = slave;
     out.connected = true;
     out.positionDeg = UnitConverter::pulsesToDeg(pos, p.encoderPulsesPerRev, p.gearRatio);
-    out.velocityDps = UnitConverter::pulsesToDeg(vel, p.encoderPulsesPerRev, p.gearRatio); // 假定脉冲/s
+    // 速度 = 位置差分（脉冲/秒 → deg/s），轻滤波抑制编码器量化噪声
+    double velDps = 0.0;
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    const auto itPos = lastPosPulses_.find(slave);
+    const auto itTime = lastPosTimeMs_.find(slave);
+    if (itPos != lastPosPulses_.end() && itTime != lastPosTimeMs_.end()) {
+        const qint64 dt = now - *itTime;
+        if (dt > 0) {
+            const double dpulses = pos - *itPos;
+            const double inst = UnitConverter::pulsesToDeg(dpulses * 1000.0 / dt,
+                                                           p.encoderPulsesPerRev, p.gearRatio);
+            const auto itVel = lastVelDps_.find(slave);
+            velDps = (itVel != lastVelDps_.end()) ? itVel.value() * 0.5 + inst * 0.5 : inst;
+            lastVelDps_[slave] = velDps;
+        }
+    }
+    lastPosPulses_[slave] = pos;
+    lastPosTimeMs_[slave] = now;
+    out.velocityDps = velDps;
     out.torqueNm = UnitConverter::permilleToNm(tor, p.ratedTorqueNm);
     out.temperatureC = temp;
     out.statusWord = sw;
