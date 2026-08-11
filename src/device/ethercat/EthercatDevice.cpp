@@ -34,35 +34,26 @@ void EthercatDevice::readDeviceParams()
             if (eth_readSDO(s, 0x608F, 0x00, &v0, eth_DataType_uint32, 1000) == ETH_SUCCESS && v0 > 0)
                 p.encoderPulsesPerRev = v0;
         }
-        // 减速比：优先 0x6091:1/2（PHU 厂商布局，1/1=1.0）；回退标准 0x6090:1/2
-        v1 = v2 = 0;
-        bool gearOk = false;
-        if (eth_readSDO(s, 0x6091, 0x01, &v1, eth_DataType_uint32, 1000) == ETH_SUCCESS
-            && eth_readSDO(s, 0x6091, 0x02, &v2, eth_DataType_uint32, 1000) == ETH_SUCCESS) {
-            p.gearRatio = v2 > 0 ? (double)v1 / v2 : 0.0;
-            gearOk = true;
-        }
-        if (!gearOk) {
-            v1 = v2 = 0;
-            if (eth_readSDO(s, 0x6090, 0x01, &v1, eth_DataType_uint32, 1000) == ETH_SUCCESS
-                && eth_readSDO(s, 0x6090, 0x02, &v2, eth_DataType_uint32, 1000) == ETH_SUCCESS) {
-                p.gearRatio = v2 > 0 ? (double)v1 / v2 : 0.0;
-            }
-        }
+        // 减速比：不自动读取。实机 0x6091:1/2 报 1/1，但手册实物减速比为 101，
+        // OD 值不可靠，必须以连接对话框手动设置为准。
         paramsBySlave_.insert(s, p);
     }
 }
 
-// 某从站参数：读到的有效则用，否则回退到 cfg 手动值
-// （pulsesPerRev_/gearRatio_/ratedNm_ 已在 open() 从 cfg 赋值）
+// 某从站参数：编码器分辨率/额定扭矩用自动读取值；减速比一律用 cfg 手动值
+// （0x6091 实测不可靠，PHU 双绝对关节实物减速比 101）。cfg 值在 open() 已从对话框赋值。
 Joint::DeviceParams EthercatDevice::paramsFor(quint16 slave) const
 {
-    auto it = paramsBySlave_.find(slave);
-    if (it != paramsBySlave_.end() && it->valid()) return *it;
     Joint::DeviceParams p;
     p.encoderPulsesPerRev = pulsesPerRev_;
     p.gearRatio = gearRatio_;
     p.ratedTorqueNm = ratedNm_;
+    const auto it = paramsBySlave_.find(slave);
+    if (it != paramsBySlave_.end()) {
+        if (it->encoderPulsesPerRev > 0) p.encoderPulsesPerRev = it->encoderPulsesPerRev;
+        if (it->ratedTorqueNm > 0) p.ratedTorqueNm = it->ratedTorqueNm;
+        // gearRatio 保持 cfg 值
+    }
     return p;
 }
 
