@@ -77,9 +77,15 @@ QList<quint16> EthercatDevice::slaveList() const
 void EthercatDevice::close()
 {
     if (inited_) {
-        // 多从站安全：断开前对全部从站尽力失能
+        // 多从站安全：断开前对全部从站尽力失能。
+        // 用带短超时的 SDO 写控制字 0x0000（解除使能）替代 eth_disable：
+        // eth_disable 内部走 SDK 默认超时，从站挂死时可能阻塞数秒 → 电机失控时间更长。
+        // 写失败（从站无响应）也继续释放网卡，由从站自身 EtherCAT 看门狗触发 Quick Stop。
         const QList<quint16> slaves = slaveList();
-        for (quint16 s : slaves) eth_disable(s);
+        for (quint16 s : slaves) {
+            huint16 cw = 0x0000;   // CiA402 控制字：Operation Enabled → Switch On Disabled
+            eth_writeSDO(s, 0x6040, 0x00, &cw, eth_DataType_uint16, 200);
+        }
         eth_freeDLL();
         inited_ = false;
         slaveCount_ = 0;
@@ -214,15 +220,17 @@ bool EthercatDevice::readTelemetry(quint16 slave, Joint::Telemetry& out)
 
     // 速度寄存器(0x606C)在静止时读数不稳（实测静止报 16000），改由位置差分计算；
     // 位置(0x6064)读数经验证稳定。
+    // 遥测用 eth_get* 系列（PDO 路径）：实测本驱动遥测对象走 SDO 短超时读会在连接后立刻失败
+    // → 看门狗误判遥测超时断开，故改回 eth_get*（正常时 <1ms）。
+    // 代价是从站真挂起时会按 SDK 默认超时阻塞；断开/看门狗走有界 SDO 写失能兜底。
     const bool ok =
         eth_getActualPosition(slave, &pos) == ETH_SUCCESS &&
         eth_getActualTorque(slave, &tor) == ETH_SUCCESS &&
         eth_getStatusWord(slave, &sw) == ETH_SUCCESS &&
         eth_getOperateMode(slave, &mode) == ETH_SUCCESS &&
         eth_getErrorCode(slave, &err) == ETH_SUCCESS;
-    eth_getDriveTemper(slave, &temp);   // 温度读取允许失败
-
     if (!ok) return false;
+    eth_getDriveTemper(slave, &temp);   // 温度读取允许失败；核心项已成功说明从站存活
 
     out.slave = slave;
     out.connected = true;

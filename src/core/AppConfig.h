@@ -16,7 +16,7 @@ struct AppConfig {
     // 单位换算（EtherCAT 必需；CANopen/仿真可忽略）
     double encoderPulsesPerRev = 524288;  // 编码器分辨率（本关节 19 位 = 524288）
     double gearRatio = 101.0;             // 减速比（本关节 101:1）
-    double ratedTorqueNm = 85.0;          // 额定力矩 N·m（本关节）
+    double ratedTorqueNm = 28.0;          // 额定力矩 N·m（官方上位机实测 ±28；0x6076 读数单位不可靠）
 
     int controlCycleMs() const;          // 工作周期
 };
