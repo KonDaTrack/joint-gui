@@ -8,7 +8,9 @@ ControlWorker::ControlWorker(QObject* parent)
 {
     // 关键：定时器必须作为子对象随 moveToThread 一起迁移到工作线程，
     // 否则它停留在创建线程（UI 线程），start/stop 变成跨线程调用且周期退化。
+    // 用精确计时器：CoarseTimer 在 2ms 级周期下抖动明显，会导致 CSP 命令位置抖动 → 电机抖。
     cycleTimer_.setParent(this);
+    cycleTimer_.setTimerType(Qt::PreciseTimer);
     connect(&cycleTimer_, &QTimer::timeout, this, &ControlWorker::onCycle);
 }
 
