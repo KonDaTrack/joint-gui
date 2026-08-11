@@ -191,8 +191,18 @@ bool EthercatDevice::setTarget(quint16 slave, const Joint::TargetCommand& cmd)
         eth_setProfileDeceleration(slave, (huint32)UnitConverter::degToPulses(
             cmd.profileDeceleration, p.encoderPulsesPerRev, p.gearRatio));
         if (cmd.hasPosition) {
-            eth_setTargetPosition(slave, (hint32)UnitConverter::degToPulses(
-                cmd.positionDeg, p.encoderPulsesPerRev, p.gearRatio));
+            // 0-360 回绕：目标映射到与当前位置最近的同余角度（最多 ±180°）。
+            // 否则多圈绝对位置（显示回绕 0-360）会让电机整圈旋转，表现为"到了不停止"
+            hint32 curPos = 0;
+            eth_getActualPosition(slave, &curPos);
+            const double curDeg = UnitConverter::pulsesToDeg(
+                curPos, p.encoderPulsesPerRev, p.gearRatio);
+            double diffDeg = std::fmod(cmd.positionDeg - curDeg + 180.0, 360.0);
+            if (diffDeg < 0) diffDeg += 360.0;
+            diffDeg -= 180.0;
+            const double goal = curPos + diffDeg / 360.0
+                                * (p.encoderPulsesPerRev * p.gearRatio);
+            eth_setTargetPosition(slave, (hint32)goal);
             // 新设定点：控制字 bit5(立即变更) → bit4(新设定点) 上升沿
             eth_setControlWord(slave, 0x0F | 0x20);
             std::this_thread::sleep_for(std::chrono::milliseconds(20));
