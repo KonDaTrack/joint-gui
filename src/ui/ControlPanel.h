@@ -16,7 +16,6 @@ class ControlPanel : public QWidget
     Q_OBJECT
 public:
     explicit ControlPanel(QWidget* parent = nullptr);
-    // CANopen 仅支持力矩位置混合，限制模式下拉避免下发零刚度 MIT 帧
     void setBusType(Joint::BusType type);
     void setSlaves(const QList<quint16>& slaves);
     void setActiveSlave(quint16 address);
@@ -54,8 +53,7 @@ private:
     QLineEdit* profVelEdit_;
     QLineEdit* profAccEdit_;
     QLineEdit* profDecEdit_;
-    QLineEdit* kpEdit_;
-    QLineEdit* kdEdit_;
+    QLineEdit* torSlopeEdit_;
     QPushButton* sendBtn_;
     QPushButton* stopBtn_;
     QFormLayout* form_;   // 目标设定表单，用于按模式隐藏/显示字段

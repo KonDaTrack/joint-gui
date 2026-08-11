@@ -60,6 +60,7 @@ struct TargetCommand {
     double profileVelocity = 0.0;      // 轮廓速度 (deg/s)
     double profileAcceleration = 0.0;  // 轮廓加速度 (deg/s^2)
     double profileDeceleration = 0.0;  // 轮廓减速度 (deg/s^2)
+    double torqueSlopeNmPerSec = 0.0;  // 轮廓力矩斜率 (N·m/s，PT 模式)
     double kp = 0.0;                   // MIT 模式
     double kd = 0.0;
 };

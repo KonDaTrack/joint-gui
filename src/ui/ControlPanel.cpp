@@ -50,10 +50,10 @@ ControlPanel::ControlPanel(QWidget* parent)
     connect(faultResetBtn_, &QPushButton::clicked, this, &ControlPanel::onFaultResetClicked);
 
     modeCombo_ = new QComboBox(this);
-    modeCombo_->addItem(QStringLiteral("同步位置 CSP"), (int)Joint::OperateMode::CyclicSyncPosition);
-    modeCombo_->addItem(QStringLiteral("同步速度 CSV"), (int)Joint::OperateMode::CyclicSyncVelocity);
-    modeCombo_->addItem(QStringLiteral("同步力矩 CST"), (int)Joint::OperateMode::CyclicSyncTorque);
-    modeCombo_->addItem(QStringLiteral("力矩位置混合"), (int)Joint::OperateMode::TorquePositionFixed);
+    // 轮廓模式：驱动内部生成平滑轨迹，主站一发目标即可（对齐官方 PP/PV/PT 例程）
+    modeCombo_->addItem(QStringLiteral("轮廓位置 PP"), (int)Joint::OperateMode::ProfilePosition);
+    modeCombo_->addItem(QStringLiteral("轮廓速度 PV"), (int)Joint::OperateMode::ProfileVelocity);
+    modeCombo_->addItem(QStringLiteral("轮廓力矩 PT"), (int)Joint::OperateMode::ProfileTorque);
 
     posEdit_   = new QLineEdit(QStringLiteral("0"), this);
     velEdit_   = new QLineEdit(QStringLiteral("0"), this);
@@ -61,8 +61,7 @@ ControlPanel::ControlPanel(QWidget* parent)
     profVelEdit_ = new QLineEdit(QStringLiteral("10"), this);
     profAccEdit_ = new QLineEdit(QStringLiteral("10"), this);
     profDecEdit_ = new QLineEdit(QStringLiteral("10"), this);
-    kpEdit_    = new QLineEdit(QStringLiteral("5"), this);
-    kdEdit_    = new QLineEdit(QStringLiteral("2"), this);
+    torSlopeEdit_ = new QLineEdit(QStringLiteral("10"), this);
 
     sendBtn_ = new QPushButton(QStringLiteral("下发目标"), this);
     sendBtn_->setObjectName(QStringLiteral("primaryButton"));
@@ -89,8 +88,7 @@ ControlPanel::ControlPanel(QWidget* parent)
     form_->addRow(tr("轮廓速度 (deg/s)"), profVelEdit_);
     form_->addRow(tr("轮廓加速度 (deg/s²)"), profAccEdit_);
     form_->addRow(tr("轮廓减速度 (deg/s²)"), profDecEdit_);
-    form_->addRow(tr("MIT KP"), kpEdit_);
-    form_->addRow(tr("MIT KD"), kdEdit_);
+    form_->addRow(tr("力矩斜率 (N·m/s)"), torSlopeEdit_);
     connect(modeCombo_, qOverload<int>(&QComboBox::currentIndexChanged),
             this, &ControlPanel::updateFieldVisibility);
     updateFieldVisibility();
@@ -121,29 +119,20 @@ Joint::OperateMode ControlPanel::currentMode() const
 
 void ControlPanel::setBusType(Joint::BusType type)
 {
-    if (type == Joint::BusType::CanOpen) {
-        const int idx = modeCombo_->findData((int)Joint::OperateMode::TorquePositionFixed);
-        if (idx >= 0) modeCombo_->setCurrentIndex(idx);
-        modeCombo_->setEnabled(false);
-    } else {
-        modeCombo_->setEnabled(true);
-    }
+    // CANopen 暂未适配 PP/PV/PT，本次仅 EtherCAT 使用；保留接口便于后续扩展
+    Q_UNUSED(type);
+    modeCombo_->setEnabled(true);
 }
 
-// 按操作模式只显示相关字段：位置模式→位置+轮廓；速度→速度；力矩→力矩；MIT→位置/速度/力矩
-// MIT 的 KP/KD 隐藏（用户不需要 PD 设置，内部默认值 5/2 仍会下发）
+// 按操作模式只显示相关字段：PP→位置+轮廓；PV→速度+轮廓加/减；PT→力矩+斜率
 void ControlPanel::updateFieldVisibility()
 {
     const Joint::OperateMode m = currentMode();
-    const bool posMode = (m == Joint::OperateMode::CyclicSyncPosition
-                          || m == Joint::OperateMode::ProfilePosition
+    const bool posMode = (m == Joint::OperateMode::ProfilePosition
                           || m == Joint::OperateMode::InterpolatedPosition);
-    const bool velMode = (m == Joint::OperateMode::CyclicSyncVelocity
-                          || m == Joint::OperateMode::ProfileVelocity
+    const bool velMode = (m == Joint::OperateMode::ProfileVelocity
                           || m == Joint::OperateMode::Velocity);
-    const bool torMode = (m == Joint::OperateMode::CyclicSyncTorque
-                          || m == Joint::OperateMode::ProfileTorque);
-    const bool mitMode = (m == Joint::OperateMode::TorquePositionFixed);
+    const bool torMode = (m == Joint::OperateMode::ProfileTorque);
 
     // 隐藏/显示目标字段（含标签）。本 Qt 无 QFormLayout::setRowVisible，用 labelForField 一并隐藏。
     auto vis = [this](QWidget* w, bool v) {
@@ -154,14 +143,13 @@ void ControlPanel::updateFieldVisibility()
             if (lab) lab->setVisible(v);
         }
     };
-    vis(posEdit_, posMode || mitMode);
-    vis(velEdit_, velMode || mitMode);
-    vis(torEdit_, torMode || mitMode);
+    vis(posEdit_, posMode);
+    vis(velEdit_, velMode);
+    vis(torEdit_, torMode);
     vis(profVelEdit_, posMode);
-    vis(profAccEdit_, posMode);
-    vis(profDecEdit_, posMode);
-    vis(kpEdit_, false);   // MIT KP/KD 不显示（用户不需要 PD 设置）
-    vis(kdEdit_, false);
+    vis(profAccEdit_, posMode || velMode);
+    vis(profDecEdit_, posMode || velMode);
+    vis(torSlopeEdit_, torMode);
 }
 
 void ControlPanel::setSlaves(const QList<quint16>& slaves)
@@ -213,32 +201,25 @@ void ControlPanel::onSendTarget()
     Joint::TargetCommand c;
     const Joint::OperateMode m = currentMode();
     switch (m) {
-    case Joint::OperateMode::CyclicSyncPosition:
     case Joint::OperateMode::ProfilePosition:
+    case Joint::OperateMode::InterpolatedPosition:
         c.hasPosition = true;
         c.positionDeg = posEdit_->text().toDouble();
         c.profileVelocity = profVelEdit_->text().toDouble();
         c.profileAcceleration = profAccEdit_->text().toDouble();
         c.profileDeceleration = profDecEdit_->text().toDouble();
         break;
-    case Joint::OperateMode::CyclicSyncVelocity:
     case Joint::OperateMode::ProfileVelocity:
     case Joint::OperateMode::Velocity:
         c.hasVelocity = true;
         c.velocityDps = velEdit_->text().toDouble();
+        c.profileAcceleration = profAccEdit_->text().toDouble();
+        c.profileDeceleration = profDecEdit_->text().toDouble();
         break;
-    case Joint::OperateMode::CyclicSyncTorque:
     case Joint::OperateMode::ProfileTorque:
         c.hasTorque = true;
         c.torqueNm = torEdit_->text().toDouble();
-        break;
-    case Joint::OperateMode::TorquePositionFixed:
-        c.hasPosition = true;
-        c.positionDeg = posEdit_->text().toDouble();
-        c.velocityDps = velEdit_->text().toDouble();
-        c.torqueNm = torEdit_->text().toDouble();
-        c.kp = kpEdit_->text().toDouble();
-        c.kd = kdEdit_->text().toDouble();
+        c.torqueSlopeNmPerSec = torSlopeEdit_->text().toDouble();
         break;
     default:
         break;

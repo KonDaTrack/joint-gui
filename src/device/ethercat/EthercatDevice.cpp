@@ -97,13 +97,22 @@ bool EthercatDevice::enable(quint16 slave)
 {
     // 位置类模式使能前，先把目标位置初始化为当前实际位置：
     // 否则使能瞬间"目标位置(旧值/0) vs 实际位置"偏差过大 → 0x8611 位置偏差故障
-    if (mode_ == Joint::OperateMode::CyclicSyncPosition
-        || mode_ == Joint::OperateMode::ProfilePosition
-        || mode_ == Joint::OperateMode::InterpolatedPosition
-        || mode_ == Joint::OperateMode::TorquePositionFixed) {
+    if (mode_ == Joint::OperateMode::ProfilePosition
+        || mode_ == Joint::OperateMode::InterpolatedPosition) {
         hint32 pos = 0;
         if (eth_getActualPosition(slave, &pos) == ETH_SUCCESS)
             eth_setTargetPosition(slave, pos);
+    }
+    // 轮廓类模式按官方例程用控制字序列使能：0x06(Shutdown) → 0x07(Switch On) → 0x0F(Enable Operation)
+    if (mode_ == Joint::OperateMode::ProfilePosition
+        || mode_ == Joint::OperateMode::ProfileVelocity
+        || mode_ == Joint::OperateMode::ProfileTorque) {
+        eth_setControlWord(slave, 0x06);
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        eth_setControlWord(slave, 0x07);
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        eth_setControlWord(slave, 0x0F);
+        return true;
     }
     return eth_enable(slave) == ETH_SUCCESS;
 }
@@ -136,73 +145,56 @@ bool EthercatDevice::setTarget(quint16 slave, const Joint::TargetCommand& cmd)
 {
     const Joint::DeviceParams p = paramsFor(slave);
     switch (mode_) {
-    case Joint::OperateMode::CyclicSyncPosition:
-    case Joint::OperateMode::InterpolatedPosition:
     case Joint::OperateMode::ProfilePosition:
-        // 位置类模式：主站斜坡推进，避免跳变触发 0x8611
-        if (cmd.hasPosition) {
-            hint32 curPos = 0;
-            eth_getActualPosition(slave, &curPos);
-            // 0-360 回绕：目标取与当前位置最近的同余角度（走最近方向，最多 ±180°）
-            const double curDeg = UnitConverter::pulsesToDeg(
-                curPos, p.encoderPulsesPerRev, p.gearRatio);
-            double diffDeg = std::fmod(cmd.positionDeg - curDeg + 180.0, 360.0);
-            if (diffDeg < 0) diffDeg += 360.0;
-            diffDeg -= 180.0;
-            const double goal = curPos + diffDeg / 360.0 * (p.encoderPulsesPerRev * p.gearRatio);
-            goalPosPulses_[slave] = goal;
-            rampVelPulses_[slave] = qMax(1.0, UnitConverter::degToPulses(
-                qMax(cmd.profileVelocity, 1.0), p.encoderPulsesPerRev, p.gearRatio));
-            if (!cmdPosPulses_.contains(slave))
-                cmdPosPulses_[slave] = curPos;
-            // 先发当前命令位置（斜坡起点），后续由 readTelemetry 周期推进
-            eth_setTargetPosition(slave, (hint32)cmdPosPulses_[slave]);
-        } else if (cmd.hasVelocity && cmd.velocityDps == 0.0) {
-            // "停止运动"：位置模式保持当前位置（目标设为当前实际位置）
-            hint32 curPos = 0;
-            if (eth_getActualPosition(slave, &curPos) == ETH_SUCCESS) {
-                goalPosPulses_[slave] = curPos;
-                cmdPosPulses_[slave] = curPos;
-                eth_setTargetPosition(slave, curPos);
-            }
-        }
+    case Joint::OperateMode::InterpolatedPosition:
+        // 轮廓位置 PP：驱动内部生成平滑轨迹（对齐 test_pp_mode.cpp）
         eth_setProfileVelocity(slave, (huint32)UnitConverter::degToPulses(
             cmd.profileVelocity, p.encoderPulsesPerRev, p.gearRatio));
         eth_setProfileAcceleration(slave, (huint32)UnitConverter::degToPulses(
             cmd.profileAcceleration, p.encoderPulsesPerRev, p.gearRatio));
         eth_setProfileDeceleration(slave, (huint32)UnitConverter::degToPulses(
             cmd.profileDeceleration, p.encoderPulsesPerRev, p.gearRatio));
-        return true;
-    case Joint::OperateMode::CyclicSyncVelocity:
-    case Joint::OperateMode::ProfileVelocity:
-    case Joint::OperateMode::Velocity:
-        if (cmd.hasVelocity) {
-            eth_setTargetVelocity(slave, (hint32)UnitConverter::degToPulses(
-                cmd.velocityDps, p.encoderPulsesPerRev, p.gearRatio));
-        }
-        return true;
-    case Joint::OperateMode::CyclicSyncTorque:
-    case Joint::OperateMode::ProfileTorque:
-        if (cmd.hasTorque) {
-            eth_setTargetTorque(slave, (hint32)UnitConverter::nmToPermille(
-                cmd.torqueNm, p.ratedTorqueNm));
-        } else if (cmd.hasVelocity && cmd.velocityDps == 0.0) {
-            eth_setTargetTorque(slave, 0);   // "停止运动"：力矩归零
-        }
-        return true;
-    case Joint::OperateMode::TorquePositionFixed:
-        // 力矩位置混合：位置/速度/力矩三个寄存器同时下发（SDK 无独立 MIT 函数）
         if (cmd.hasPosition) {
             eth_setTargetPosition(slave, (hint32)UnitConverter::degToPulses(
                 cmd.positionDeg, p.encoderPulsesPerRev, p.gearRatio));
+            // 新设定点：控制字 bit5(立即变更) → bit4(新设定点) 上升沿
+            eth_setControlWord(slave, 0x0F | 0x20);
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+            eth_setControlWord(slave, 0x0F | 0x20 | 0x10);
+        } else if (cmd.hasVelocity && cmd.velocityDps == 0.0) {
+            // "停止运动"：目标置为当前实际位置并触发新设定点
+            hint32 curPos = 0;
+            if (eth_getActualPosition(slave, &curPos) == ETH_SUCCESS) {
+                eth_setTargetPosition(slave, curPos);
+                eth_setControlWord(slave, 0x0F | 0x20);
+                std::this_thread::sleep_for(std::chrono::milliseconds(20));
+                eth_setControlWord(slave, 0x0F | 0x20 | 0x10);
+            }
         }
+        return true;
+    case Joint::OperateMode::ProfileVelocity:
+    case Joint::OperateMode::Velocity:
+        // 轮廓速度 PV：驱动按轮廓加减速生成速度曲线（对齐 test_pv_mode.cpp）
+        eth_setProfileAcceleration(slave, (huint32)UnitConverter::degToPulses(
+            cmd.profileAcceleration, p.encoderPulsesPerRev, p.gearRatio));
+        eth_setProfileDeceleration(slave, (huint32)UnitConverter::degToPulses(
+            cmd.profileDeceleration, p.encoderPulsesPerRev, p.gearRatio));
         if (cmd.hasVelocity) {
             eth_setTargetVelocity(slave, (hint32)UnitConverter::degToPulses(
                 cmd.velocityDps, p.encoderPulsesPerRev, p.gearRatio));
+            eth_setControlWord(slave, 0x0F);
         }
+        return true;
+    case Joint::OperateMode::ProfileTorque:
+        // 轮廓力矩 PT：驱动按力矩斜率生成力矩曲线（对齐 test_pt_mode.cpp）
         if (cmd.hasTorque) {
+            eth_setTorqueSlope(slave, (huint32)qMax(1.0, cmd.torqueSlopeNmPerSec * 1000.0 / p.ratedTorqueNm));
             eth_setTargetTorque(slave, (hint32)UnitConverter::nmToPermille(
                 cmd.torqueNm, p.ratedTorqueNm));
+            eth_setControlWord(slave, 0x0F);
+        } else if (cmd.hasVelocity && cmd.velocityDps == 0.0) {
+            eth_setTargetTorque(slave, 0);   // "停止运动"：力矩归零
+            eth_setControlWord(slave, 0x0F);
         }
         return true;
     default:
@@ -259,18 +251,6 @@ bool EthercatDevice::readTelemetry(quint16 slave, Joint::Telemetry& out)
     }
     lastPosPulses_[slave] = pos;
     lastPosTimeMs_[slave] = now;
-    // 位置斜坡：每周期把命令位置朝目标渐进（固定步长，命令速度恒定 → 平滑，对齐厂商 CSP 示例）。
-    // 用名义周期 cycleMs_（而非实测 dt）算步长，避免周期抖动导致命令速度抖动 → 电机抖。
-    const auto itGoal = goalPosPulses_.find(slave);
-    if (itGoal != goalPosPulses_.end()) {
-        double cmd = cmdPosPulses_.value(slave, (double)pos);
-        const double rampVel = rampVelPulses_.value(slave, 1.0);
-        const double maxStep = rampVel * qMax(1, cycleMs_) / 1000.0;   // 固定步长（名义周期）
-        const double d = itGoal.value() - cmd;
-        cmd = (std::fabs(d) > maxStep) ? cmd + (d > 0 ? maxStep : -maxStep) : itGoal.value();
-        cmdPosPulses_[slave] = cmd;
-        eth_setTargetPosition(slave, (hint32)cmd);
-    }
     out.velocityDps = velDps;
     out.torqueNm = UnitConverter::permilleToNm(tor, p.ratedTorqueNm);
     out.temperatureC = temp;

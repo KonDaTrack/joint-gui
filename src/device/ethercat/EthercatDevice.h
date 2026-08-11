@@ -33,16 +33,12 @@ private:
     double pulsesPerRev_ = 65536;
     double gearRatio_ = 1.0;
     double ratedNm_ = 1.0;
-    Joint::OperateMode mode_ = Joint::OperateMode::CyclicSyncPosition;
+    Joint::OperateMode mode_ = Joint::OperateMode::ProfilePosition;
     QHash<quint16, Joint::DeviceParams> paramsBySlave_;   // 每从站自动读取的参数
     // 速度由位置差分计算（0x606C 速度寄存器在静止时读数不稳）
     QHash<quint16, double> lastPosPulses_;
     QHash<quint16, qint64> lastPosTimeMs_;
     QHash<quint16, double> lastVelDps_;
-    // 位置斜坡（CSP 需主站提供平滑轨迹，避免跳变触发 0x8611 跟随误差）
-    QHash<quint16, double> goalPosPulses_;
-    QHash<quint16, double> cmdPosPulses_;
-    QHash<quint16, double> rampVelPulses_;
     void readDeviceParams();
     Joint::DeviceParams paramsFor(quint16 slave) const;   // 有效参数或 cfg 回退
 };
