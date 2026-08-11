@@ -3,37 +3,49 @@
 #include "eu_ethercat.h"
 #include <QDateTime>
 
-// 0x6076 额定扭矩原始值 → N·m 的换算系数；假定 1.0（实机若为 mN·m 改 0.001）
-static constexpr double kRatedTorqueNmScale = 1.0;
+// 0x6076 额定扭矩原始值 → N·m 的换算系数；实机 PHU 报 250（mN·m）→ 0.25 N·m
+static constexpr double kRatedTorqueNmScale = 0.001;
 
 EthercatDevice::~EthercatDevice()
 {
     close();
 }
 
-// 逐从站按标准 CiA402 对象读取参数；失败字段保持 0
+// 逐从站读取设备参数。PHU 关节用厂商 OD 布局（实机 0x608F:1/2=524288/1、0x6091:1/2=1/1），
+// 与 CANopen 版一致；标准 0x608F:0 / 0x6090 在本驱动不可用。读取失败字段保持 0。
 void EthercatDevice::readDeviceParams()
 {
     paramsBySlave_.clear();   // 避免重连残留旧从站参数
     for (quint16 s : slaveList()) {
         Joint::DeviceParams p;
-        // 0x6076 额定扭矩；单位假定 N·m（×kRatedTorqueNmScale），实机验证（可能 mN·m → scale=0.001）
+        // 0x6076 额定扭矩；单位假定 mN·m（×kRatedTorqueNmScale），实机 PHU 报 250 → 0.25 N·m
         hint32 t = 0;
-        if (eth_readSDO(s, 0x6076, 0x00, &t, eth_DataType_int32, 20) == ETH_SUCCESS)
+        if (eth_readSDO(s, 0x6076, 0x00, &t, eth_DataType_int32, 1000) == ETH_SUCCESS)
             p.ratedTorqueNm = t * kRatedTorqueNmScale;
-        // 0x608F 标准为 sub0 单值（每转编码器增量）；部分厂商用 sub1/2 分子分母，作回退
-        huint32 v0 = 0, v1 = 0, v2 = 0;
-        if (eth_readSDO(s, 0x608F, 0x00, &v0, eth_DataType_uint32, 20) == ETH_SUCCESS && v0 > 0) {
-            p.encoderPulsesPerRev = v0;
-        } else if (eth_readSDO(s, 0x608F, 0x01, &v1, eth_DataType_uint32, 20) == ETH_SUCCESS
-                   && eth_readSDO(s, 0x608F, 0x02, &v2, eth_DataType_uint32, 20) == ETH_SUCCESS) {
+        // 编码器分辨率：优先 0x608F:1/2（分子/分母，PHU 用 524288/1）；sub0 单值作回退
+        huint32 v1 = 0, v2 = 0;
+        if (eth_readSDO(s, 0x608F, 0x01, &v1, eth_DataType_uint32, 1000) == ETH_SUCCESS
+            && eth_readSDO(s, 0x608F, 0x02, &v2, eth_DataType_uint32, 1000) == ETH_SUCCESS) {
             p.encoderPulsesPerRev = v2 > 0 ? (double)v1 / v2 : (double)v1;
+        } else {
+            huint32 v0 = 0;
+            if (eth_readSDO(s, 0x608F, 0x00, &v0, eth_DataType_uint32, 1000) == ETH_SUCCESS && v0 > 0)
+                p.encoderPulsesPerRev = v0;
         }
-        // 0x6090 减速比（电机转数/轴转数）
+        // 减速比：优先 0x6091:1/2（PHU 厂商布局，1/1=1.0）；回退标准 0x6090:1/2
         v1 = v2 = 0;
-        if (eth_readSDO(s, 0x6090, 0x01, &v1, eth_DataType_uint32, 20) == ETH_SUCCESS
-            && eth_readSDO(s, 0x6090, 0x02, &v2, eth_DataType_uint32, 20) == ETH_SUCCESS) {
+        bool gearOk = false;
+        if (eth_readSDO(s, 0x6091, 0x01, &v1, eth_DataType_uint32, 1000) == ETH_SUCCESS
+            && eth_readSDO(s, 0x6091, 0x02, &v2, eth_DataType_uint32, 1000) == ETH_SUCCESS) {
             p.gearRatio = v2 > 0 ? (double)v1 / v2 : 0.0;
+            gearOk = true;
+        }
+        if (!gearOk) {
+            v1 = v2 = 0;
+            if (eth_readSDO(s, 0x6090, 0x01, &v1, eth_DataType_uint32, 1000) == ETH_SUCCESS
+                && eth_readSDO(s, 0x6090, 0x02, &v2, eth_DataType_uint32, 1000) == ETH_SUCCESS) {
+                p.gearRatio = v2 > 0 ? (double)v1 / v2 : 0.0;
+            }
         }
         paramsBySlave_.insert(s, p);
     }
