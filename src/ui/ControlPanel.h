@@ -5,6 +5,7 @@
 
 class QCheckBox;
 class QComboBox;
+class QFormLayout;
 class QLineEdit;
 class QPushButton;
 
@@ -35,6 +36,7 @@ private slots:
     void onFaultResetClicked();
     void onSendTarget();
     void onStopMotion();
+    void updateFieldVisibility();
 
 private:
     Joint::OperateMode currentMode() const;
@@ -56,4 +58,5 @@ private:
     QLineEdit* kdEdit_;
     QPushButton* sendBtn_;
     QPushButton* stopBtn_;
+    QFormLayout* form_;   // 目标设定表单，用于按模式隐藏/显示字段
 };

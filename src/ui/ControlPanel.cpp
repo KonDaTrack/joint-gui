@@ -59,8 +59,8 @@ ControlPanel::ControlPanel(QWidget* parent)
     velEdit_   = new QLineEdit(QStringLiteral("0"), this);
     torEdit_   = new QLineEdit(QStringLiteral("0"), this);
     profVelEdit_ = new QLineEdit(QStringLiteral("10"), this);
-    profAccEdit_ = new QLineEdit(QStringLiteral("50"), this);
-    profDecEdit_ = new QLineEdit(QStringLiteral("50"), this);
+    profAccEdit_ = new QLineEdit(QStringLiteral("10"), this);
+    profDecEdit_ = new QLineEdit(QStringLiteral("10"), this);
     kpEdit_    = new QLineEdit(QStringLiteral("5"), this);
     kdEdit_    = new QLineEdit(QStringLiteral("2"), this);
 
@@ -81,16 +81,19 @@ ControlPanel::ControlPanel(QWidget* parent)
     btnRow->addWidget(disableBtn_);
     btnRow->addWidget(faultResetBtn_);
 
-    QFormLayout* form = new QFormLayout;
-    form->addRow(tr("操作模式"), modeCombo_);
-    form->addRow(tr("目标位置 (deg)"), posEdit_);
-    form->addRow(tr("目标速度 (deg/s)"), velEdit_);
-    form->addRow(tr("目标力矩 (N·m)"), torEdit_);
-    form->addRow(tr("轮廓速度 (deg/s)"), profVelEdit_);
-    form->addRow(tr("轮廓加速度 (deg/s²)"), profAccEdit_);
-    form->addRow(tr("轮廓减速度 (deg/s²)"), profDecEdit_);
-    form->addRow(tr("MIT KP"), kpEdit_);
-    form->addRow(tr("MIT KD"), kdEdit_);
+    form_ = new QFormLayout;
+    form_->addRow(tr("操作模式"), modeCombo_);
+    form_->addRow(tr("目标位置 (deg)"), posEdit_);
+    form_->addRow(tr("目标速度 (deg/s)"), velEdit_);
+    form_->addRow(tr("目标力矩 (N·m)"), torEdit_);
+    form_->addRow(tr("轮廓速度 (deg/s)"), profVelEdit_);
+    form_->addRow(tr("轮廓加速度 (deg/s²)"), profAccEdit_);
+    form_->addRow(tr("轮廓减速度 (deg/s²)"), profDecEdit_);
+    form_->addRow(tr("MIT KP"), kpEdit_);
+    form_->addRow(tr("MIT KD"), kdEdit_);
+    connect(modeCombo_, qOverload<int>(&QComboBox::currentIndexChanged),
+            this, &ControlPanel::updateFieldVisibility);
+    updateFieldVisibility();
 
     QHBoxLayout* targetRow = new QHBoxLayout;
     targetRow->addWidget(sendBtn_);
@@ -106,7 +109,7 @@ ControlPanel::ControlPanel(QWidget* parent)
     root->addLayout(estopRow);
     root->addLayout(btnRow);
     root->addWidget(targetTitle);
-    root->addLayout(form);
+    root->addLayout(form_);
     root->addLayout(targetRow);
     root->addStretch();
 }
@@ -125,6 +128,40 @@ void ControlPanel::setBusType(Joint::BusType type)
     } else {
         modeCombo_->setEnabled(true);
     }
+}
+
+// 按操作模式只显示相关字段：位置模式→位置+轮廓；速度→速度；力矩→力矩；MIT→位置/速度/力矩
+// MIT 的 KP/KD 隐藏（用户不需要 PD 设置，内部默认值 5/2 仍会下发）
+void ControlPanel::updateFieldVisibility()
+{
+    const Joint::OperateMode m = currentMode();
+    const bool posMode = (m == Joint::OperateMode::CyclicSyncPosition
+                          || m == Joint::OperateMode::ProfilePosition
+                          || m == Joint::OperateMode::InterpolatedPosition);
+    const bool velMode = (m == Joint::OperateMode::CyclicSyncVelocity
+                          || m == Joint::OperateMode::ProfileVelocity
+                          || m == Joint::OperateMode::Velocity);
+    const bool torMode = (m == Joint::OperateMode::CyclicSyncTorque
+                          || m == Joint::OperateMode::ProfileTorque);
+    const bool mitMode = (m == Joint::OperateMode::TorquePositionFixed);
+
+    // 隐藏/显示目标字段（含标签）。本 Qt 无 QFormLayout::setRowVisible，用 labelForField 一并隐藏。
+    auto vis = [this](QWidget* w, bool v) {
+        if (!w) return;
+        w->setVisible(v);
+        if (form_) {
+            QWidget* lab = form_->labelForField(w);
+            if (lab) lab->setVisible(v);
+        }
+    };
+    vis(posEdit_, posMode || mitMode);
+    vis(velEdit_, velMode || mitMode);
+    vis(torEdit_, torMode || mitMode);
+    vis(profVelEdit_, posMode);
+    vis(profAccEdit_, posMode);
+    vis(profDecEdit_, posMode);
+    vis(kpEdit_, false);   // MIT KP/KD 不显示（用户不需要 PD 设置）
+    vis(kdEdit_, false);
 }
 
 void ControlPanel::setSlaves(const QList<quint16>& slaves)
