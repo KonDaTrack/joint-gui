@@ -106,7 +106,20 @@ void EthercatDevice::close()
     }
 }
 
-bool EthercatDevice::enable(quint16 slave)  { return eth_enable(slave) == ETH_SUCCESS; }
+bool EthercatDevice::enable(quint16 slave)
+{
+    // 位置类模式使能前，先把目标位置初始化为当前实际位置：
+    // 否则使能瞬间"目标位置(旧值/0) vs 实际位置"偏差过大 → 0x8611 位置偏差故障
+    if (mode_ == Joint::OperateMode::CyclicSyncPosition
+        || mode_ == Joint::OperateMode::ProfilePosition
+        || mode_ == Joint::OperateMode::InterpolatedPosition
+        || mode_ == Joint::OperateMode::TorquePositionFixed) {
+        hint32 pos = 0;
+        if (eth_getActualPosition(slave, &pos) == ETH_SUCCESS)
+            eth_setTargetPosition(slave, pos);
+    }
+    return eth_enable(slave) == ETH_SUCCESS;
+}
 bool EthercatDevice::disable(quint16 slave) { return eth_disable(slave) == ETH_SUCCESS; }
 bool EthercatDevice::faultReset(quint16 slave)
 {
