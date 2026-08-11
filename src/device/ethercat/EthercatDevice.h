@@ -39,6 +39,10 @@ private:
     QHash<quint16, double> lastPosPulses_;
     QHash<quint16, qint64> lastPosTimeMs_;
     QHash<quint16, double> lastVelDps_;
+    // 位置斜坡（CSP 需主站提供平滑轨迹，避免跳变触发 0x8611 跟随误差）
+    QHash<quint16, double> goalPosPulses_;
+    QHash<quint16, double> cmdPosPulses_;
+    QHash<quint16, double> rampVelPulses_;
     void readDeviceParams();
     Joint::DeviceParams paramsFor(quint16 slave) const;   // 有效参数或 cfg 回退
 };

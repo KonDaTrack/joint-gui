@@ -2,6 +2,7 @@
 #include "core/UnitConverter.h"
 #include "eu_ethercat.h"
 #include <QDateTime>
+#include <cmath>
 #include <thread>
 #include <chrono>
 
@@ -133,8 +134,22 @@ bool EthercatDevice::setTarget(quint16 slave, const Joint::TargetCommand& cmd)
     case Joint::OperateMode::ProfilePosition:
     case Joint::OperateMode::InterpolatedPosition:
         if (cmd.hasPosition) {
-            eth_setTargetPosition(slave, (hint32)UnitConverter::degToPulses(
-                cmd.positionDeg, p.encoderPulsesPerRev, p.gearRatio));
+            hint32 curPos = 0;
+            eth_getActualPosition(slave, &curPos);
+            // 0-360 回绕：目标取与当前位置最近的同余角度（走最近方向，最多 ±180°）
+            const double curDeg = UnitConverter::pulsesToDeg(
+                curPos, p.encoderPulsesPerRev, p.gearRatio);
+            double diffDeg = std::fmod(cmd.positionDeg - curDeg + 180.0, 360.0);
+            if (diffDeg < 0) diffDeg += 360.0;
+            diffDeg -= 180.0;
+            const double goal = curPos + diffDeg / 360.0 * (p.encoderPulsesPerRev * p.gearRatio);
+            goalPosPulses_[slave] = goal;
+            rampVelPulses_[slave] = qMax(1.0, UnitConverter::degToPulses(
+                qMax(cmd.profileVelocity, 1.0), p.encoderPulsesPerRev, p.gearRatio));
+            if (!cmdPosPulses_.contains(slave))
+                cmdPosPulses_[slave] = curPos;
+            // 先发当前命令位置（斜坡起点），后续由 readTelemetry 周期推进
+            eth_setTargetPosition(slave, (hint32)cmdPosPulses_[slave]);
         }
         eth_setProfileVelocity(slave, (huint32)UnitConverter::degToPulses(
             cmd.profileVelocity, p.encoderPulsesPerRev, p.gearRatio));
@@ -200,15 +215,21 @@ bool EthercatDevice::readTelemetry(quint16 slave, Joint::Telemetry& out)
 
     out.slave = slave;
     out.connected = true;
-    out.positionDeg = UnitConverter::pulsesToDeg(pos, p.encoderPulsesPerRev, p.gearRatio);
+    // 0-360 回绕显示：多圈绝对位置取模 360，避免数值累积到几千上万度
+    double posDeg = UnitConverter::pulsesToDeg(pos, p.encoderPulsesPerRev, p.gearRatio);
+    posDeg = std::fmod(posDeg, 360.0);
+    if (posDeg < 0) posDeg += 360.0;
+    out.positionDeg = posDeg;
     // 速度 = 位置差分（脉冲/秒 → deg/s），轻滤波抑制编码器量化噪声
     double velDps = 0.0;
     const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    qint64 dtMs = 2;   // 周期估计
     const auto itPos = lastPosPulses_.find(slave);
     const auto itTime = lastPosTimeMs_.find(slave);
     if (itPos != lastPosPulses_.end() && itTime != lastPosTimeMs_.end()) {
         const qint64 dt = now - *itTime;
         if (dt > 0) {
+            dtMs = dt;
             const double dpulses = pos - *itPos;
             const double inst = UnitConverter::pulsesToDeg(dpulses * 1000.0 / dt,
                                                            p.encoderPulsesPerRev, p.gearRatio);
@@ -219,6 +240,17 @@ bool EthercatDevice::readTelemetry(quint16 slave, Joint::Telemetry& out)
     }
     lastPosPulses_[slave] = pos;
     lastPosTimeMs_[slave] = now;
+    // 位置斜坡：每周期把命令位置朝目标渐进（限速），CSP 平滑移动避免 0x8611 跟随误差
+    const auto itGoal = goalPosPulses_.find(slave);
+    if (itGoal != goalPosPulses_.end()) {
+        double cmd = cmdPosPulses_.value(slave, (double)pos);
+        const double rampVel = rampVelPulses_.value(slave, 1.0);
+        const double maxStep = rampVel * dtMs / 1000.0;   // dtMs 毫秒 → 脉冲步长
+        const double d = itGoal.value() - cmd;
+        cmd = (std::fabs(d) > maxStep) ? cmd + (d > 0 ? maxStep : -maxStep) : itGoal.value();
+        cmdPosPulses_[slave] = cmd;
+        eth_setTargetPosition(slave, (hint32)cmd);
+    }
     out.velocityDps = velDps;
     out.torqueNm = UnitConverter::permilleToNm(tor, p.ratedTorqueNm);
     out.temperatureC = temp;
