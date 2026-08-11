@@ -9,16 +9,19 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+# 只匹配当前架构的 SDK 目录（x86_64 / aarch64），避免混入另一架构的库
+ARCH="$(uname -m)"
+
 BIN="${1:-./build/joint_gui}"
 
 LIBS=""
-for d in ../eyou_ethercat_phu_sdk_*_linux_gnu_*/lib \
-         ../eyou_canopen_sdk_PHU_*_linux_gnu_*/lib; do
+for d in ../eyou_ethercat_phu_sdk_${ARCH}_linux_gnu_*/lib \
+         ../eyou_canopen_sdk_PHU_${ARCH}_linux_gnu_*/lib; do
     [ -d "$d" ] && LIBS="${LIBS:+$LIBS:}$d"
 done
 
 if [ -z "$LIBS" ]; then
-    echo "未找到 SDK 库目录" >&2
+    echo "未找到 ${ARCH} 架构的 SDK 库目录" >&2
     exit 1
 fi
 
