@@ -57,7 +57,7 @@ export LD_LIBRARY_PATH=/path/to/sdk/lib:$LD_LIBRARY_PATH
 - CANopen: 建议直接拷贝整个 `lib/` 目录（`libeu_canopen.so` `libeu_eds.so` `libeu_candrv.so` `libeu_log.so` `libeu_resources.so` 及 `libcontrolcan.so` `libeu_canable.so` `libusbcanfd.so`，驱动库在运行时按需加载）
 
 ## 权限
-EtherCAT（SOEM 主站）需 root 或 `CAP_NET_RAW` 访问网卡，用 `sudo` 启动。
+EtherCAT（SOEM 主站）需 root 或 `CAP_NET_RAW` 访问网卡。ARM 板上用 `sudo ./run.sh` 启动即可（run.sh 会自动设置 SDK 库路径，不再需要手动 `LD_LIBRARY_PATH`）。
 CANopen USB-CAN 适配器需对应驱动与权限。
 
 ## 单元测试
@@ -69,7 +69,7 @@ ctest --test-dir build --output-on-failure
 ## 使用
 1. 启动 → 选总线（仿真/EtherCAT/CANopen）→ 填参数 → 连接；检测到多个从站后，用"控制从站"下拉选择要控制的从站（监控面板每从站一个标签页）
 2. 勾选"已确认现场安全"→ 使能
-3. 填目标值 → 下发目标（CSP/CSV/CST/力矩位置混合）
+3. 选模式（PP 轮廓位置 / PV 轮廓速度 / PT 轮廓力矩）→ 填目标值 → 下发目标
 4. 急停/故障复位按需
 
 > EtherCAT 连接后自动读取从站参数（编码器分辨率/减速比/额定力矩）用于单位换算；读不到时回退到连接对话框中手动填写的值。

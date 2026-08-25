@@ -31,7 +31,7 @@ sudo apt install qtbase5-dev cmake g++ pkg-config
 cd joint-gui
 ./build.sh
 # 无硬件也能跑：启动后选"自动检测"→ 无设备自动回退仿真模式
-./build/joint_gui
+./run.sh
 ```
 > 仿真模式用于教学演示与界面调试，无需接任何硬件。
 
@@ -68,18 +68,15 @@ sudo apt install libqt5widgets5 libqt5gui5 libqt5core5a libqt5network5
 ```
 
 ### 3.3 运行
-> 注意：**不要用 `sudo ./joint_gui`**——sudo 默认会清空 `LD_LIBRARY_PATH`，导致找不到 SDK `.so`。
-> 普通用户直接运行即可；EtherCAT 若需权限，先按 3.4 执行 setcap。
-
+用 `run.sh` 一键启动（自动按当前架构聚合 SDK 库路径，无需手动 `LD_LIBRARY_PATH`）：
 ```bash
 cd /opt/joint-gui
-export LD_LIBRARY_PATH=$PWD/eth_lib:$PWD/can_lib
-./joint_gui
+./run.sh           # 已 setcap 的普通用户
+sudo ./run.sh      # 直接 root 启动（EtherCAT 需 raw socket 权限，最简单）
 ```
-若确需 root 运行，用 `sudo env LD_LIBRARY_PATH=$PWD/eth_lib:$PWD/can_lib ./joint_gui`。
 
 ### 3.4 权限
-- **EtherCAT**：SOEM 主站需要 root 或 `CAP_NET_RAW` 访问网卡。推荐用 setcap 让普通用户也可运行（否则每次启动都要 root）：
+- **EtherCAT**：SOEM 主站需要 root 或 `CAP_NET_RAW` 访问网卡。最简单用 `sudo ./run.sh`；想免 sudo 就给二进制加 setcap：
   ```bash
   sudo setcap cap_net_raw+ep /opt/joint-gui/joint_gui
   ```
@@ -100,6 +97,6 @@ export LD_LIBRARY_PATH=$PWD/eth_lib:$PWD/can_lib
 | 自动检测一直落到仿真，但明明接了 EtherCAT | `ip link` 确认网卡名与直连；网卡需独立专用；EtherCAT 需 root/CAP_NET_RAW（见 3.4 setcap），否则检测会跳过该网卡 |
 | 交叉编译找不到 Qt5 | 确认装了 `qtbase5-dev:arm64`；toolchain 使用 `cmake/aarch64-linux-gnu.cmake` |
 | 运行时报找不到 .so | 检查 LD_LIBRARY_PATH 是否包含 SDK lib 目录；`ldd joint_gui` 看缺失项；Qt 库缺失则装 `libqt5network5` 等运行库 |
-| 用 sudo 启动后找不到 SDK .so | sudo 会清空 LD_LIBRARY_PATH；改用 `./joint_gui`（先 setcap）或 `sudo env LD_LIBRARY_PATH=... ./joint_gui`（见 3.3） |
+| 用 sudo 启动后找不到 SDK .so | 用 `sudo ./run.sh`（run.sh 内部会设置 LD_LIBRARY_PATH，见 3.3） |
 | CANopen 无设备 | 确认适配器插入且节点 ID 与界面从站 ID 一致；Canable/SocketCAN 接口可用 `candump can0` 看报文 |
 | 使能后不动 | 检查操作模式是否支持；MIT 模式下目标范围需在 SDK 读到的限制内（±12.5 rad 量级） |
