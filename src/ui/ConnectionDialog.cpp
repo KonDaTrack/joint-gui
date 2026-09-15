@@ -33,6 +33,7 @@ ConnectionDialog::ConnectionDialog(QWidget* parent)
     pulsesEdit_ = new QLineEdit(QStringLiteral("524288"), this);
     gearEdit_ = new QLineEdit(QStringLiteral("101"), this);
     ratedTorqueEdit_ = new QLineEdit(QStringLiteral("50"), this);
+    travelLimitEdit_ = new QLineEdit(QStringLiteral("170"), this);
 
     QFormLayout* form = new QFormLayout;
     form->setHorizontalSpacing(14);
@@ -45,6 +46,7 @@ ConnectionDialog::ConnectionDialog(QWidget* parent)
     form->addRow(QStringLiteral("编码器分辨率 (脉冲/圈)"), pulsesEdit_);
     form->addRow(QStringLiteral("减速比"), gearEdit_);
     form->addRow(QStringLiteral("额定力矩 (N·m)"), ratedTorqueEdit_);
+    form->addRow(QStringLiteral("行程限位 ±(deg)"), travelLimitEdit_);
 
     buttons_ = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
     connect(buttons_, &QDialogButtonBox::accepted, this, &QDialog::accept);
@@ -83,5 +85,6 @@ AppConfig ConnectionDialog::config() const
     c.encoderPulsesPerRev = qMax(1.0, pulsesEdit_->text().toDouble());
     c.gearRatio = qMax(0.0001, gearEdit_->text().toDouble());
     c.ratedTorqueNm = ratedTorqueEdit_->text().toDouble();
+    c.travelLimitDeg = qBound(1.0, travelLimitEdit_->text().toDouble(), 360.0);
     return c;
 }

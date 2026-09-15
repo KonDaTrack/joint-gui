@@ -52,6 +52,7 @@ bool EthercatDevice::open(const AppConfig& cfg)
     pulsesPerRev_ = cfg.encoderPulsesPerRev;
     gearRatio_ = cfg.gearRatio;
     ratedNm_ = cfg.ratedTorqueNm;
+    travelLimitDeg_ = cfg.travelLimitDeg;
     cycleMs_ = cfg.ethCycleMs;
     slaveId_ = cfg.slaveId;
 
@@ -177,6 +178,31 @@ bool EthercatDevice::homing(quint16 slave)
     return true;
 }
 
+// 回0：切到 PP 模式，用保守轮廓速度把关节运动到 0 度（相对零点）。
+// 与 homing 不同——homing 是标定零点，这里是让关节走回零点。
+bool EthercatDevice::moveToZero(quint16 slave)
+{
+    const Joint::DeviceParams p = paramsFor(slave);
+    if (p.encoderPulsesPerRev <= 0 || p.gearRatio <= 0) return false;
+
+    eth_setOperateMode(slave, eth_OperateMode_ProfilePosition);
+    mode_ = Joint::OperateMode::ProfilePosition;
+
+    // 保守轮廓（回0 是辅助动作，慢一点更安全）：速度 30 deg/s，加/减速 30 deg/s²
+    eth_setProfileVelocity(slave, (huint32)UnitConverter::degToPulses(
+        30.0, p.encoderPulsesPerRev, p.gearRatio));
+    eth_setProfileAcceleration(slave, (huint32)UnitConverter::degToPulses(
+        30.0, p.encoderPulsesPerRev, p.gearRatio));
+    eth_setProfileDeceleration(slave, (huint32)UnitConverter::degToPulses(
+        30.0, p.encoderPulsesPerRev, p.gearRatio));
+
+    eth_setTargetPosition(slave, 0);   // 0 度 = 归零后的零点的绝对脉冲位置
+    eth_setControlWord(slave, 0x0F | 0x20);        // 立即变更
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    eth_setControlWord(slave, 0x0F | 0x20 | 0x10); // 新设定点上升沿
+    return true;
+}
+
 bool EthercatDevice::setTarget(quint16 slave, const Joint::TargetCommand& cmd)
 {
     const Joint::DeviceParams p = paramsFor(slave);
@@ -191,18 +217,11 @@ bool EthercatDevice::setTarget(quint16 slave, const Joint::TargetCommand& cmd)
         eth_setProfileDeceleration(slave, (huint32)UnitConverter::degToPulses(
             cmd.profileDeceleration, p.encoderPulsesPerRev, p.gearRatio));
         if (cmd.hasPosition) {
-            // 0-360 回绕：目标映射到与当前位置最近的同余角度（最多 ±180°）。
-            // 否则多圈绝对位置（显示回绕 0-360）会让电机整圈旋转，表现为"到了不停止"
-            hint32 curPos = 0;
-            eth_getActualPosition(slave, &curPos);
-            const double curDeg = UnitConverter::pulsesToDeg(
-                curPos, p.encoderPulsesPerRev, p.gearRatio);
-            double diffDeg = std::fmod(cmd.positionDeg - curDeg + 180.0, 360.0);
-            if (diffDeg < 0) diffDeg += 360.0;
-            diffDeg -= 180.0;
-            const double goal = curPos + diffDeg / 360.0
-                                * (p.encoderPulsesPerRev * p.gearRatio);
-            eth_setTargetPosition(slave, (hint32)goal);
+            // 目标角度夹到 ±行程限位内（相对零点带符号），再按绝对角度直接映射成脉冲。
+            // 限位下不会超过一圈，无需最近的同余角映射。
+            const double target = qBound(-travelLimitDeg_, cmd.positionDeg, travelLimitDeg_);
+            eth_setTargetPosition(slave, (hint32)UnitConverter::degToPulses(
+                target, p.encoderPulsesPerRev, p.gearRatio));
             // 新设定点：控制字 bit5(立即变更) → bit4(新设定点) 上升沿
             eth_setControlWord(slave, 0x0F | 0x20);
             std::this_thread::sleep_for(std::chrono::milliseconds(20));
@@ -272,10 +291,9 @@ bool EthercatDevice::readTelemetry(quint16 slave, Joint::Telemetry& out)
 
     out.slave = slave;
     out.connected = true;
-    // 0-360 回绕显示：多圈绝对位置取模 360，避免数值累积到几千上万度
-    double posDeg = UnitConverter::pulsesToDeg(pos, p.encoderPulsesPerRev, p.gearRatio);
-    posDeg = std::fmod(posDeg, 360.0);
-    if (posDeg < 0) posDeg += 360.0;
+    // 带符号显示（相对归零零点，不回绕）：±行程限位下位置不会超过一圈，
+    // 带符号能直观看出偏离零点的方向和距离；越限时数值会超出 ±limit 以醒目提示。
+    const double posDeg = UnitConverter::pulsesToDeg(pos, p.encoderPulsesPerRev, p.gearRatio);
     out.positionDeg = posDeg;
     // 速度 = 位置差分（脉冲/秒 → deg/s），轻滤波抑制编码器量化噪声
     double velDps = 0.0;
@@ -304,6 +322,26 @@ bool EthercatDevice::readTelemetry(quint16 slave, Joint::Telemetry& out)
     out.driveState = Joint::mapDriveState(sw);
     out.errorCode = err;
     out.operateMode = static_cast<Joint::OperateMode>(mode);
+    // 行程限位保护（保护中空轴内力矩传感器线束）：超限立即停住当前模式的动作。
+    // 放在读遥测里是因为它每周期都跑，PV/PT 这类没有位置目标的模式只能靠监控拦。
+    if (std::fabs(posDeg) > travelLimitDeg_) {
+        switch (mode_) {
+        case Joint::OperateMode::ProfilePosition:
+        case Joint::OperateMode::InterpolatedPosition:
+            eth_setTargetPosition(slave, pos);       // 保持当前位置，停止继续走
+            break;
+        case Joint::OperateMode::ProfileVelocity:
+        case Joint::OperateMode::Velocity:
+            eth_setTargetVelocity(slave, 0);         // 速度归零
+            break;
+        case Joint::OperateMode::ProfileTorque:
+            eth_setTargetTorque(slave, 0);           // 力矩归零
+            break;
+        default:
+            break;
+        }
+        out.limitExceeded = true;
+    }
     out.timestampMs = QDateTime::currentMSecsSinceEpoch();
     return true;
 }

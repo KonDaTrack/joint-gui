@@ -54,6 +54,11 @@ ControlPanel::ControlPanel(QWidget* parent)
     connect(homeBtn_, &QPushButton::clicked, this, &ControlPanel::homingRequested);
     connect(readyCheck_, &QCheckBox::toggled, homeBtn_, &QPushButton::setEnabled);
 
+    zeroBtn_ = new QPushButton(QStringLiteral("回0"), this);
+    zeroBtn_->setEnabled(false);
+    connect(zeroBtn_, &QPushButton::clicked, this, &ControlPanel::moveToZeroRequested);
+    connect(readyCheck_, &QCheckBox::toggled, zeroBtn_, &QPushButton::setEnabled);
+
     modeCombo_ = new QComboBox(this);
     // 轮廓模式：驱动内部生成平滑轨迹，主站一发目标即可（对齐官方 PP/PV/PT 例程）
     modeCombo_->addItem(QStringLiteral("轮廓位置 PP"), (int)Joint::OperateMode::ProfilePosition);
@@ -85,6 +90,7 @@ ControlPanel::ControlPanel(QWidget* parent)
     btnRow->addWidget(disableBtn_);
     btnRow->addWidget(faultResetBtn_);
     btnRow->addWidget(homeBtn_);
+    btnRow->addWidget(zeroBtn_);
 
     form_ = new QFormLayout;
     form_->addRow(tr("操作模式"), modeCombo_);

@@ -25,6 +25,7 @@ public slots:
     void setOperateModeRequested(Joint::OperateMode mode);
     void setTargetRequested(const Joint::TargetCommand& cmd);
     void homingRequested();
+    void moveToZeroRequested();
 
 signals:
     void connectionChanged(bool connected, QString busName, int slaveCount, QString error);
@@ -33,6 +34,7 @@ signals:
     void faultDetected(QString message);
     void detectionMessage(QString message);   // 自动检测过程提示（显示在状态栏）
     void homingFinished(bool ok);             // 归航完成（ok=false 表示失败/超时）
+    void limitExceeded(QString message);      // 超出行程限位（已自动停止）
 
 private slots:
     void onCycle();
@@ -47,4 +49,5 @@ private:
     bool connected_ = false;
     quint16 activeSlave_ = 1;
     qint64 lastTelemetryMs_ = 0;
+    bool limitWarned_ = false;   // 超限告警去抖：仅上升沿提示一次
 };

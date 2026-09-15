@@ -20,6 +20,7 @@ public:
     bool setTarget(quint16 slave, const Joint::TargetCommand& cmd) override;
     bool readTelemetry(quint16 slave, Joint::Telemetry& out) override;
     bool homing(quint16 slave) override;
+    bool moveToZero(quint16 slave) override;   // 回0：切 PP 模式走到 0 度
 
     bool readSDO(quint16 slave, quint16 index, quint8 subIndex,
                  void* value, int dataType, int timeout) override;
@@ -34,6 +35,7 @@ private:
     double pulsesPerRev_ = 65536;
     double gearRatio_ = 1.0;
     double ratedNm_ = 1.0;
+    double travelLimitDeg_ = 170.0;   // 行程限位 ±deg（相对归零零点）
     Joint::OperateMode mode_ = Joint::OperateMode::ProfilePosition;
     QHash<quint16, Joint::DeviceParams> paramsBySlave_;   // 每从站自动读取的参数
     // 速度由位置差分计算（0x606C 速度寄存器在静止时读数不稳）

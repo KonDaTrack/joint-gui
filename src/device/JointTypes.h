@@ -39,7 +39,7 @@ enum class DriveState {
 struct Telemetry {
     quint16 slave = 0;
     bool connected = false;
-    double positionDeg = 0.0;    // 当前角度 (deg)
+    double positionDeg = 0.0;    // 当前角度 (deg，带符号，相对零点)
     double velocityDps = 0.0;    // (deg/s)
     double torqueNm = 0.0;       // (N·m)
     double temperatureC = 0.0;
@@ -47,6 +47,7 @@ struct Telemetry {
     DriveState driveState = DriveState::Unknown;
     quint16 errorCode = 0;
     OperateMode operateMode = OperateMode::Invalid;
+    bool limitExceeded = false;  // 超出行程限位（已自动停止该模式动作）
     qint64 timestampMs = 0;
 };
 

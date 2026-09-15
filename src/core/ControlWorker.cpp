@@ -124,6 +124,19 @@ void ControlWorker::onCycle()
     }
     emit telemetryUpdatedAll(list);
 
+    // 行程限位告警（去抖，仅上升沿提示一次）：设备层已停住该模式的动作
+    bool limitNow = false;
+    for (const Joint::Telemetry& t : list) {
+        if (t.connected && t.limitExceeded) { limitNow = true; break; }
+    }
+    if (limitNow && !limitWarned_) {
+        limitWarned_ = true;
+        emit limitExceeded(QStringLiteral("超出 ±%1° 行程限位，已自动停止（保护力矩传感器线束）")
+                           .arg(cfg_.travelLimitDeg));
+    } else if (!limitNow) {
+        limitWarned_ = false;   // 回到范围内，恢复可再次告警
+    }
+
     if (activeOk) {
         lastTelemetryMs_ = QDateTime::currentMSecsSinceEpoch();
         return;
@@ -175,4 +188,13 @@ void ControlWorker::homingRequested()
     const bool ok = device_->homing(activeSlave_);
     lastTelemetryMs_ = QDateTime::currentMSecsSinceEpoch();
     emit homingFinished(ok);
+}
+void ControlWorker::moveToZeroRequested()
+{
+    if (!device_ || !connected_) return;
+    lastTelemetryMs_ = QDateTime::currentMSecsSinceEpoch();
+    const bool ok = device_->moveToZero(activeSlave_);
+    lastTelemetryMs_ = QDateTime::currentMSecsSinceEpoch();
+    emit detectionMessage(ok ? QStringLiteral("已下发回0（切轮廓位置模式走到 0°）")
+                             : QStringLiteral("回0 失败"));
 }

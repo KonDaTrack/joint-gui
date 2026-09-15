@@ -17,6 +17,8 @@ struct AppConfig {
     double encoderPulsesPerRev = 524288;  // 编码器分辨率（本关节 19 位 = 524288）
     double gearRatio = 101.0;             // 减速比（本关节 101:1）
     double ratedTorqueNm = 50.0;          // 额定力矩 N·m（PHU-20H-90-F-B，90mm 关节；探针实测 0x6076=850、限制 3030）
+    // 行程限位 ±角度（相对归零后的零点）。保护中空轴里的力矩传感器线束，禁止连续旋转。
+    double travelLimitDeg = 170.0;
 
     int controlCycleMs() const;          // 工作周期
 };

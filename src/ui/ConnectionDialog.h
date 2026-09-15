@@ -25,5 +25,6 @@ private:
     QLineEdit* pulsesEdit_;    // 编码器分辨率
     QLineEdit* gearEdit_;      // 减速比
     QLineEdit* ratedTorqueEdit_;
+    QLineEdit* travelLimitEdit_;   // 行程限位 ±deg
     QDialogButtonBox* buttons_;
 };
