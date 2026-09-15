@@ -17,20 +17,8 @@ ControlPanel::ControlPanel(QWidget* parent)
     setObjectName(QStringLiteral("PanelCard"));
     setAttribute(Qt::WA_StyledBackground, true);
 
-    // 控制从站下拉：连接前禁用（占位 "--" data 0），检测到从站后由 setSlaves 填充
-    slaveCombo_ = new QComboBox(this);
-    slaveCombo_->addItem(QStringLiteral("--"), 0);
-    slaveCombo_->setEnabled(false);
-    connect(slaveCombo_, qOverload<int>(&QComboBox::currentIndexChanged), this,
-            [this](int) {
-                emit activeSlaveChanged(static_cast<quint16>(slaveCombo_->currentData().toInt()));
-            });
-
-    QHBoxLayout* slaveRow = new QHBoxLayout;
-    slaveRow->addWidget(new QLabel(tr("控制从站"), this));
-    slaveRow->addWidget(slaveCombo_, 1);
-
-    // 控制目标醒目标注：切换后命令发向哪个轴一眼可见，避免"想让A动却发给了B"
+    // 控制目标：只显示，不提供切换控件（切换统一走左侧监控面板标签页，
+    // 避免两个入口互相不同步）。显示里提示切换位置，方便操作者找到。
     targetLabel_ = new QLabel(this);
     targetLabel_->setStyleSheet(QStringLiteral("color: #00E5FF; font-weight: bold;"));
     refreshTargetLabel();
@@ -120,7 +108,6 @@ ControlPanel::ControlPanel(QWidget* parent)
     QVBoxLayout* root = new QVBoxLayout(this);
     root->setContentsMargins(16, 16, 16, 16);
     root->setSpacing(10);
-    root->addLayout(slaveRow);
     root->addWidget(targetLabel_);
     root->addLayout(estopRow);
     root->addLayout(btnRow);
@@ -172,47 +159,43 @@ void ControlPanel::updateFieldVisibility()
 
 void ControlPanel::setSlaves(const QList<quint16>& slaves)
 {
-    const quint16 cur = static_cast<quint16>(slaveCombo_->currentData().toInt());
-    QSignalBlocker b(slaveCombo_);   // 重建期间抑制信号，避免误发 activeSlaveChanged 覆盖 worker 的 active
-    slaveCombo_->clear();
-    for (quint16 s : slaves)
-        slaveCombo_->addItem(QStringLiteral("从站 %1").arg(s), s);
-    slaveCombo_->setEnabled(!slaves.isEmpty());
-    if (slaveCombo_->findData(cur) < 0 && slaveCombo_->count() > 0)
-        slaveCombo_->setCurrentIndex(0);
+    slaves_ = slaves;
+    if (!slaves_.contains(activeSlave_) && !slaves_.isEmpty())
+        activeSlave_ = slaves_.first();   // 重连后原目标可能不存在了
     refreshTargetLabel();
 }
 
-// 按当前下拉项刷新「控制目标」标注，并通知外部（状态栏提示）
+// 组合「从站N · XXmm」文本；型号未知时退回「从站N」
+QString ControlPanel::slaveText(quint16 address) const
+{
+    const int idx = address - 1;
+    const QString sn = (idx >= 0 && idx < shorts_.size()) ? shorts_.at(idx) : QString();
+    return sn.isEmpty() ? QStringLiteral("从站%1").arg(address)
+                        : QStringLiteral("从站%1 · %2").arg(address).arg(sn);
+}
+
+// 刷新「控制目标」显示，并通知外部（状态栏提示）
 void ControlPanel::refreshTargetLabel()
 {
-    const QString text = slaveCombo_->currentText();
-    targetLabel_->setText(QStringLiteral("▶ 当前控制目标：%1").arg(text));
+    if (!slaves_.contains(activeSlave_)) {
+        targetLabel_->setText(QStringLiteral("▶ 当前控制目标：--"));
+        return;
+    }
+    const QString text = slaveText(activeSlave_);
+    targetLabel_->setText(QStringLiteral("▶ 当前控制目标：%1（左侧标签页切换）").arg(text));
     emit controlTargetChanged(text);
 }
 
-// 下标 i ↔ 从站 i+1：下拉项带上型号短名（如「从站2 · 70mm」），
-// 避免多轴时只能靠编号猜哪个是哪个关节
 void ControlPanel::setSlaveModels(const QStringList& shortNames)
 {
-    for (int i = 0; i < slaveCombo_->count(); ++i) {
-        const quint16 s = static_cast<quint16>(slaveCombo_->itemData(i).toInt());
-        const int idx = s - 1;
-        const QString sn = (idx >= 0 && idx < shortNames.size()) ? shortNames.at(idx) : QString();
-        slaveCombo_->setItemText(i, sn.isEmpty() ? QStringLiteral("从站 %1").arg(s)
-                                                 : QStringLiteral("从站%1 · %2").arg(s).arg(sn));
-    }
-    refreshTargetLabel();   // 型号变了，标注也要跟着更新
+    shorts_ = shortNames;
+    refreshTargetLabel();   // 型号变了，显示跟着更新
 }
 
 void ControlPanel::setActiveSlave(quint16 address)
 {
-    const int idx = slaveCombo_->findData(address);
-    if (idx >= 0) {
-        QSignalBlocker b(slaveCombo_);
-        slaveCombo_->setCurrentIndex(idx);
-    }
-    refreshTargetLabel();   // 控制目标变了，更新标注并通知状态栏
+    activeSlave_ = address;
+    refreshTargetLabel();
 }
 
 void ControlPanel::onEnableClicked()
