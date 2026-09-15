@@ -41,6 +41,11 @@ private:
     quint16 activeSlave_ = 1;
     int bufferSize_ = 5000;    // 10s @500Hz：一次完整运动通常几秒，300 点(0.6s)装不下
     bool recording_ = false;   // 仅在「下发目标」后为真；否则不采样也不绘制
+    // 力矩显示平滑：驱动器基于电流估算的力矩有几十‰的高频噪声（实测使能静止时
+    // ±1.4 N·m 摆动而位置纹丝不动），直接画是一条毛刺带。这里只平滑「显示值」，
+    // 不改变遥测原始数据（监控面板的数字仍是原始值）。
+    double torSmooth_ = 0.0;
+    bool torSmoothInit_ = false;
     bool moved_ = false;       // 本次记录中是否真的动过（用于判定"运动完成"）
     qint64 stillSinceMs_ = 0;  // 连续静止的起点时间戳（0=当前不静止）
     qint64 firstMs_ = 0, lastMs_ = 0;   // 本次记录的时间跨度（标题显示）

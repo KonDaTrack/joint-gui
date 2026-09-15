@@ -43,6 +43,7 @@ void CurvePanel::beginCapture()
     moved_ = false;
     stillSinceMs_ = 0;
     firstMs_ = lastMs_ = 0;
+    torSmoothInit_ = false;   // 重新建立平滑起点，避免上次的稳态值拖尾
     update();
 }
 
@@ -66,9 +67,14 @@ void CurvePanel::onTelemetry(const QList<Joint::Telemetry>& list)
                 tor_.minSpan = t.ratedTorqueNm * 0.1;
             if (firstMs_ == 0) firstMs_ = t.timestampMs;
             lastMs_ = t.timestampMs;
+            // 力矩显示平滑（一阶，alpha=0.1 → 白噪声标准差降到约 1/4）；
+            // 位置与速度不平滑，保持原始读数
+            if (!torSmoothInit_) { torSmooth_ = t.torqueNm; torSmoothInit_ = true; }
+            else torSmooth_ += (t.torqueNm - torSmooth_) * 0.1;
+
             push(pos_, t.positionDeg);
             push(vel_, t.velocityDps);
-            push(tor_, t.torqueNm);
+            push(tor_, torSmooth_);
 
             // 运动完成自动收尾：先"动过"，再连续静止 ~500ms → 停止记录，
             // 让完整波形留在屏上（不必手动点停止运动）
@@ -94,6 +100,7 @@ void CurvePanel::setActiveSlave(quint16 address)
     activeSlave_ = address;
     pos_.buf.clear(); vel_.buf.clear(); tor_.buf.clear();
     pos_.scaled = vel_.scaled = tor_.scaled = false;   // 换轴重新建立显示量程
+    torSmoothInit_ = false;
     update();
 }
 
@@ -164,7 +171,7 @@ void CurvePanel::paintEvent(QPaintEvent* e)
 
     const double secs = (lastMs_ > firstMs_) ? (lastMs_ - firstMs_) / 1000.0 : 0.0;
     p.setPen(QColor(0xD0, 0xD6, 0xDD));
-    p.drawText(10, 18, recording_
-               ? tr("● 记录中 %1s —— 位置(蓝) 速度(绿) 力矩(橙)").arg(secs, 0, 'f', 1)
-               : tr("记录完成 %1s —— 位置(蓝) 速度(绿) 力矩(橙)").arg(secs, 0, 'f', 1));
+    p.drawText(10, 18,
+               (recording_ ? tr("● 记录中 %1s") : tr("记录完成 %1s")).arg(secs, 0, 'f', 1)
+               + tr(" —— 位置(蓝) 速度(绿) 力矩(橙·显示已平滑)"));
 }
