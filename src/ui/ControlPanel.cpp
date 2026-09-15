@@ -188,7 +188,11 @@ void ControlPanel::refreshTargetLabel()
         return;
     }
     const QString text = slaveText(activeSlave_);
-    targetLabel_->setText(QStringLiteral("▶ 当前控制目标：%1（左侧标签页切换）").arg(text));
+    // 文本保持短：这行没有换行，过长会把整栏最小宽度撑大，
+    // 反过来挤压下面那排按钮（表现为「回0」被裁或右侧对不齐）。
+    // 「在哪切换」的提示移到 tooltip，不再占用行宽。
+    targetLabel_->setText(QStringLiteral("▶ 控制目标：%1").arg(text));
+    targetLabel_->setToolTip(tr("命令发往该从站。切换：点击左侧监控面板的从站标签页"));
     emit controlTargetChanged(text);
 }
 

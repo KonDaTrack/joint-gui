@@ -132,7 +132,7 @@ QComboBox {
     background-color: #16181D;
     border: 1px solid #2B303C;
     border-radius: 4px;
-    padding: 5px 26px 5px 10px;   /* 右侧留出箭头位置 */
+    padding: 5px 28px 5px 10px;   /* 右侧留足箭头安全边距，避免箭头压到文字 */
     color: #E2E8F0;
     min-height: 22px;
 }
@@ -143,13 +143,20 @@ QComboBox::drop-down {
     subcontrol-origin: padding;
     subcontrol-position: top right;
     width: 24px;
-    border-left: 1px solid #2B303C;
-    border-top-right-radius: 4px;
-    border-bottom-right-radius: 4px;
+    border: none;
+    background: transparent;
 }
-/* 箭头交给 Fusion 画（配合下面的深色调色板）。
-   这里曾经用 CSS 的 border 三角技巧，在本 Qt 上渲染成了黑色小方块，故移除该覆盖。
-   注意 padding-right 要留够，否则箭头会压到文字上。 */
+/* 纯 CSS 边框三角（免素材）。关键：必须显式给 width/height:0，
+   否则 subcontrol 会按默认尺寸渲染成一个实心方块（之前就是这个症状）。 */
+QComboBox::down-arrow {
+    width: 0;
+    height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 6px solid #94A3B8;
+    margin-right: 8px;
+}
+QComboBox::down-arrow:hover { border-top-color: #38BDF8; }
 QComboBox QAbstractItemView {
     background-color: #1E2128;
     color: #E2E8F0;

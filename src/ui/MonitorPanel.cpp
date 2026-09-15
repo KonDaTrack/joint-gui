@@ -13,6 +13,7 @@ QLabel* MonitorPanel::value(const char* objectName)
         // 数值框固定宽度并右对齐：否则 QFormLayout 会把它拉满整行，
         // 右边留一大条空白，重心失衡。右对齐符合工业仪表读数习惯。
         lab->setFixedWidth(112);
+        lab->setFixedHeight(28);   // 固定高度，配合收紧的行距形成均匀节奏
         lab->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
     } else {
         lab->setMinimumHeight(24);
@@ -64,8 +65,8 @@ MonitorPanel::Page MonitorPanel::makePage(quint16 slave)
     QWidget* w = new QWidget(tabs_);
     w->setObjectName(QStringLiteral("pageWidget"));   // 对应 QSS 限定选择器，透明底
     QFormLayout* form = new QFormLayout(w);
-    form->setHorizontalSpacing(12);
-    form->setVerticalSpacing(8);
+    form->setHorizontalSpacing(16);   // 键名与数值之间留出呼吸感
+    form->setVerticalSpacing(6);      // 收紧了行距，避免读数框与下方遥测文本节奏断层
     // 行标题靠右贴住数值列：默认左对齐时，短标题与数值之间会留一段忽大忽小的空档
     form->setLabelAlignment(Qt::AlignRight | Qt::AlignVCenter);
     // 识别出的型号：供核对本从站参数（额定力矩/减速比）是否配对，避免多关节错配
