@@ -30,6 +30,11 @@ ControlPanel::ControlPanel(QWidget* parent)
     slaveRow->addWidget(new QLabel(tr("控制从站"), this));
     slaveRow->addWidget(slaveCombo_, 1);
 
+    // 控制目标醒目标注：切换后命令发向哪个轴一眼可见，避免"想让A动却发给了B"
+    targetLabel_ = new QLabel(this);
+    targetLabel_->setStyleSheet(QStringLiteral("color: #00E5FF; font-weight: bold;"));
+    refreshTargetLabel();
+
     // 急停按钮：最显眼（全局 QSS #dangerButton 红色醒目样式）
     estopBtn_ = new QPushButton(QStringLiteral("急停 ESTOP"), this);
     estopBtn_->setObjectName(QStringLiteral("dangerButton"));
@@ -116,6 +121,7 @@ ControlPanel::ControlPanel(QWidget* parent)
     root->setContentsMargins(16, 16, 16, 16);
     root->setSpacing(10);
     root->addLayout(slaveRow);
+    root->addWidget(targetLabel_);
     root->addLayout(estopRow);
     root->addLayout(btnRow);
     root->addWidget(targetTitle);
@@ -174,6 +180,15 @@ void ControlPanel::setSlaves(const QList<quint16>& slaves)
     slaveCombo_->setEnabled(!slaves.isEmpty());
     if (slaveCombo_->findData(cur) < 0 && slaveCombo_->count() > 0)
         slaveCombo_->setCurrentIndex(0);
+    refreshTargetLabel();
+}
+
+// 按当前下拉项刷新「控制目标」标注，并通知外部（状态栏提示）
+void ControlPanel::refreshTargetLabel()
+{
+    const QString text = slaveCombo_->currentText();
+    targetLabel_->setText(QStringLiteral("▶ 当前控制目标：%1").arg(text));
+    emit controlTargetChanged(text);
 }
 
 // 下标 i ↔ 从站 i+1：下拉项带上型号短名（如「从站2 · 70mm」），
@@ -187,6 +202,7 @@ void ControlPanel::setSlaveModels(const QStringList& shortNames)
         slaveCombo_->setItemText(i, sn.isEmpty() ? QStringLiteral("从站 %1").arg(s)
                                                  : QStringLiteral("从站%1 · %2").arg(s).arg(sn));
     }
+    refreshTargetLabel();   // 型号变了，标注也要跟着更新
 }
 
 void ControlPanel::setActiveSlave(quint16 address)
@@ -196,6 +212,7 @@ void ControlPanel::setActiveSlave(quint16 address)
         QSignalBlocker b(slaveCombo_);
         slaveCombo_->setCurrentIndex(idx);
     }
+    refreshTargetLabel();   // 控制目标变了，更新标注并通知状态栏
 }
 
 void ControlPanel::onEnableClicked()

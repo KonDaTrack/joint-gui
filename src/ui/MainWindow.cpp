@@ -78,6 +78,10 @@ MainWindow::MainWindow(QWidget* parent)
     };
     connect(monitor_, &MonitorPanel::activeSlaveChanged, this, switchSlave);
     connect(control_, &ControlPanel::activeSlaveChanged, this, switchSlave);
+    // 控制目标切换时状态栏提示，强化"命令会发给哪个轴"的感知
+    connect(control_, &ControlPanel::controlTargetChanged, this, [this](const QString& label) {
+        statusBar()->showMessage(QStringLiteral("控制目标已切换到 %1").arg(label), 5000);
+    });
 
     connect(control_, &ControlPanel::enableRequested, worker_, &ControlWorker::enableRequested);
     connect(control_, &ControlPanel::disableRequested, worker_, &ControlWorker::disableRequested);

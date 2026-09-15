@@ -6,6 +6,7 @@
 class QCheckBox;
 class QComboBox;
 class QFormLayout;
+class QLabel;
 class QLineEdit;
 class QPushButton;
 
@@ -22,6 +23,8 @@ public:
     void setSlaveModels(const QStringList& shortNames);   // 下标 i ↔ 从站 i+1
 
 signals:
+    // 控制目标变化（切换从站后），供状态栏提示。参数是完整描述如「从站2 · 70mm」
+    void controlTargetChanged(const QString& label);
     void enableRequested();
     void disableRequested();
     void quickStopRequested();
@@ -42,6 +45,7 @@ private slots:
 
 private:
     Joint::OperateMode currentMode() const;
+    void refreshTargetLabel();   // 按当前下拉项刷新「控制目标」标注
 
     QCheckBox* readyCheck_;
     QPushButton* estopBtn_;
@@ -50,6 +54,7 @@ private:
     QPushButton* faultResetBtn_;
     QPushButton* homeBtn_;
     QPushButton* zeroBtn_;
+    QLabel* targetLabel_;   // 醒目标注当前控制目标，避免命令发错轴
     QComboBox* slaveCombo_;
     QComboBox* modeCombo_;
     QLineEdit* posEdit_;
