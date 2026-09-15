@@ -27,8 +27,11 @@ ConnectionDialog::ConnectionDialog(QWidget* parent)
     baudCombo_->addItem(QStringLiteral("500 kbps"), 500);
     baudCombo_->addItem(QStringLiteral("250 kbps"), 250);
 
-    // 关节型号预设：选定后自动填额定力矩（力矩换算的唯一标定参数，填错会超发/少发）
+    // 关节型号：默认"自动检测"——连接后按驱动器 0x6076 逐从站识别型号，
+    // 用该型号的规格值（多关节各轴独立）。这里的型号选择只是**识别失败时的兜底**，
+    // 选定后自动填额定力矩（力矩换算的唯一标定参数，填错会超发/少发）。
     modelCombo_ = new QComboBox(this);
+    modelCombo_->addItem(QStringLiteral("自动检测（按驱动器识别）"), 0.0);
     modelCombo_->addItem(QStringLiteral("PHU-14H-70-F-B（额定 9.6）"), 9.6);
     modelCombo_->addItem(QStringLiteral("PHU-20H-90-F-B（额定 50）"), 50.0);
     modelCombo_->addItem(QStringLiteral("PHU-25H-110-F-B（额定 84）"), 84.0);
@@ -40,6 +43,10 @@ ConnectionDialog::ConnectionDialog(QWidget* parent)
     pulsesEdit_ = new QLineEdit(QStringLiteral("524288"), this);
     gearEdit_ = new QLineEdit(QStringLiteral("101"), this);
     ratedTorqueEdit_ = new QLineEdit(QStringLiteral("50"), this);
+    ratedTorqueEdit_->setToolTip(QStringLiteral(
+        "力矩换算基准。连接后按驱动器自动识别型号并以型号规格值为准；\n"
+        "仅当识别失败时才用此手填值。\n"
+        "注意：填得过小会导致力矩超发（危险），填得偏大只会欠发（安全）。"));
     travelLimitEdit_ = new QLineEdit(QStringLiteral("170"), this);
 
     QFormLayout* form = new QFormLayout;
