@@ -14,6 +14,9 @@ public:
 public slots:
     void onTelemetry(const QList<Joint::Telemetry>& list);
     void setActiveSlave(quint16 address);
+    // 采集控制：平时不记录不显示；点「下发目标」后清空并开始记录（观察本次响应）
+    void beginCapture();
+    void stopCapture();
 
 protected:
     void paintEvent(QPaintEvent* e) override;
@@ -37,4 +40,5 @@ private:
     Trace pos_, vel_, tor_;
     quint16 activeSlave_ = 1;
     int bufferSize_ = 300;
+    bool recording_ = false;   // 仅在「下发目标」后为真；否则不采样也不绘制
 };

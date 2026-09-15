@@ -33,8 +33,25 @@ void CurvePanel::push(Trace& tr, double v)
     if (tr.buf.size() > bufferSize_) tr.buf.remove(0, tr.buf.size() - bufferSize_);
 }
 
+// 点「下发目标」：清空并开始记录，用来看本次指令的响应
+void CurvePanel::beginCapture()
+{
+    pos_.buf.clear(); vel_.buf.clear(); tor_.buf.clear();
+    pos_.scaled = vel_.scaled = tor_.scaled = false;   // 重新建立显示量程
+    recording_ = true;
+    update();
+}
+
+// 停止记录（停止运动/失能/急停）：保留已记录的波形，只是不再采样
+void CurvePanel::stopCapture()
+{
+    recording_ = false;
+    update();
+}
+
 void CurvePanel::onTelemetry(const QList<Joint::Telemetry>& list)
 {
+    if (!recording_) return;   // 未在下发目标后的观察窗口内，不采样
     for (const Joint::Telemetry& t : list) {
         if (!t.connected) continue;   // 断开条目不下发，避免把故障画成归零冲断曲线
         if (t.slave == activeSlave_) {
@@ -115,6 +132,16 @@ void CurvePanel::paintEvent(QPaintEvent* e)
     drawTrace(p, vel_, pad);   // 绿 速度
     drawTrace(p, tor_, pad);   // 橙 力矩
 
+    if (!recording_ && pos_.buf.isEmpty() && vel_.buf.isEmpty() && tor_.buf.isEmpty()) {
+        // 空闲未记录：不显示曲线，只提示怎么开始
+        p.setPen(QColor(0x7A, 0x83, 0x8C));
+        p.drawText(rect(), Qt::AlignCenter,
+                   tr("点「下发目标」后开始记录波形"));
+        return;
+    }
+
     p.setPen(QColor(0xD0, 0xD6, 0xDD));
-    p.drawText(10, 18, tr("位置(蓝) 速度(绿) 力矩(橙)"));
+    p.drawText(10, 18, recording_
+               ? tr("● 记录中 —— 位置(蓝) 速度(绿) 力矩(橙)")
+               : tr("已停止记录 —— 位置(蓝) 速度(绿) 力矩(橙)"));
 }

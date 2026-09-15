@@ -89,6 +89,9 @@ MainWindow::MainWindow(QWidget* parent)
     connect(control_, &ControlPanel::faultResetRequested, worker_, &ControlWorker::faultResetRequested);
     connect(control_, &ControlPanel::operateModeChanged, worker_, &ControlWorker::setOperateModeRequested);
     connect(control_, &ControlPanel::targetRequested, worker_, &ControlWorker::setTargetRequested);
+    // 波形只在「下发目标」后记录，避免平时一直被噪声刷新
+    connect(control_, &ControlPanel::captureStarted, curve_, &CurvePanel::beginCapture);
+    connect(control_, &ControlPanel::captureStopped, curve_, &CurvePanel::stopCapture);
     connect(control_, &ControlPanel::homingRequested, worker_, &ControlWorker::homingRequested);
     connect(control_, &ControlPanel::moveToZeroRequested, worker_, &ControlWorker::moveToZeroRequested);
     connect(worker_, &ControlWorker::homingFinished, this, [this](bool ok) {

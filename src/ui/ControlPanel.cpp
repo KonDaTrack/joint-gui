@@ -36,7 +36,10 @@ ControlPanel::ControlPanel(QWidget* parent)
     connect(enableBtn_, &QPushButton::clicked, this, &ControlPanel::onEnableClicked);
 
     disableBtn_ = new QPushButton(QStringLiteral("失能"), this);
-    connect(disableBtn_, &QPushButton::clicked, this, &ControlPanel::disableRequested);
+    connect(disableBtn_, &QPushButton::clicked, this, [this] {
+        emit captureStopped();
+        emit disableRequested();
+    });
 
     faultResetBtn_ = new QPushButton(QStringLiteral("故障复位"), this);
     faultResetBtn_->setObjectName(QStringLiteral("warningButton"));
@@ -206,6 +209,7 @@ void ControlPanel::onEnableClicked()
 
 void ControlPanel::onEstopClicked()
 {
+    emit captureStopped();
     emit quickStopRequested();
     emit disableRequested();
     // 急停后复位安全确认勾选，再次使能必须重新确认现场安全
@@ -250,6 +254,7 @@ void ControlPanel::onSendTarget()
         break;
     }
     emit targetRequested(c);
+    emit captureStarted();   // 每次下发目标都重新开始记录本次响应
 }
 
 void ControlPanel::onStopMotion()
@@ -258,4 +263,5 @@ void ControlPanel::onStopMotion()
     c.hasVelocity = true;
     c.velocityDps = 0.0;
     emit targetRequested(c);
+    emit captureStopped();
 }

@@ -31,6 +31,9 @@ signals:
     void faultResetRequested();
     void operateModeChanged(Joint::OperateMode mode);
     void targetRequested(const Joint::TargetCommand& cmd);
+    // 波形采集控制：下发目标→开始记录本次响应；停止/失能/急停→停止记录
+    void captureStarted();
+    void captureStopped();
     void homingRequested();
     void moveToZeroRequested();
 
