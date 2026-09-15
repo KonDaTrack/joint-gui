@@ -24,7 +24,7 @@ QWidget {
                  "WenQuanYi Micro Hei", "Microsoft YaHei", sans-serif;
     background-color: #16181D;
     color: #E2E8F0;
-    font-size: 16px;
+    font-size: 18px;
     selection-background-color: #0284C7;
     selection-color: #FFFFFF;
 }
@@ -42,15 +42,15 @@ QLabel {
 /* 监控页：QFormLayout 的行标题调暗成灰蓝，值列等宽提亮 —— 形成"参数名 | 数值"两列层级。
    字号比正文小一档即可（15 vs 17），过小会显得局促、读起来吃力。
    行标题由 QFormLayout 内部创建，只能靠父级限定选择器命中 */
-QTabWidget QWidget#pageWidget QLabel { color: #64748B; font-size: 15px; }
+QTabWidget QWidget#pageWidget QLabel { color: #64748B; font-size: 17px; }
 QLabel#valText {
     color: #E2E8F0;
-    font-size: 17px;
+    font-size: 19px;
     font-family: "JetBrains Mono", "DejaVu Sans Mono", "Consolas", monospace;
 }
 /* 关节型号不是数值，用无衬线体即可：等宽下这串型号会撑宽整列 */
-QLabel#modelText { color: #94A3B8; font-size: 16px; }
-QLabel#unitText { color: #64748B; font-size: 15px; }
+QLabel#modelText { color: #94A3B8; font-size: 18px; }
+QLabel#unitText { color: #64748B; font-size: 16px; }
 QWidget#unitRow { background: transparent; }
 
 /* ============ 功能卡片 ============ */
@@ -72,7 +72,7 @@ QPushButton {
     /* 左右 padding 由 16px 收到 10px：5 个按钮并排时自然宽度会超出右栏可用宽度 */
     padding: 6px 10px;
     color: #E2E8F0;
-    min-height: 28px;
+    min-height: 32px;
 }
 QPushButton:hover { background-color: #2B303C; border-color: #0284C7; }
 QPushButton:pressed { background-color: #1A1D24; }
@@ -100,9 +100,9 @@ QPushButton#dangerButton {
     border: 1px solid #DC2626;
     color: #FFFFFF;
     border-radius: 6px;
-    font-size: 22px;
+    font-size: 24px;
     font-weight: bold;
-    min-height: 52px;
+    min-height: 58px;
 }
 QPushButton#dangerButton:hover { background-color: #EF4444; border-color: #FF8A8A; }
 QPushButton#dangerButton:pressed { background-color: #B91C1C; }
@@ -116,7 +116,7 @@ QLineEdit {
     border-radius: 4px;
     padding: 5px 8px;
     color: #E2E8F0;
-    min-height: 26px;
+    min-height: 30px;
 }
 QLineEdit:focus { border-color: #0284C7; }
 QLineEdit:hover { border-color: #4B5366; }
@@ -128,7 +128,7 @@ QComboBox {
     border-radius: 4px;
     padding: 5px 28px 5px 10px;   /* 右侧留足箭头安全边距，避免箭头压到文字 */
     color: #E2E8F0;
-    min-height: 26px;
+    min-height: 30px;
 }
 QComboBox:focus { border-color: #0284C7; }
 QComboBox:hover { border-color: #4B5366; }
@@ -188,7 +188,7 @@ QTabBar::tab {
     margin-right: 3px;
     border-top-left-radius: 4px;
     border-top-right-radius: 4px;
-    font-size: 15px;
+    font-size: 17px;
 }
 QTabBar::tab:hover:!selected { background-color: #242831; color: #CBD5E1; }
 /* 选中页：顶部高亮指示条 + 与面板同色，视觉上"融进"下方内容区 */
@@ -270,7 +270,7 @@ QLabel#bigValue {
     border-radius: 5px;
     padding: 3px 10px;
     color: #38BDF8;
-    font-size: 26px;
+    font-size: 30px;
     font-weight: bold;
     font-family: "JetBrains Mono", "DejaVu Sans Mono", "Consolas", monospace;
 }
@@ -304,7 +304,7 @@ QWidget#dotRow { background: transparent; }
 QLabel#sectionTitle {
     color: #38BDF8;
     font-weight: bold;
-    font-size: 17px;
+    font-size: 19px;
     margin-top: 4px;
 }
 )";
