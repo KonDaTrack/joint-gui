@@ -46,13 +46,25 @@ int main(int argc, char** argv)
         dumps(s, 0x607D, 2, "software MAX position");
         dumps(s, 0x607C, 0, "home offset");
         dumps(s, 0x607A, 0, "target position");
-        hint16 act = 0; eth_getActualTorque(s, &act);
-        hint32 pos = 0; eth_getActualPosition(s, &pos);
-        printf("  actual torque(permille)   = %d\n", act);
-        printf("  actual pos(pulses)        = %d\n", pos);
-        // 换算成圈数：每输出圈 = 编码器分辨率 × 减速比（本关节 524288 × 101）
-        const double pulsesPerRev = 524288.0 * 101.0;
-        printf("  actual pos(revs, 101:1)   = %.2f\n", pos / pulsesPerRev);
+        // ---- 遥测快照（PDO 路径）。多从站时若两个从站的这些值完全相同，
+        //      说明 SDK 的 PDO 遥测在多从站下串了（走 SDO 的对象索引不会串） ----
+        hint32 tpos = 0, ttemp = 0;
+        hint16 ttor = 0;
+        huint16 tsw = 0, terr = 0;
+        eth_OperateMode tmode = eth_OperateMode_Reserve;
+        eth_getActualPosition(s, &tpos);
+        eth_getActualTorque(s, &ttor);
+        eth_getStatusWord(s, &tsw);
+        eth_getErrorCode(s, &terr);
+        eth_getOperateMode(s, &tmode);
+        eth_getDriveTemper(s, &ttemp);
+        printf("  --- 遥测(PDO) ---\n");
+        printf("  状态字(0x6041)            = 0x%04X  (bit3=故障 bit0-2=状态)\n", tsw);
+        printf("  故障码(0x603F)            = 0x%04X\n", terr);
+        printf("  操作模式(0x6061)          = %d\n", (int)tmode);
+        printf("  位置(0x6064)              = %d 脉冲\n", tpos);
+        printf("  力矩(0x6077)              = %d ‰\n", ttor);
+        printf("  驱动器温度                 = %d ℃\n", ttemp);
     }
     eth_freeDLL();
     return 0;
