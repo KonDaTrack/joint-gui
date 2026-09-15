@@ -38,6 +38,11 @@ void CurvePanel::onTelemetry(const QList<Joint::Telemetry>& list)
     for (const Joint::Telemetry& t : list) {
         if (!t.connected) continue;   // 断开条目不下发，避免把故障画成归零冲断曲线
         if (t.slave == activeSlave_) {
+            // 力矩最小量程按额定力矩取 10%：驱动基于电流估算的力矩本身有 ~1% 额定的
+            // 纹波（实测 110mm 在 -2~+9‰，即 0.9 N·m，而此时轴纹丝不动）。
+            // 若用固定量程，小关节够用、大关节（84 N·m）会被这点纹波占满整个面板。
+            if (t.ratedTorqueNm > 0.0)
+                tor_.minSpan = t.ratedTorqueNm * 0.1;
             push(pos_, t.positionDeg);
             push(vel_, t.velocityDps);
             push(tor_, t.torqueNm);

@@ -48,6 +48,7 @@ struct Telemetry {
     quint16 errorCode = 0;
     OperateMode operateMode = OperateMode::Invalid;
     bool limitExceeded = false;  // 超出行程限位（已自动停止该模式动作）
+    double ratedTorqueNm = 0.0;  // 该从站额定力矩（供界面按量级设置显示范围）
     qint64 timestampMs = 0;
 };
 
