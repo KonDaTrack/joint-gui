@@ -11,8 +11,10 @@ QLabel* MonitorPanel::value(const char* objectName)
     if (big) {
         // 数值框固定宽度并右对齐：否则布局会把它拉满整行，
         // 右边留一大条空白，重心失衡。右对齐符合工业仪表读数习惯。
+        // 宽度固定、高度可随行高伸展：让三个读数槽均分左列剩余高度，撑满数据区
         lab->setFixedWidth(210);
-        lab->setFixedHeight(56);   // 固定高度，配合行距形成均匀节奏（随字号一起放大）
+        lab->setMinimumHeight(56);
+        lab->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
         lab->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
     } else {
         lab->setMinimumHeight(24);
@@ -63,12 +65,14 @@ QWidget* MonitorPanel::withUnit(QLabel* plate, const QString& unit)
 {
     QWidget* box = new QWidget(this);
     box->setObjectName(QStringLiteral("unitRow"));
+    box->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);   // 随行高伸展
     QHBoxLayout* h = new QHBoxLayout(box);
     h->setContentsMargins(0, 0, 0, 0);
     h->setSpacing(6);
     h->addWidget(plate);
     QLabel* u = new QLabel(unit, box);
     u->setObjectName(QStringLiteral("unitText"));
+    u->setAlignment(Qt::AlignVCenter);   // 读数槽变高时单位保持垂直居中
     h->addWidget(u);
     h->addStretch();
     return box;
@@ -144,7 +148,9 @@ MonitorPanel::Page MonitorPanel::makePage(quint16 slave)
     r = addRow(left, r, leftBox, tr("速度"), "lblLeft", withUnit(p.vel, tr("deg/s")), false);
     p.tor = value("bigValue");
     r = addRow(left, r, leftBox, tr("力矩"), "lblLeft", withUnit(p.tor, tr("N·m")), false);
-    left->setRowStretch(r, 1);   // 余量压到底部，各行按自身高度紧凑排列
+    // 型号行保持紧凑，三个读数槽均分剩余高度 → 撑满数据区而非只在底部留白
+    left->setRowStretch(0, 0);
+    for (int i = 1; i < r; ++i) left->setRowStretch(i, 1);
 
     // ---- 右列：状态类字段，每行一条 1px 分隔线形成"数据条"节奏 ----
     int q = 0;
