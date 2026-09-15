@@ -1,5 +1,6 @@
 #pragma once
 #include <QWidget>
+#include <QFrame>
 #include <QLabel>
 #include <QHash>
 #include <QTabWidget>
@@ -28,12 +29,16 @@ private:
         QLabel *model = nullptr;   // 识别出的型号（供核对参数是否配对）
         QLabel *pos = nullptr, *vel = nullptr, *tor = nullptr, *temp = nullptr,
                *status = nullptr, *state = nullptr, *err = nullptr, *conn = nullptr, *freq = nullptr;
+        QLabel *stateDot = nullptr, *connDot = nullptr;   // 状态指示灯（纯 QSS 圆点）
         int samples = 0;
         qint64 lastFreqMs = 0;
         double freqHz = 0.0;
     };
     QLabel* value(const char* objectName = nullptr);
-    QWidget* withUnit(QLabel* plate, const QString& unit);   // 数值框 + 独立单位小字
+    QLabel* dot();                                            // 8px 状态指示灯
+    QWidget* withUnit(QLabel* plate, const QString& unit);    // 数值框 + 独立单位小字
+    QWidget* withDot(QLabel* d, QLabel* text);                // 指示灯 + 状态文字
+    QFrame* rowSep();                                         // 遥测行之间的 1px 分隔线
     Page makePage(quint16 slave);
     void updatePage(Page& p, const Joint::Telemetry& t);
 

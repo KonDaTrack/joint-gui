@@ -39,11 +39,14 @@ QLabel {
     color: #E2E8F0;
 }
 
-/* 监控页：QFormLayout 的行标题调暗，值列提亮 —— 形成清晰的"参数名 | 数值"两列层级。
+/* 监控页：QFormLayout 的行标题调暗成小号灰蓝，值列等宽提亮 —— 形成"参数名 | 数值"两列层级。
    行标题由 QFormLayout 内部创建，只能靠父级限定选择器命中 */
-QTabWidget QWidget#pageWidget QLabel { color: #8D949E; }
-QLabel#valText { color: #E2E8F0; }
-QLabel#unitText { color: #646C7A; font-size: 13px; }
+QTabWidget QWidget#pageWidget QLabel { color: #64748B; font-size: 12px; }
+QLabel#valText {
+    color: #E2E8F0;
+    font-family: "JetBrains Mono", "DejaVu Sans Mono", "Consolas", monospace;
+}
+QLabel#unitText { color: #64748B; font-size: 12px; }
 QWidget#unitRow { background: transparent; }
 
 /* ============ 功能卡片 ============ */
@@ -51,7 +54,9 @@ QWidget#unitRow { background: transparent; }
    类型选择器必须写 QWidget#PanelCard，写 QFrame#... 会静默不匹配 */
 QWidget#PanelCard {
     background-color: #1E2128;
-    border: 1px solid #2B303C;
+    /* 顶部受光边比其余三面亮一档，模拟自上而下的环境光 → 卡片有厚度感 */
+    border: 1px solid #2B313E;
+    border-top: 1px solid #3E4656;
     border-radius: 8px;
 }
 
@@ -81,25 +86,10 @@ QPushButton#primaryButton:hover { background-color: #0369A1; border-color: #38BD
 QPushButton#primaryButton:pressed { background-color: #075985; }
 QPushButton#primaryButton:disabled { background-color: #1A1D24; color: #646C7A; border-color: #262A34; }
 
-/* 故障复位：橙色描边警示（可恢复操作） */
-QPushButton#warningButton {
-    background-color: #27231B;
-    border: 1px solid #F59E0B;
-    color: #FBBF24;
-    font-weight: bold;
-}
-QPushButton#warningButton:hover { background-color: #382E1E; border-color: #FBBF24; }
-QPushButton#warningButton:pressed { background-color: #1F1912; }
-
-/* 停止运动：暗红描边（危险动作，与故障复位区分） */
-QPushButton#dangerActionButton {
-    background-color: #2B1D20;
-    border: 1px solid #F87171;
-    color: #FCA5A5;
-    font-weight: bold;
-}
-QPushButton#dangerActionButton:hover { background-color: #382327; border-color: #FCA5A5; }
-QPushButton#dangerActionButton:pressed { background-color: #23171A; }
+/* 色彩克制：除「急停」(实心红) 与「下发目标」(科技蓝) 外，其余按钮一律收束为
+   深炭灰中性色，移除黄/红描边，避免一屏多焦点。
+   warningButton / dangerActionButton 因此不再单独配色，回落到默认 QPushButton 样式
+   （objectName 保留，便于日后需要时重新区分）。 */
 
 QPushButton#dangerButton {
     background-color: #DC2626;
@@ -266,18 +256,41 @@ QToolTip {
 }
 
 /* ============ 实时数据大字号 ============ */
-/* 三个关键遥测（位置/速度/力矩）：等宽数字 + 内嵌深色底框，像工业仪表读数。
-   等宽保证数值跳动时宽度不抖，底框让数值从背景里"立"起来 */
+/* 三个关键遥测（位置/速度/力矩）：内凹读数槽。
+   底色比卡片更深(#111317) → 视觉上"陷进去"；底部一条微亮分割线模拟槽底反光；
+   等宽字体保证数值跳动时宽度不抖 */
 QLabel#bigValue {
-    background-color: #13151A;
-    border: 1px solid #282C37;
+    background-color: #111317;
+    border: 1px solid #1B1F2A;
+    border-bottom: 1px solid #333C4E;
     border-radius: 5px;
     padding: 3px 10px;
-    color: #34D399;
+    color: #38BDF8;
     font-size: 19px;
     font-weight: bold;
     font-family: "JetBrains Mono", "DejaVu Sans Mono", "Consolas", monospace;
 }
+
+/* 遥测行之间的 1px 分隔线（QFormLayout 里加整行 QFrame 实现） */
+QFrame#rowSep {
+    background-color: #232732;
+    border: none;
+    max-height: 1px;
+}
+
+/* 纯 QSS 状态指示灯：8px 内容 + 2px 边框 = 12px 外径，radius 6 即正圆。
+   几何写死在这里，代码只改 background/border 的"颜色"，
+   避免正常态加光晕时圆点尺寸跳动导致整行抖动。 */
+QLabel#statusDot {
+    min-width: 8px;
+    max-width: 8px;
+    min-height: 8px;
+    max-height: 8px;
+    border: 2px solid transparent;
+    border-radius: 6px;
+    background-color: #4B5563;
+}
+QWidget#dotRow { background: transparent; }
 QLabel#sectionTitle {
     color: #38BDF8;
     font-weight: bold;

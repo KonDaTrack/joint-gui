@@ -26,6 +26,39 @@ QLabel* MonitorPanel::value(const char* objectName)
     return lab;
 }
 
+// 8px 状态指示灯：形状/底色由 QSS(#statusDot) 决定，颜色由 updatePage 按状态改写
+QLabel* MonitorPanel::dot()
+{
+    QLabel* d = new QLabel(this);
+    d->setObjectName(QStringLiteral("statusDot"));
+    d->style()->unpolish(d);
+    d->style()->polish(d);
+    return d;
+}
+
+// 指示灯 + 文字：状态行前面加一个圆点，比纯文字更直观
+QWidget* MonitorPanel::withDot(QLabel* d, QLabel* text)
+{
+    QWidget* box = new QWidget(this);
+    box->setObjectName(QStringLiteral("dotRow"));
+    QHBoxLayout* h = new QHBoxLayout(box);
+    h->setContentsMargins(0, 0, 0, 0);
+    h->setSpacing(7);
+    h->addWidget(d);
+    h->addWidget(text);
+    h->addStretch();
+    return box;
+}
+
+// 遥测行之间的 1px 分隔线（QFormLayout 里整行插入）
+QFrame* MonitorPanel::rowSep()
+{
+    QFrame* f = new QFrame(this);
+    f->setObjectName(QStringLiteral("rowSep"));
+    f->setFixedHeight(1);
+    return f;
+}
+
 // 数值框右侧跟一个浅灰单位小字（如 [ 0.00 ] deg），比把单位塞进行标题更接近仪表观感
 QWidget* MonitorPanel::withUnit(QLabel* plate, const QString& unit)
 {
@@ -71,15 +104,24 @@ MonitorPanel::Page MonitorPanel::makePage(quint16 slave)
     form->setLabelAlignment(Qt::AlignRight | Qt::AlignVCenter);
     // 识别出的型号：供核对本从站参数（额定力矩/减速比）是否配对，避免多关节错配
     p.model  = value("valText");   form->addRow(tr("关节型号"), p.model);
-    // 位置/速度/力矩为实时核心数据：等宽字体 + 内嵌底框，单位独立成小字
+    // 位置/速度/力矩为实时核心数据：内凹读数槽 + 等宽数字，单位独立成小字
     p.pos    = value("bigValue");  form->addRow(tr("位置"), withUnit(p.pos, tr("deg")));
     p.vel    = value("bigValue");  form->addRow(tr("速度"), withUnit(p.vel, tr("deg/s")));
     p.tor    = value("bigValue");  form->addRow(tr("力矩"), withUnit(p.tor, tr("N·m")));
+    form->addRow(rowSep());
+    // 下方遥测：每行一条 1px 分隔线，形成"数据条"的排版节奏
     p.temp   = value("valText");   form->addRow(tr("驱动器温度"), p.temp);
+    form->addRow(rowSep());
     p.status = value("valText");   form->addRow(tr("状态字"), p.status);
-    p.state  = value("valText");   form->addRow(tr("驱动状态"), p.state);
+    form->addRow(rowSep());
+    p.state  = value("valText");   p.stateDot = dot();
+    form->addRow(tr("驱动状态"), withDot(p.stateDot, p.state));
+    form->addRow(rowSep());
     p.err    = value("valText");   form->addRow(tr("故障码"), p.err);
-    p.conn   = value("valText");   form->addRow(tr("连接状态"), p.conn);
+    form->addRow(rowSep());
+    p.conn   = value("valText");   p.connDot = dot();
+    form->addRow(tr("连接状态"), withDot(p.connDot, p.conn));
+    form->addRow(rowSep());
     p.freq   = value("valText");   form->addRow(tr("刷新率"), p.freq);
     p.page = w;
     Q_UNUSED(slave);
@@ -177,6 +219,14 @@ void MonitorPanel::updatePage(Page& p, const Joint::Telemetry& t)
     default: break;
     }
     p.state->setStyleSheet(QStringLiteral("color: %1; font-weight: bold;").arg(stateColor));
+    // 指示灯：只改颜色，几何由 QSS #statusDot 统一（否则正常态加光晕会让圆点变大）
+    // 正常态给深绿描边模拟自发光，其余状态描边与底色同色（等于无光晕）
+    if (p.stateDot) {
+        const bool okState = (t.driveState == Joint::DriveState::OperationEnabled);
+        p.stateDot->setStyleSheet(
+            QStringLiteral("background-color: %1; border-color: %2;")
+                .arg(stateColor, okState ? QStringLiteral("#14532D") : QString(stateColor)));
+    }
 
     p.err->setText(t.errorCode ? QStringLiteral("0x%1").arg(t.errorCode, 4, 16, QLatin1Char('0'))
                                : QStringLiteral("无"));
@@ -189,6 +239,12 @@ void MonitorPanel::updatePage(Page& p, const Joint::Telemetry& t)
     p.conn->setText(t.connected ? QStringLiteral("在线") : QStringLiteral("离线"));
     p.conn->setStyleSheet(t.connected ? QStringLiteral("color: #34D399; font-weight: bold;")
                                       : QStringLiteral("color: #F87171; font-weight: bold;"));
+    if (p.connDot) {
+        p.connDot->setStyleSheet(
+            t.connected
+                ? QStringLiteral("background-color: #34D399; border-color: #14532D;")
+                : QStringLiteral("background-color: #F87171; border-color: #F87171;"));
+    }
 
     ++p.samples;
     if (p.lastFreqMs == 0) p.lastFreqMs = QDateTime::currentMSecsSinceEpoch();
