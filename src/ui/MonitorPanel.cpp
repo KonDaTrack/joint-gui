@@ -12,8 +12,8 @@ QLabel* MonitorPanel::value(const char* objectName)
     if (big) {
         // 数值框固定宽度并右对齐：否则 QFormLayout 会把它拉满整行，
         // 右边留一大条空白，重心失衡。右对齐符合工业仪表读数习惯。
-        lab->setFixedWidth(112);
-        lab->setFixedHeight(28);   // 固定高度，配合收紧的行距形成均匀节奏
+        lab->setFixedWidth(124);
+        lab->setFixedHeight(34);   // 固定高度，配合收紧的行距形成均匀节奏（随字号一起放大）
         lab->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
     } else {
         lab->setMinimumHeight(24);
@@ -103,7 +103,7 @@ MonitorPanel::Page MonitorPanel::makePage(quint16 slave)
     // 行标题靠右贴住数值列：默认左对齐时，短标题与数值之间会留一段忽大忽小的空档
     form->setLabelAlignment(Qt::AlignRight | Qt::AlignVCenter);
     // 识别出的型号：供核对本从站参数（额定力矩/减速比）是否配对，避免多关节错配
-    p.model  = value("valText");   form->addRow(tr("关节型号"), p.model);
+    p.model  = value("modelText"); form->addRow(tr("关节型号"), p.model);
     // 位置/速度/力矩为实时核心数据：内凹读数槽 + 等宽数字，单位独立成小字
     p.pos    = value("bigValue");  form->addRow(tr("位置"), withUnit(p.pos, tr("deg")));
     p.vel    = value("bigValue");  form->addRow(tr("速度"), withUnit(p.vel, tr("deg/s")));

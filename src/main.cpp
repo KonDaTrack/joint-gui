@@ -39,14 +39,18 @@ QLabel {
     color: #E2E8F0;
 }
 
-/* 监控页：QFormLayout 的行标题调暗成小号灰蓝，值列等宽提亮 —— 形成"参数名 | 数值"两列层级。
+/* 监控页：QFormLayout 的行标题调暗成灰蓝，值列等宽提亮 —— 形成"参数名 | 数值"两列层级。
+   字号比正文小一档即可（13 vs 15），过小会显得局促、读起来吃力。
    行标题由 QFormLayout 内部创建，只能靠父级限定选择器命中 */
-QTabWidget QWidget#pageWidget QLabel { color: #64748B; font-size: 12px; }
+QTabWidget QWidget#pageWidget QLabel { color: #64748B; font-size: 13px; }
 QLabel#valText {
     color: #E2E8F0;
+    font-size: 15px;
     font-family: "JetBrains Mono", "DejaVu Sans Mono", "Consolas", monospace;
 }
-QLabel#unitText { color: #64748B; font-size: 12px; }
+/* 关节型号不是数值，用无衬线体即可：等宽下这串型号会撑宽整列 */
+QLabel#modelText { color: #94A3B8; font-size: 14px; }
+QLabel#unitText { color: #64748B; font-size: 13px; }
 QWidget#unitRow { background: transparent; }
 
 /* ============ 功能卡片 ============ */
@@ -266,7 +270,7 @@ QLabel#bigValue {
     border-radius: 5px;
     padding: 3px 10px;
     color: #38BDF8;
-    font-size: 19px;
+    font-size: 21px;
     font-weight: bold;
     font-family: "JetBrains Mono", "DejaVu Sans Mono", "Consolas", monospace;
 }
