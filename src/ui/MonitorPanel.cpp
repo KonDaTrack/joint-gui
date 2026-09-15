@@ -11,9 +11,11 @@ QLabel* MonitorPanel::value(const char* objectName)
     if (big) {
         // 数值框固定宽度并右对齐：否则布局会把它拉满整行，
         // 右边留一大条空白，重心失衡。右对齐符合工业仪表读数习惯。
-        // 宽度固定、高度可随行高伸展：让三个读数槽均分左列剩余高度，撑满数据区
-        lab->setFixedWidth(210);
-        lab->setMinimumHeight(56);
+        // 宽度固定、高度可随行高伸展：三个读数槽均分左列剩余高度，撑满数据区。
+        // 但设上限，避免窗口拉高时读数槽被拉成一大块空框（超出部分转为行间距）。
+        lab->setFixedWidth(182);
+        lab->setMinimumHeight(48);
+        lab->setMaximumHeight(84);
         lab->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
         lab->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
     } else {

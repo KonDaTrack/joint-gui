@@ -271,9 +271,9 @@ QLabel#bigValue {
     border: 1px solid #1B1F2A;
     border-bottom: 1px solid #333C4E;
     border-radius: 5px;
-    padding: 4px 14px;
+    padding: 3px 12px;
     color: #38BDF8;
-    font-size: 34px;
+    font-size: 32px;
     font-weight: bold;
     font-family: "JetBrains Mono", "DejaVu Sans Mono", "Consolas", monospace;
 }
