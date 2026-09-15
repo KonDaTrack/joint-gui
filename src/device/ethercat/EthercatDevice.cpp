@@ -12,6 +12,22 @@ EthercatDevice::~EthercatDevice()
     close();
 }
 
+namespace {
+// SDO 读取带重试。刚 eth_initDLL 完就读取时，邮箱/驱动器可能还没就绪，
+// 单次超时失败不代表对象不可读（探针用 2000ms 读同一对象是成功的；
+// 1000ms 实测会失败）。重试几次即可，代价只是连接时多花几十毫秒。
+bool readSdoRetry(huint16 slave, huint16 index, huint8 sub, void* value,
+                  eth_DataType dt, int timeoutMs, int tries)
+{
+    for (int i = 0; i < tries; ++i) {
+        if (eth_readSDO(slave, index, sub, value, dt, timeoutMs) == ETH_SUCCESS)
+            return true;
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+    return false;
+}
+} // namespace
+
 // 逐从站读取/识别设备参数。
 //  - 编码器分辨率：读 0x608F:1/2（自动读取可靠，与 19 位编码器一致）
 //  - 型号：读 0x6076 查型号表 → 得到该从站的减速比与额定力矩（多关节必须按从站区分，
@@ -26,18 +42,18 @@ void EthercatDevice::readDeviceParams()
         Joint::DeviceParams p;
         // 编码器分辨率：优先 0x608F:1/2（分子/分母，PHU 用 524288/1）；sub0 单值作回退
         huint32 v1 = 0, v2 = 0;
-        if (eth_readSDO(s, 0x608F, 0x01, &v1, eth_DataType_uint32, 1000) == ETH_SUCCESS
-            && eth_readSDO(s, 0x608F, 0x02, &v2, eth_DataType_uint32, 1000) == ETH_SUCCESS) {
+        if (readSdoRetry(s, 0x608F, 0x01, &v1, eth_DataType_uint32, 2000, 3)
+            && readSdoRetry(s, 0x608F, 0x02, &v2, eth_DataType_uint32, 2000, 3)) {
             p.encoderPulsesPerRev = v2 > 0 ? (double)v1 / v2 : (double)v1;
         } else {
             huint32 v0 = 0;
-            if (eth_readSDO(s, 0x608F, 0x00, &v0, eth_DataType_uint32, 1000) == ETH_SUCCESS && v0 > 0)
+            if (readSdoRetry(s, 0x608F, 0x00, &v0, eth_DataType_uint32, 2000, 3) && v0 > 0)
                 p.encoderPulsesPerRev = v0;
         }
 
         // 型号识别：0x6076 三个型号各不相同且随额定单调，作指纹
         huint32 key = 0;
-        if (eth_readSDO(s, 0x6076, 0x00, &key, eth_DataType_uint32, 1000) == ETH_SUCCESS) {
+        if (readSdoRetry(s, 0x6076, 0x00, &key, eth_DataType_uint32, 2000, 3)) {
             const JointModelTable::ModelInfo mi =
                 JointModelTable::byRatedTorqueKey(static_cast<quint16>(key));
             modelUnknownBySlave_.insert(s, !mi.found);
