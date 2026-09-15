@@ -57,7 +57,7 @@ export LD_LIBRARY_PATH=/path/to/sdk/lib:$LD_LIBRARY_PATH
 - CANopen: 建议直接拷贝整个 `lib/` 目录（`libeu_canopen.so` `libeu_eds.so` `libeu_candrv.so` `libeu_log.so` `libeu_resources.so` 及 `libcontrolcan.so` `libeu_canable.so` `libusbcanfd.so`，驱动库在运行时按需加载）
 
 ## 权限
-EtherCAT（SOEM 主站）需 root 或 `CAP_NET_RAW` 访问网卡。ARM 板上用 `sudo ./run.sh` 启动即可（run.sh 会自动设置 SDK 库路径，不再需要手动 `LD_LIBRARY_PATH`）。
+EtherCAT（SOEM 主站）需 root 或 `CAP_NET_RAW` 访问网卡——**x86 和 ARM 都一样**（SOEM 要开 `AF_PACKET` raw socket，与网卡类型无关）。用 `sudo ./run.sh` 启动即可（run.sh 会自动设置 SDK 库路径，不再需要手动 `LD_LIBRARY_PATH`）。跑仿真模式则不需要 root。
 CANopen USB-CAN 适配器需对应驱动与权限。
 
 ## 单元测试

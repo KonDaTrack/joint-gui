@@ -19,8 +19,8 @@
 
 ```bash
 cd joint-gui
-./run.sh          # 开发机（x86）直接运行（自动设置 SDK 库路径）
-sudo ./run.sh     # ARM 板上运行（EtherCAT 需 raw socket 权限）
+sudo ./run.sh     # 接 EtherCAT 实机（SOEM 需 raw socket 权限，x86/ARM 都要）
+./run.sh          # 仿真模式（不接硬件，无需 root）
 ```
 
 启动后弹出**连接关节模组**对话框。

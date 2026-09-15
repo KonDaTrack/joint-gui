@@ -66,12 +66,10 @@ cd joint-gui
 ## 5. 启动
 
 ```bash
-./run.sh          # 自动设置 SDK 库路径
+sudo ./run.sh     # 接 EtherCAT 实机（SOEM 需 raw socket 权限）
+./run.sh          # 仿真模式（不接硬件，无需 root）
 ```
-EtherCAT 需要 raw socket 权限，若连不上/检测跳过，用 root：
-```bash
-sudo ./run.sh
-```
+`run.sh` 会自动按架构设置 SDK 库路径。
 
 ## 6. 连接
 
