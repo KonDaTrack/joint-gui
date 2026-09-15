@@ -421,6 +421,14 @@ bool EthercatDevice::readTelemetry(quint16 slave, Joint::Telemetry& out)
     lastPosTimeMs_[slave] = now;
     out.velocityDps = velDps;
     out.torqueNm = UnitConverter::permilleToNm(tor, p.ratedTorqueNm);
+    // 诊断：每 ~500ms 打印一次原始力矩(‰)/位置(脉冲)，用于判断力矩抖动是
+    // 量化噪声、驱动电流估算纹波、还是真实机械振荡（位置是否同步动）
+    static quint64 s_telemetryTick = 0;
+    if (++s_telemetryTick % 250 == 1) {
+        qDebug("[tor] slave %u pos=%d tor=%d‰ (%.4f N·m, 额定 %.1f, 状态字 0x%04X)",
+               static_cast<unsigned>(slave), pos, static_cast<int>(tor),
+               out.torqueNm, p.ratedTorqueNm, sw);
+    }
     out.temperatureC = temp;
     out.statusWord = sw;
     out.driveState = Joint::mapDriveState(sw);
