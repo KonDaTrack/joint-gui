@@ -79,14 +79,17 @@ ControlPanel::ControlPanel(QWidget* parent)
 
     QHBoxLayout* estopRow = new QHBoxLayout;
     estopRow->addWidget(estopBtn_, 2);
-    estopRow->addWidget(readyCheck_, 1);
+    // 垂直居中：急停按钮高 52px，复选框自然高度小，不显式指定会偏上贴边
+    estopRow->addWidget(readyCheck_, 1, Qt::AlignVCenter);
 
+    // 5 个按钮等分卡片宽度：用自然宽度会超出右栏可用宽度，最右侧的「回0」被裁掉半个字
     QHBoxLayout* btnRow = new QHBoxLayout;
-    btnRow->addWidget(enableBtn_);
-    btnRow->addWidget(disableBtn_);
-    btnRow->addWidget(faultResetBtn_);
-    btnRow->addWidget(homeBtn_);
-    btnRow->addWidget(zeroBtn_);
+    btnRow->setSpacing(6);
+    for (QPushButton* b : {enableBtn_, disableBtn_, faultResetBtn_, homeBtn_, zeroBtn_}) {
+        b->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        b->setMinimumWidth(0);
+        btnRow->addWidget(b);
+    }
 
     form_ = new QFormLayout;
     form_->addRow(tr("操作模式"), modeCombo_);

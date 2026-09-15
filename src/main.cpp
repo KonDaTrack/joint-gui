@@ -1,4 +1,6 @@
 #include <QApplication>
+#include <QColor>
+#include <QPalette>
 #include <QStyleFactory>
 #include "device/JointTypes.h"
 #include "ui/MainWindow.h"
@@ -37,6 +39,13 @@ QLabel {
     color: #E2E8F0;
 }
 
+/* 监控页：QFormLayout 的行标题调暗，值列提亮 —— 形成清晰的"参数名 | 数值"两列层级。
+   行标题由 QFormLayout 内部创建，只能靠父级限定选择器命中 */
+QTabWidget QWidget#pageWidget QLabel { color: #8D949E; }
+QLabel#valText { color: #E2E8F0; }
+QLabel#unitText { color: #646C7A; font-size: 13px; }
+QWidget#unitRow { background: transparent; }
+
 /* ============ 功能卡片 ============ */
 /* 注意：监控/控制/曲线面板都是 QWidget 子类（不是 QFrame），
    类型选择器必须写 QWidget#PanelCard，写 QFrame#... 会静默不匹配 */
@@ -50,8 +59,9 @@ QWidget#PanelCard {
 QPushButton {
     background-color: #262A34;
     border: 1px solid #373D4B;
-    border-radius: 4px;
-    padding: 6px 16px;
+    border-radius: 5px;
+    /* 左右 padding 由 16px 收到 10px：5 个按钮并排时自然宽度会超出右栏可用宽度 */
+    padding: 6px 10px;
     color: #E2E8F0;
     min-height: 24px;
 }
@@ -122,7 +132,7 @@ QComboBox {
     background-color: #16181D;
     border: 1px solid #2B303C;
     border-radius: 4px;
-    padding: 5px 30px 5px 10px;
+    padding: 5px 26px 5px 10px;   /* 右侧留出箭头位置 */
     color: #E2E8F0;
     min-height: 22px;
 }
@@ -132,18 +142,14 @@ QComboBox:disabled { color: #646C7A; background-color: #1A1D24; }
 QComboBox::drop-down {
     subcontrol-origin: padding;
     subcontrol-position: top right;
-    width: 26px;
+    width: 24px;
     border-left: 1px solid #2B303C;
     border-top-right-radius: 4px;
     border-bottom-right-radius: 4px;
 }
-QComboBox::down-arrow {
-    image: none;
-    border-left: 5px solid transparent;
-    border-right: 5px solid transparent;
-    border-top: 6px solid #94A3B8;
-    margin-right: 8px;
-}
+/* 箭头交给 Fusion 画（配合下面的深色调色板）。
+   这里曾经用 CSS 的 border 三角技巧，在本 Qt 上渲染成了黑色小方块，故移除该覆盖。
+   注意 padding-right 要留够，否则箭头会压到文字上。 */
 QComboBox QAbstractItemView {
     background-color: #1E2128;
     color: #E2E8F0;
@@ -273,13 +279,36 @@ QLabel#sectionTitle {
 }
 )";
 
+// Fusion 自绘的部分（下拉箭头、菜单、勾选框等）取的是调色板颜色而非 QSS。
+// 不设深色调色板时，这些部位会用默认浅色调色板的深色前景 → 深底上几乎看不见。
+static void applyDarkPalette(QApplication& app)
+{
+    QPalette p = app.palette();
+    p.setColor(QPalette::Window,          QColor(0x16, 0x18, 0x1D));
+    p.setColor(QPalette::WindowText,      QColor(0xE2, 0xE8, 0xF0));
+    p.setColor(QPalette::Base,            QColor(0x13, 0x15, 0x1A));
+    p.setColor(QPalette::AlternateBase,   QColor(0x1E, 0x21, 0x28));
+    p.setColor(QPalette::Text,            QColor(0xE2, 0xE8, 0xF0));
+    p.setColor(QPalette::Button,          QColor(0x26, 0x2A, 0x34));
+    p.setColor(QPalette::ButtonText,      QColor(0xE2, 0xE8, 0xF0));
+    p.setColor(QPalette::Highlight,       QColor(0x02, 0x84, 0xC7));
+    p.setColor(QPalette::HighlightedText, QColor(0xFF, 0xFF, 0xFF));
+    p.setColor(QPalette::ToolTipBase,     QColor(0x1E, 0x21, 0x28));
+    p.setColor(QPalette::ToolTipText,     QColor(0xE2, 0xE8, 0xF0));
+    p.setColor(QPalette::Disabled, QPalette::Text,       QColor(0x64, 0x6C, 0x7A));
+    p.setColor(QPalette::Disabled, QPalette::ButtonText, QColor(0x64, 0x6C, 0x7A));
+    p.setColor(QPalette::Disabled, QPalette::WindowText, QColor(0x64, 0x6C, 0x7A));
+    app.setPalette(p);
+}
+
 int main(int argc, char* argv[])
 {
     QApplication app(argc, argv);
 
-    // Fusion 内建样式 + QSS，保证深色主题跨控件渲染一致
+    // Fusion 内建样式 + 深色调色板 + QSS，保证深色主题跨控件渲染一致
     if (QStyle* fs = QStyleFactory::create("Fusion"))
         app.setStyle(fs);
+    applyDarkPalette(app);
     app.setStyleSheet(QString::fromUtf8(kGlobalQss));
 
     qRegisterMetaType<Joint::Telemetry>("Joint::Telemetry");

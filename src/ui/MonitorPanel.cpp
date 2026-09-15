@@ -1,20 +1,44 @@
 #include "ui/MonitorPanel.h"
 #include <QDateTime>
 #include <QFormLayout>
+#include <QHBoxLayout>
 #include <QStyle>
 #include <QVBoxLayout>
 
 QLabel* MonitorPanel::value(const char* objectName)
 {
     QLabel* lab = new QLabel(QStringLiteral("--"), this);
-    lab->setMinimumWidth(200);
-    lab->setMinimumHeight(26);
+    const bool big = objectName && !qstrcmp(objectName, "bigValue");
+    if (big) {
+        // 数值框固定宽度并右对齐：否则 QFormLayout 会把它拉满整行，
+        // 右边留一大条空白，重心失衡。右对齐符合工业仪表读数习惯。
+        lab->setFixedWidth(112);
+        lab->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    } else {
+        lab->setMinimumHeight(24);
+    }
     if (objectName && *objectName) {
         lab->setObjectName(QString::fromLatin1(objectName));
         lab->style()->unpolish(lab);
         lab->style()->polish(lab);
     }
     return lab;
+}
+
+// 数值框右侧跟一个浅灰单位小字（如 [ 0.00 ] deg），比把单位塞进行标题更接近仪表观感
+QWidget* MonitorPanel::withUnit(QLabel* plate, const QString& unit)
+{
+    QWidget* box = new QWidget(this);
+    box->setObjectName(QStringLiteral("unitRow"));
+    QHBoxLayout* h = new QHBoxLayout(box);
+    h->setContentsMargins(0, 0, 0, 0);
+    h->setSpacing(6);
+    h->addWidget(plate);
+    QLabel* u = new QLabel(unit, box);
+    u->setObjectName(QStringLiteral("unitText"));
+    h->addWidget(u);
+    h->addStretch();
+    return box;
 }
 
 MonitorPanel::MonitorPanel(QWidget* parent)
@@ -40,20 +64,22 @@ MonitorPanel::Page MonitorPanel::makePage(quint16 slave)
     QWidget* w = new QWidget(tabs_);
     w->setObjectName(QStringLiteral("pageWidget"));   // 对应 QSS 限定选择器，透明底
     QFormLayout* form = new QFormLayout(w);
-    form->setHorizontalSpacing(16);
+    form->setHorizontalSpacing(12);
     form->setVerticalSpacing(8);
+    // 行标题靠右贴住数值列：默认左对齐时，短标题与数值之间会留一段忽大忽小的空档
+    form->setLabelAlignment(Qt::AlignRight | Qt::AlignVCenter);
     // 识别出的型号：供核对本从站参数（额定力矩/减速比）是否配对，避免多关节错配
-    p.model  = value();            form->addRow(tr("关节型号"), p.model);
-    // 位置/速度/力矩为实时核心数据：大字号 + 科技青 + 等宽数字字体
-    p.pos    = value("bigValue");  form->addRow(tr("位置 (deg)"), p.pos);
-    p.vel    = value("bigValue");  form->addRow(tr("速度 (deg/s)"), p.vel);
-    p.tor    = value("bigValue");  form->addRow(tr("力矩 (N·m)"), p.tor);
-    p.temp   = value();            form->addRow(tr("驱动器温度 (°C)"), p.temp);
-    p.status = value();            form->addRow(tr("状态字 (hex)"), p.status);
-    p.state  = value();            form->addRow(tr("驱动状态"), p.state);
-    p.err    = value();            form->addRow(tr("故障码"), p.err);
-    p.conn   = value();            form->addRow(tr("连接状态"), p.conn);
-    p.freq   = value();            form->addRow(tr("刷新率"), p.freq);
+    p.model  = value("valText");   form->addRow(tr("关节型号"), p.model);
+    // 位置/速度/力矩为实时核心数据：等宽字体 + 内嵌底框，单位独立成小字
+    p.pos    = value("bigValue");  form->addRow(tr("位置"), withUnit(p.pos, tr("deg")));
+    p.vel    = value("bigValue");  form->addRow(tr("速度"), withUnit(p.vel, tr("deg/s")));
+    p.tor    = value("bigValue");  form->addRow(tr("力矩"), withUnit(p.tor, tr("N·m")));
+    p.temp   = value("valText");   form->addRow(tr("驱动器温度"), p.temp);
+    p.status = value("valText");   form->addRow(tr("状态字"), p.status);
+    p.state  = value("valText");   form->addRow(tr("驱动状态"), p.state);
+    p.err    = value("valText");   form->addRow(tr("故障码"), p.err);
+    p.conn   = value("valText");   form->addRow(tr("连接状态"), p.conn);
+    p.freq   = value("valText");   form->addRow(tr("刷新率"), p.freq);
     p.page = w;
     Q_UNUSED(slave);
     return p;

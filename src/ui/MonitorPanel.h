@@ -33,6 +33,7 @@ private:
         double freqHz = 0.0;
     };
     QLabel* value(const char* objectName = nullptr);
+    QWidget* withUnit(QLabel* plate, const QString& unit);   // 数值框 + 独立单位小字
     Page makePage(quint16 slave);
     void updatePage(Page& p, const Joint::Telemetry& t);
 
