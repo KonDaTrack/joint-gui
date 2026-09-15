@@ -19,6 +19,7 @@ public:
     void setBusType(Joint::BusType type);
     void setSlaves(const QList<quint16>& slaves);
     void setActiveSlave(quint16 address);
+    void setSlaveModels(const QStringList& shortNames);   // 下标 i ↔ 从站 i+1
 
 signals:
     void enableRequested();

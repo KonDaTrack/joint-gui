@@ -28,6 +28,8 @@ public:
     virtual bool moveToZero(quint16) { return false; }
     // 识别出的从站型号（含额定力矩；未识别时说明"用手填值"）。空 = 不支持
     virtual QString modelInfo(quint16) const { return QString(); }
+    // 型号短名（如 "70mm"），用于标签页/下拉。空 = 未识别
+    virtual QString modelShortName(quint16) const { return QString(); }
 
     // SDO/OD 访问（预留；dt 为 0x02~0x09 数据类型码）
     virtual bool readSDO(quint16 slave, quint16 index, quint8 subIndex,

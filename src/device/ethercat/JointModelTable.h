@@ -13,7 +13,8 @@ namespace JointModelTable {
 
 struct ModelInfo {
     bool found = false;      // 是否匹配到已知型号
-    QString name;            // 型号名（未匹配时为空）
+    QString name;            // 完整型号名（未匹配时为空）
+    QString shortName;       // 短名（如 "70mm"），用于标签页/下拉，够短又能区分
     double ratedNm = 0.0;    // 额定力矩 N·m
     double gearRatio = 0.0;  // 减速比
     quint16 key6076 = 0;     // 实际读到的 0x6076 原始值（未匹配时也填，便于加表）

@@ -22,6 +22,7 @@ public:
     bool homing(quint16 slave) override;
     bool moveToZero(quint16 slave) override;   // 回0：切 PP 模式走到 0 度
     QString modelInfo(quint16 slave) const override;
+    QString modelShortName(quint16 slave) const override;
 
     bool readSDO(quint16 slave, quint16 index, quint8 subIndex,
                  void* value, int dataType, int timeout) override;
@@ -41,6 +42,7 @@ private:
     QHash<quint16, Joint::OperateMode> modeBySlave_;
     QHash<quint16, Joint::DeviceParams> paramsBySlave_;   // 每从站识别/读取的参数
     QHash<quint16, QString> modelNameBySlave_;            // 识别出的型号名（或"未识别(…)"）
+    QHash<quint16, QString> modelShortBySlave_;           // 型号短名（70mm/90mm/110mm）
     QHash<quint16, bool> modelUnknownBySlave_;            // 型号未识别 → 用对话框手填值
     // 速度由位置差分计算（0x606C 速度寄存器在静止时读数不稳）
     QHash<quint16, double> lastPosPulses_;

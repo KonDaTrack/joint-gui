@@ -12,11 +12,15 @@ class MonitorPanel : public QWidget
 public:
     explicit MonitorPanel(QWidget* parent = nullptr);
 
+signals:
+    // 用户点击标签页切换从站（程序化同步时不发，避免联动回环）
+    void activeSlaveChanged(quint16 address);
+
 public slots:
     void onTelemetry(const QList<Joint::Telemetry>& list);
     void setSlaves(const QList<quint16>& slaves);
-    void setActiveSlave(quint16 address);
-    void setSlaveModels(const QStringList& modelInfos);   // 下标 i ↔ 从站 i+1
+    void setActiveSlave(quint16 address);                 // 程序化同步（静默）
+    void setSlaveModels(const QStringList& shortNames, const QStringList& modelInfos);
 
 private:
     struct Page {
@@ -35,4 +39,6 @@ private:
     QTabWidget* tabs_;
     QHash<quint16, Page> pages_;
     QList<quint16> order_;   // 从站顺序，用于按 active 切换标签页
+    QStringList shorts_;     // 各从站型号短名，构造标签页标题用
+    bool syncing_ = false;   // 程序化切换标签页时置位，抑制 activeSlaveChanged
 };

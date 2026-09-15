@@ -62,7 +62,22 @@ MainWindow::MainWindow(QWidget* parent)
                 control_->setActiveSlave(active);
                 curve_->setActiveSlave(active);
             });
-    connect(worker_, &ControlWorker::slaveModelsDetected, monitor_, &MonitorPanel::setSlaveModels);
+    connect(worker_, &ControlWorker::slaveModelsDetected, this,
+            [this](const QStringList& shorts, const QStringList& infos) {
+                monitor_->setSlaveModels(shorts, infos);
+                control_->setSlaveModels(shorts);   // 下拉项也带型号，控制目标一眼可辨
+            });
+
+    // 从站选择三处统一（左侧标签页 / 右侧下拉 / 下方曲线 + worker 的控制目标）：
+    // 任一控件切换都同步其余，避免"看着从站2、命令发给从站1"的错位
+    auto switchSlave = [this](quint16 a) {
+        monitor_->setActiveSlave(a);   // 均为程序化同步（内部屏蔽信号），不会回环
+        control_->setActiveSlave(a);
+        curve_->setActiveSlave(a);
+        QMetaObject::invokeMethod(worker_, "selectSlave", Qt::QueuedConnection, Q_ARG(quint16, a));
+    };
+    connect(monitor_, &MonitorPanel::activeSlaveChanged, this, switchSlave);
+    connect(control_, &ControlPanel::activeSlaveChanged, this, switchSlave);
 
     connect(control_, &ControlPanel::enableRequested, worker_, &ControlWorker::enableRequested);
     connect(control_, &ControlPanel::disableRequested, worker_, &ControlWorker::disableRequested);
@@ -70,8 +85,6 @@ MainWindow::MainWindow(QWidget* parent)
     connect(control_, &ControlPanel::faultResetRequested, worker_, &ControlWorker::faultResetRequested);
     connect(control_, &ControlPanel::operateModeChanged, worker_, &ControlWorker::setOperateModeRequested);
     connect(control_, &ControlPanel::targetRequested, worker_, &ControlWorker::setTargetRequested);
-    connect(control_, &ControlPanel::activeSlaveChanged, worker_, &ControlWorker::selectSlave);
-    connect(control_, &ControlPanel::activeSlaveChanged, curve_, &CurvePanel::setActiveSlave);
     connect(control_, &ControlPanel::homingRequested, worker_, &ControlWorker::homingRequested);
     connect(control_, &ControlPanel::moveToZeroRequested, worker_, &ControlWorker::moveToZeroRequested);
     connect(worker_, &ControlWorker::homingFinished, this, [this](bool ok) {

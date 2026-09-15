@@ -176,6 +176,19 @@ void ControlPanel::setSlaves(const QList<quint16>& slaves)
         slaveCombo_->setCurrentIndex(0);
 }
 
+// 下标 i ↔ 从站 i+1：下拉项带上型号短名（如「从站2 · 70mm」），
+// 避免多轴时只能靠编号猜哪个是哪个关节
+void ControlPanel::setSlaveModels(const QStringList& shortNames)
+{
+    for (int i = 0; i < slaveCombo_->count(); ++i) {
+        const quint16 s = static_cast<quint16>(slaveCombo_->itemData(i).toInt());
+        const int idx = s - 1;
+        const QString sn = (idx >= 0 && idx < shortNames.size()) ? shortNames.at(idx) : QString();
+        slaveCombo_->setItemText(i, sn.isEmpty() ? QStringLiteral("从站 %1").arg(s)
+                                                 : QStringLiteral("从站%1 · %2").arg(s).arg(sn));
+    }
+}
+
 void ControlPanel::setActiveSlave(quint16 address)
 {
     const int idx = slaveCombo_->findData(address);

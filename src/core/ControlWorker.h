@@ -31,8 +31,9 @@ signals:
     void connectionChanged(bool connected, QString busName, int slaveCount, QString error);
     void telemetryUpdatedAll(const QList<Joint::Telemetry>& list);      // 批量遥测
     void slavesDetected(const QList<quint16>& slaves, quint16 activeSlave);
-    // 各从站识别出的型号文本，下标 i 对应 slaveList()[i]（即从站 i+1）
-    void slaveModelsDetected(const QStringList& modelInfos);
+    // 各从站识别出的型号，下标 i 对应 slaveList()[i]（即从站 i+1）。
+    // shortNames 用于标签页/下拉（如 "70mm"）；modelInfos 是含额定值的完整描述
+    void slaveModelsDetected(const QStringList& shortNames, const QStringList& modelInfos);
     void faultDetected(QString message);
     void detectionMessage(QString message);   // 自动检测过程提示（显示在状态栏）
     void homingFinished(bool ok);             // 归航完成（ok=false 表示失败/超时）

@@ -38,6 +38,7 @@ void EthercatDevice::readDeviceParams()
 {
     paramsBySlave_.clear();     // 避免重连残留旧从站参数
     modelNameBySlave_.clear();
+    modelShortBySlave_.clear();
     modelUnknownBySlave_.clear();
     for (quint16 s : slaveList()) {
         Joint::DeviceParams p;
@@ -62,6 +63,7 @@ void EthercatDevice::readDeviceParams()
                 p.ratedTorqueNm = mi.ratedNm;    // 用规格值，不用 0x6076 换算
                 p.gearRatio = mi.gearRatio;
                 modelNameBySlave_.insert(s, mi.name);
+                modelShortBySlave_.insert(s, mi.shortName);
             } else {
                 modelNameBySlave_.insert(s, QStringLiteral("未识别(0x6076=%1)").arg(key));
             }
@@ -108,6 +110,11 @@ QString EthercatDevice::modelInfo(quint16 slave) const
     if (modelUnknownBySlave_.value(slave, false))
         return QStringLiteral("%1 · 用手填额定 %2 N·m").arg(name).arg(ratedNm_);
     return QStringLiteral("%1 · 额定 %2 N·m").arg(name).arg(paramsFor(slave).ratedTorqueNm);
+}
+
+QString EthercatDevice::modelShortName(quint16 slave) const
+{
+    return modelShortBySlave_.value(slave, QString());
 }
 
 bool EthercatDevice::open(const AppConfig& cfg)
@@ -159,6 +166,7 @@ void EthercatDevice::close()
         slaveCount_ = 0;
         paramsBySlave_.clear();   // 与 CANopen 一致，断开后清掉从站参数
         modelNameBySlave_.clear();
+        modelShortBySlave_.clear();
         modelUnknownBySlave_.clear();
         modeBySlave_.clear();
     }

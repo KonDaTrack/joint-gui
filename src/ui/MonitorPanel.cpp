@@ -25,6 +25,11 @@ MonitorPanel::MonitorPanel(QWidget* parent)
     setAttribute(Qt::WA_StyledBackground, true);
 
     tabs_ = new QTabWidget(this);
+    // 点标签页 = 切换当前从站（查看 + 控制 + 曲线三处统一），对外发信号
+    connect(tabs_, &QTabWidget::currentChanged, this, [this](int idx) {
+        if (syncing_ || idx < 0 || idx >= order_.size()) return;
+        emit activeSlaveChanged(order_.at(idx));
+    });
     QVBoxLayout* lay = new QVBoxLayout(this);
     lay->setContentsMargins(8, 8, 8, 8);
     lay->addWidget(tabs_);
@@ -57,6 +62,9 @@ MonitorPanel::Page MonitorPanel::makePage(quint16 slave)
 
 void MonitorPanel::setSlaves(const QList<quint16>& slaves)
 {
+    // 重建标签页期间 addTab/removeTab 会触发 currentChanged，
+    // 必须抑制，否则会发出假的 activeSlaveChanged 把 worker 的控制目标带偏
+    syncing_ = true;
     while (tabs_->count() > 0) {
         QWidget* w = tabs_->widget(0);
         tabs_->removeTab(0);
@@ -64,6 +72,7 @@ void MonitorPanel::setSlaves(const QList<quint16>& slaves)
     }
     pages_.clear();
     order_ = slaves;
+    shorts_.clear();   // 型号随重连变化，等 setSlaveModels 再填
     for (quint16 s : slaves) {
         Page p = makePage(s);
         pages_.insert(s, p);
@@ -72,13 +81,15 @@ void MonitorPanel::setSlaves(const QList<quint16>& slaves)
     if (slaves.isEmpty()) {
         tabs_->addTab(new QLabel(QStringLiteral("未连接"), tabs_), QStringLiteral("--"));
     }
+    syncing_ = false;
 }
 
 // 下标 i ↔ 从站 i+1（与 slaveList() 同序）
-void MonitorPanel::setSlaveModels(const QStringList& modelInfos)
+void MonitorPanel::setSlaveModels(const QStringList& shortNames, const QStringList& modelInfos)
 {
-    qDebug("[ui] setSlaveModels: order=%d, models=[%s]",
-           order_.size(), qPrintable(modelInfos.join(QStringLiteral(" | "))));
+    qDebug("[ui] setSlaveModels: order=%d, shorts=[%s]",
+           order_.size(), qPrintable(shortNames.join(QStringLiteral(" | "))));
+    shorts_ = shortNames;
     for (quint16 s : order_) {
         const int idx = s - 1;
         if (idx < 0 || idx >= modelInfos.size()) continue;
@@ -86,13 +97,20 @@ void MonitorPanel::setSlaveModels(const QStringList& modelInfos)
         if (it == pages_.end() || !it->model) continue;
         const QString t = modelInfos.at(idx);
         it->model->setText(t.isEmpty() ? QStringLiteral("--") : t);
+        // 标签页标题带上型号短名（如「从站2 · 70mm」），不点开也能分清哪个轴
+        const QString sn = (idx < shorts_.size()) ? shorts_.at(idx) : QString();
+        tabs_->setTabText(idx, sn.isEmpty() ? QStringLiteral("从站 %1").arg(s)
+                                            : QStringLiteral("从站%1 · %2").arg(s).arg(sn));
     }
 }
 
 void MonitorPanel::setActiveSlave(quint16 address)
 {
     const int idx = order_.indexOf(address);
-    if (idx >= 0) tabs_->setCurrentIndex(idx);
+    if (idx < 0) return;
+    syncing_ = true;                 // 抑制信号：这是程序化同步，不是用户切换
+    tabs_->setCurrentIndex(idx);
+    syncing_ = false;
 }
 
 void MonitorPanel::onTelemetry(const QList<Joint::Telemetry>& list)
