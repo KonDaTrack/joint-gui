@@ -3,7 +3,6 @@
 #include "core/UnitConverter.h"
 #include "eu_ethercat.h"
 #include <QDateTime>
-#include <QDebug>
 #include <cmath>
 #include <thread>
 #include <chrono>
@@ -71,11 +70,6 @@ void EthercatDevice::readDeviceParams()
             modelUnknownBySlave_.insert(s, true);
             modelNameBySlave_.insert(s, QStringLiteral("未识别(读 0x6076 失败)"));
         }
-        // 诊断日志：多从站识别不一致时，看这行就知道每个从站实际读到了什么
-        qDebug("[eth] slave %u: 0x608F=%.0f 0x6076=%u -> %s",
-               static_cast<unsigned>(s), p.encoderPulsesPerRev,
-               static_cast<unsigned>(key),
-               qPrintable(modelNameBySlave_.value(s)));
         paramsBySlave_.insert(s, p);
     }
 }
@@ -136,7 +130,6 @@ bool EthercatDevice::open(const AppConfig& cfg)
     }
     inited_ = true;
     slaveCount_ = slaveCnt;
-    qDebug("[eth] open %s: slaveCount=%d", qPrintable(cfg.ethInterface), slaveCount_);
     if (slaveCount_ > 0) readDeviceParams();
     // 即使 0 从站也要返回 false（自动检测会跳过此网卡），但网卡需由 close 释放
     return slaveCount_ > 0;
@@ -422,14 +415,6 @@ bool EthercatDevice::readTelemetry(quint16 slave, Joint::Telemetry& out)
     out.velocityDps = velDps;
     out.torqueNm = UnitConverter::permilleToNm(tor, p.ratedTorqueNm);
     out.ratedTorqueNm = p.ratedTorqueNm;
-    // 诊断：每 ~500ms 打印一次原始力矩(‰)/位置(脉冲)，用于判断力矩抖动是
-    // 量化噪声、驱动电流估算纹波、还是真实机械振荡（位置是否同步动）
-    static quint64 s_telemetryTick = 0;
-    if (++s_telemetryTick % 250 == 1) {
-        qDebug("[tor] slave %u pos=%d tor=%d‰ (%.4f N·m, 额定 %.1f, 状态字 0x%04X)",
-               static_cast<unsigned>(slave), pos, static_cast<int>(tor),
-               out.torqueNm, p.ratedTorqueNm, sw);
-    }
     out.temperatureC = temp;
     out.statusWord = sw;
     out.driveState = Joint::mapDriveState(sw);

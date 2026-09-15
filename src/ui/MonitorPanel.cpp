@@ -1,6 +1,5 @@
 #include "ui/MonitorPanel.h"
 #include <QDateTime>
-#include <QDebug>
 #include <QFormLayout>
 #include <QStyle>
 #include <QVBoxLayout>
@@ -87,8 +86,6 @@ void MonitorPanel::setSlaves(const QList<quint16>& slaves)
 // 下标 i ↔ 从站 i+1（与 slaveList() 同序）
 void MonitorPanel::setSlaveModels(const QStringList& shortNames, const QStringList& modelInfos)
 {
-    qDebug("[ui] setSlaveModels: order=%d, shorts=[%s]",
-           order_.size(), qPrintable(shortNames.join(QStringLiteral(" | "))));
     shorts_ = shortNames;
     for (quint16 s : order_) {
         const int idx = s - 1;
