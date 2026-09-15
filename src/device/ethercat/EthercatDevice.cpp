@@ -53,6 +53,8 @@ bool EthercatDevice::open(const AppConfig& cfg)
     gearRatio_ = cfg.gearRatio;
     ratedNm_ = cfg.ratedTorqueNm;
     travelLimitDeg_ = cfg.travelLimitDeg;
+    lastCmdVelDps_.clear();      // 重连后不沿用旧命令方向
+    lastCmdTorqueNm_.clear();
     cycleMs_ = cfg.ethCycleMs;
     slaveId_ = cfg.slaveId;
 
@@ -203,6 +205,21 @@ bool EthercatDevice::moveToZero(quint16 slave)
     return true;
 }
 
+// 是否该拦下当前动作：仅当"已越界"且"命令方向继续向外"时为真。
+// 反向回范围内的命令一律放行（关节到限位后必须能反着回去）。
+bool EthercatDevice::limitBlocksMotion(quint16 slave, double posDeg) const
+{
+    const bool outPos = (posDeg > travelLimitDeg_);
+    const bool outNeg = (posDeg < -travelLimitDeg_);
+    if (!outPos && !outNeg) return false;
+
+    const double velCmd = lastCmdVelDps_.value(slave, 0.0);
+    const double torCmd = lastCmdTorqueNm_.value(slave, 0.0);
+    // 正向越界：继续加正速度/正力矩才算向外；反向越界对称
+    return outPos ? (velCmd > 0.0 || torCmd > 0.0)
+                  : (velCmd < 0.0 || torCmd < 0.0);
+}
+
 bool EthercatDevice::setTarget(quint16 slave, const Joint::TargetCommand& cmd)
 {
     const Joint::DeviceParams p = paramsFor(slave);
@@ -247,6 +264,7 @@ bool EthercatDevice::setTarget(quint16 slave, const Joint::TargetCommand& cmd)
         if (cmd.hasVelocity) {
             eth_setTargetVelocity(slave, (hint32)UnitConverter::degToPulses(
                 cmd.velocityDps, p.encoderPulsesPerRev, p.gearRatio));
+            lastCmdVelDps_[slave] = cmd.velocityDps;   // 供限位方向判断
             eth_setControlWord(slave, 0x0F);
         }
         return true;
@@ -256,9 +274,11 @@ bool EthercatDevice::setTarget(quint16 slave, const Joint::TargetCommand& cmd)
             eth_setTorqueSlope(slave, (huint32)qMax(1.0, cmd.torqueSlopeNmPerSec * 1000.0 / p.ratedTorqueNm));
             eth_setTargetTorque(slave, (hint32)UnitConverter::nmToPermille(
                 cmd.torqueNm, p.ratedTorqueNm));
+            lastCmdTorqueNm_[slave] = cmd.torqueNm;   // 供限位方向判断
             eth_setControlWord(slave, 0x0F);
         } else if (cmd.hasVelocity && cmd.velocityDps == 0.0) {
             eth_setTargetTorque(slave, 0);   // "停止运动"：力矩归零
+            lastCmdTorqueNm_[slave] = 0.0;
             eth_setControlWord(slave, 0x0F);
         }
         return true;
@@ -322,26 +342,30 @@ bool EthercatDevice::readTelemetry(quint16 slave, Joint::Telemetry& out)
     out.driveState = Joint::mapDriveState(sw);
     out.errorCode = err;
     out.operateMode = static_cast<Joint::OperateMode>(mode);
-    // 行程限位保护（保护中空轴内力矩传感器线束）：超限立即停住当前模式的动作。
-    // 放在读遥测里是因为它每周期都跑，PV/PT 这类没有位置目标的模式只能靠监控拦。
-    if (std::fabs(posDeg) > travelLimitDeg_) {
+    // 行程限位保护（保护中空轴内力矩传感器线束）。
+    // 放在读遥测里是因为它每周期都跑：PV/PT 没有位置目标，只能靠监控拦；
+    // PP 靠 setTarget 里夹紧目标。关键：只拦「继续向外」，反向回范围内的命令必须放行，
+    // 否则到了 +170° 就再也回不到 -170°（旧实现每周期强改目标为"保持当前位置"，会把关节钉死）。
+    if (limitBlocksMotion(slave, posDeg)) {
         switch (mode_) {
         case Joint::OperateMode::ProfilePosition:
         case Joint::OperateMode::InterpolatedPosition:
-            eth_setTargetPosition(slave, pos);       // 保持当前位置，停止继续走
+            eth_setTargetPosition(slave, pos);       // 保持当前位置
             break;
         case Joint::OperateMode::ProfileVelocity:
         case Joint::OperateMode::Velocity:
             eth_setTargetVelocity(slave, 0);         // 速度归零
+            lastCmdVelDps_[slave] = 0.0;
             break;
         case Joint::OperateMode::ProfileTorque:
             eth_setTargetTorque(slave, 0);           // 力矩归零
+            lastCmdTorqueNm_[slave] = 0.0;
             break;
         default:
             break;
         }
-        out.limitExceeded = true;
     }
+    out.limitExceeded = (std::fabs(posDeg) > travelLimitDeg_);   // 越界即提示（不限于被拦）
     out.timestampMs = QDateTime::currentMSecsSinceEpoch();
     return true;
 }

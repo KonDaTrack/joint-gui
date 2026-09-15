@@ -42,6 +42,10 @@ private:
     QHash<quint16, double> lastPosPulses_;
     QHash<quint16, qint64> lastPosTimeMs_;
     QHash<quint16, double> lastVelDps_;
+    // 最近下发的速度/力矩，用于限位时判断运动方向（只拦"继续向外"，放行"反向回来"）
+    QHash<quint16, double> lastCmdVelDps_;
+    QHash<quint16, double> lastCmdTorqueNm_;
     void readDeviceParams();
+    bool limitBlocksMotion(quint16 slave, double posDeg) const;   // 超限且朝外运动才拦
     Joint::DeviceParams paramsFor(quint16 slave) const;   // 有效参数或 cfg 回退
 };
