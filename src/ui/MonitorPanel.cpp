@@ -97,32 +97,57 @@ MonitorPanel::Page MonitorPanel::makePage(quint16 slave)
     Page p;
     QWidget* w = new QWidget(tabs_);
     w->setObjectName(QStringLiteral("pageWidget"));   // 对应 QSS 限定选择器，透明底
-    QFormLayout* form = new QFormLayout(w);
-    form->setHorizontalSpacing(16);   // 键名与数值之间留出呼吸感
-    form->setVerticalSpacing(6);      // 收紧了行距，避免读数框与下方遥测文本节奏断层
-    // 行标题靠右贴住数值列：默认左对齐时，短标题与数值之间会留一段忽大忽小的空档
-    form->setLabelAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    // 双列布局：单列时右半边整片空白。左列放核心读数与本体参数，
+    // 右列放状态类字段，两边各 5 行，宽度大致均衡。
+    QHBoxLayout* cols = new QHBoxLayout(w);
+    cols->setContentsMargins(0, 0, 0, 0);
+    cols->setSpacing(20);
+
+    auto makeForm = [](QWidget* parent) {
+        QFormLayout* f = new QFormLayout(parent);
+        f->setHorizontalSpacing(16);   // 键名与数值之间留出呼吸感
+        f->setVerticalSpacing(6);      // 收紧了行距，形成均匀节奏
+        // 行标题靠右贴住数值列：左对齐时短标题与数值之间会留忽大忽小的空档
+        f->setLabelAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        return f;
+    };
+    QFormLayout* left  = makeForm(w);
+    QFormLayout* right = makeForm(w);
+
+    // ---- 左列：核心读数 + 本体参数 ----
     // 识别出的型号：供核对本从站参数（额定力矩/减速比）是否配对，避免多关节错配
-    p.model  = value("modelText"); form->addRow(tr("关节型号"), p.model);
+    p.model  = value("modelText"); left->addRow(tr("关节型号"), p.model);
     // 位置/速度/力矩为实时核心数据：内凹读数槽 + 等宽数字，单位独立成小字
-    p.pos    = value("bigValue");  form->addRow(tr("位置"), withUnit(p.pos, tr("deg")));
-    p.vel    = value("bigValue");  form->addRow(tr("速度"), withUnit(p.vel, tr("deg/s")));
-    p.tor    = value("bigValue");  form->addRow(tr("力矩"), withUnit(p.tor, tr("N·m")));
-    form->addRow(rowSep());
-    // 下方遥测：每行一条 1px 分隔线，形成"数据条"的排版节奏
-    p.temp   = value("valText");   form->addRow(tr("驱动器温度"), p.temp);
-    form->addRow(rowSep());
-    p.status = value("valText");   form->addRow(tr("状态字"), p.status);
-    form->addRow(rowSep());
+    p.pos    = value("bigValue");  left->addRow(tr("位置"), withUnit(p.pos, tr("deg")));
+    p.vel    = value("bigValue");  left->addRow(tr("速度"), withUnit(p.vel, tr("deg/s")));
+    p.tor    = value("bigValue");  left->addRow(tr("力矩"), withUnit(p.tor, tr("N·m")));
+    left->addRow(rowSep());
+    p.temp   = value("valText");   left->addRow(tr("驱动器温度"), p.temp);
+
+    // ---- 右列：状态类字段，每行一条 1px 分隔线形成"数据条"节奏 ----
+    p.status = value("valText");   right->addRow(tr("状态字"), p.status);
+    right->addRow(rowSep());
     p.state  = value("valText");   p.stateDot = dot();
-    form->addRow(tr("驱动状态"), withDot(p.stateDot, p.state));
-    form->addRow(rowSep());
-    p.err    = value("valText");   form->addRow(tr("故障码"), p.err);
-    form->addRow(rowSep());
+    right->addRow(tr("驱动状态"), withDot(p.stateDot, p.state));
+    right->addRow(rowSep());
+    p.err    = value("valText");   right->addRow(tr("故障码"), p.err);
+    right->addRow(rowSep());
     p.conn   = value("valText");   p.connDot = dot();
-    form->addRow(tr("连接状态"), withDot(p.connDot, p.conn));
-    form->addRow(rowSep());
-    p.freq   = value("valText");   form->addRow(tr("刷新率"), p.freq);
+    right->addRow(tr("连接状态"), withDot(p.connDot, p.conn));
+    right->addRow(rowSep());
+    p.freq   = value("valText");   right->addRow(tr("刷新率"), p.freq);
+
+    // 两列之间的细分割线，强化"双栏"结构
+    QFrame* divider = new QFrame(w);
+    divider->setObjectName(QStringLiteral("colSep"));
+    divider->setFrameShape(QFrame::VLine);
+    divider->setFixedWidth(1);
+
+    cols->addLayout(left);
+    cols->addWidget(divider);
+    cols->addLayout(right);
+    cols->addStretch();
+
     p.page = w;
     Q_UNUSED(slave);
     return p;

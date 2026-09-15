@@ -282,6 +282,12 @@ QFrame#rowSep {
     max-height: 1px;
 }
 
+/* 双栏之间的竖直细分割线 */
+QFrame#colSep {
+    background-color: #2B313E;
+    border: none;
+}
+
 /* 纯 QSS 状态指示灯：8px 内容 + 2px 边框 = 12px 外径，radius 6 即正圆。
    几何写死在这里，代码只改 background/border 的"颜色"，
    避免正常态加光晕时圆点尺寸跳动导致整行抖动。 */
