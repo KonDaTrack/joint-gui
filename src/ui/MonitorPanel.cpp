@@ -1,6 +1,5 @@
 #include "ui/MonitorPanel.h"
 #include <QDateTime>
-#include <QFormLayout>
 #include <QHBoxLayout>
 #include <QStyle>
 #include <QVBoxLayout>
@@ -10,10 +9,10 @@ QLabel* MonitorPanel::value(const char* objectName)
     QLabel* lab = new QLabel(QStringLiteral("--"), this);
     const bool big = objectName && !qstrcmp(objectName, "bigValue");
     if (big) {
-        // 数值框固定宽度并右对齐：否则 QFormLayout 会把它拉满整行，
+        // 数值框固定宽度并右对齐：否则布局会把它拉满整行，
         // 右边留一大条空白，重心失衡。右对齐符合工业仪表读数习惯。
-        lab->setFixedWidth(175);
-        lab->setFixedHeight(48);   // 固定高度，配合收紧的行距形成均匀节奏（随字号一起放大）
+        lab->setFixedWidth(210);
+        lab->setFixedHeight(56);   // 固定高度，配合行距形成均匀节奏（随字号一起放大）
         lab->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
     } else {
         lab->setMinimumHeight(24);
@@ -50,7 +49,7 @@ QWidget* MonitorPanel::withDot(QLabel* d, QLabel* text)
     return box;
 }
 
-// 遥测行之间的 1px 分隔线（QFormLayout 里整行插入）
+// 遥测行之间的 1px 分隔线（网格里跨两列插入）
 QFrame* MonitorPanel::rowSep()
 {
     QFrame* f = new QFrame(this);
@@ -92,50 +91,78 @@ MonitorPanel::MonitorPanel(QWidget* parent)
     lay->addWidget(tabs_);
 }
 
+// 往网格加一行「标题 | 值」。用 QGridLayout 而非 QFormLayout，
+// 是因为 QFormLayout 的标题是内部创建的、无法单独打 objectName，
+// 而左右两列需要不同的标题字号。
+int MonitorPanel::addRow(QGridLayout* g, int row, QWidget* parent, const QString& text,
+                         const char* labelObject, QWidget* v, bool withSep)
+{
+    QLabel* l = new QLabel(text, parent);
+    l->setObjectName(QString::fromLatin1(labelObject));
+    l->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    g->addWidget(l, row, 0);
+    g->addWidget(v, row, 1);
+    g->setColumnStretch(1, 1);
+    if (withSep) g->addWidget(rowSep(), row + 1, 0, 1, 2);
+    return row + (withSep ? 2 : 1);
+}
+
 MonitorPanel::Page MonitorPanel::makePage(quint16 slave)
 {
     Page p;
     QWidget* w = new QWidget(tabs_);
     w->setObjectName(QStringLiteral("pageWidget"));   // 对应 QSS 限定选择器，透明底
-    // 双列布局：单列时右半边整片空白。左列放核心读数与本体参数，
-    // 右列放状态类字段，两边各 5 行，宽度大致均衡。
+    // 双列布局：单列时右半边整片空白。左列只放核心读数（字号/行距更大，
+    // 是操作时最常看的数据），右列放状态类字段。
     QHBoxLayout* cols = new QHBoxLayout(w);
     cols->setContentsMargins(0, 0, 0, 0);
-    cols->setSpacing(20);
+    cols->setSpacing(24);
 
-    auto makeForm = [](QWidget* parent) {
-        QFormLayout* f = new QFormLayout(parent);
-        f->setHorizontalSpacing(16);   // 键名与数值之间留出呼吸感
-        f->setVerticalSpacing(6);      // 收紧了行距，形成均匀节奏
-        // 行标题靠右贴住数值列：左对齐时短标题与数值之间会留忽大忽小的空档
-        f->setLabelAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        return f;
-    };
-    QFormLayout* left  = makeForm(w);
-    QFormLayout* right = makeForm(w);
+    QWidget* leftBox = new QWidget(w);
+    leftBox->setObjectName(QStringLiteral("colLeft"));
+    QGridLayout* left = new QGridLayout(leftBox);
+    left->setContentsMargins(0, 0, 0, 0);
+    left->setHorizontalSpacing(22);
+    left->setVerticalSpacing(14);    // 左列行距拉大
 
-    // ---- 左列：核心读数 + 本体参数 ----
+    QWidget* rightBox = new QWidget(w);
+    rightBox->setObjectName(QStringLiteral("colRight"));
+    QGridLayout* right = new QGridLayout(rightBox);
+    right->setContentsMargins(0, 0, 0, 0);
+    right->setHorizontalSpacing(16);
+    right->setVerticalSpacing(6);
+
+    // ---- 左列：核心读数 ----
+    int r = 0;
     // 识别出的型号：供核对本从站参数（额定力矩/减速比）是否配对，避免多关节错配
-    p.model  = value("modelText"); left->addRow(tr("关节型号"), p.model);
-    // 位置/速度/力矩为实时核心数据：内凹读数槽 + 等宽数字，单位独立成小字
-    p.pos    = value("bigValue");  left->addRow(tr("位置"), withUnit(p.pos, tr("deg")));
-    p.vel    = value("bigValue");  left->addRow(tr("速度"), withUnit(p.vel, tr("deg/s")));
-    p.tor    = value("bigValue");  left->addRow(tr("力矩"), withUnit(p.tor, tr("N·m")));
-    left->addRow(rowSep());
-    p.temp   = value("valText");   left->addRow(tr("驱动器温度"), p.temp);
+    p.model = value("modelText");
+    r = addRow(left, r, leftBox, tr("关节型号"), "lblLeft", p.model, false);
+    // 位置/速度/力矩：内凹读数槽 + 等宽数字，单位独立成小字
+    p.pos = value("bigValue");
+    r = addRow(left, r, leftBox, tr("位置"), "lblLeft", withUnit(p.pos, tr("deg")), false);
+    p.vel = value("bigValue");
+    r = addRow(left, r, leftBox, tr("速度"), "lblLeft", withUnit(p.vel, tr("deg/s")), false);
+    p.tor = value("bigValue");
+    r = addRow(left, r, leftBox, tr("力矩"), "lblLeft", withUnit(p.tor, tr("N·m")), false);
+    left->setRowStretch(r, 1);   // 余量压到底部，各行按自身高度紧凑排列
 
     // ---- 右列：状态类字段，每行一条 1px 分隔线形成"数据条"节奏 ----
-    p.status = value("valText");   right->addRow(tr("状态字"), p.status);
-    right->addRow(rowSep());
-    p.state  = value("valText");   p.stateDot = dot();
-    right->addRow(tr("驱动状态"), withDot(p.stateDot, p.state));
-    right->addRow(rowSep());
-    p.err    = value("valText");   right->addRow(tr("故障码"), p.err);
-    right->addRow(rowSep());
-    p.conn   = value("valText");   p.connDot = dot();
-    right->addRow(tr("连接状态"), withDot(p.connDot, p.conn));
-    right->addRow(rowSep());
-    p.freq   = value("valText");   right->addRow(tr("刷新率"), p.freq);
+    int q = 0;
+    p.status = value("valText");
+    q = addRow(right, q, rightBox, tr("状态字"), "lblRight", p.status, true);
+    p.state = value("valText");  p.stateDot = dot();
+    q = addRow(right, q, rightBox, tr("驱动状态"), "lblRight",
+               withDot(p.stateDot, p.state), true);
+    p.err = value("valText");
+    q = addRow(right, q, rightBox, tr("故障码"), "lblRight", p.err, true);
+    p.conn = value("valText");   p.connDot = dot();
+    q = addRow(right, q, rightBox, tr("连接状态"), "lblRight",
+               withDot(p.connDot, p.conn), true);
+    p.temp = value("valText");
+    q = addRow(right, q, rightBox, tr("驱动器温度"), "lblRight", p.temp, true);
+    p.freq = value("valText");
+    q = addRow(right, q, rightBox, tr("刷新率"), "lblRight", p.freq, false);
+    right->setRowStretch(q, 1);
 
     // 两列之间的细分割线，强化"双栏"结构
     QFrame* divider = new QFrame(w);
@@ -143,9 +170,9 @@ MonitorPanel::Page MonitorPanel::makePage(quint16 slave)
     divider->setFrameShape(QFrame::VLine);
     divider->setFixedWidth(1);
 
-    cols->addLayout(left);
+    cols->addWidget(leftBox, 3);
     cols->addWidget(divider);
-    cols->addLayout(right);
+    cols->addWidget(rightBox, 2);
     cols->addStretch();
 
     p.page = w;

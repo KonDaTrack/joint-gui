@@ -1,6 +1,7 @@
 #pragma once
 #include <QWidget>
 #include <QFrame>
+#include <QGridLayout>
 #include <QLabel>
 #include <QHash>
 #include <QTabWidget>
@@ -39,6 +40,10 @@ private:
     QWidget* withUnit(QLabel* plate, const QString& unit);    // 数值框 + 独立单位小字
     QWidget* withDot(QLabel* d, QLabel* text);                // 指示灯 + 状态文字
     QFrame* rowSep();                                         // 遥测行之间的 1px 分隔线
+    // 往网格加一行「标题 | 值」，返回下一行号；withSep 时在下方补分隔线。
+    // 用 QGridLayout 手写标题（而非 QFormLayout）是为了能分别给左右列标题设字号。
+    int addRow(QGridLayout* g, int row, QWidget* parent, const QString& text,
+               const char* labelObject, QWidget* v, bool withSep);
     Page makePage(quint16 slave);
     void updatePage(Page& p, const Joint::Telemetry& t);
 

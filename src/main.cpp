@@ -39,19 +39,22 @@ QLabel {
     color: #E2E8F0;
 }
 
-/* 监控页：QFormLayout 的行标题调暗成灰蓝，值列等宽提亮 —— 形成"参数名 | 数值"两列层级。
-   字号比正文小一档即可（15 vs 17），过小会显得局促、读起来吃力。
-   行标题由 QFormLayout 内部创建，只能靠父级限定选择器命中 */
-QTabWidget QWidget#pageWidget QLabel { color: #64748B; font-size: 17px; }
+/* 监控页双栏的标题：左栏是核心读数、字号更大，右栏是状态类、常规字号。
+   两栏标题用不同 objectName 分别控制（这也是不用 QFormLayout 的原因——
+   它的标题由内部创建，打不上 objectName）。 */
+QLabel#lblLeft  { color: #7C8798; font-size: 22px; }
+QLabel#lblRight { color: #64748B; font-size: 17px; }
+
+/* 右栏值列：等宽字体保证数字不跳宽 */
 QLabel#valText {
     color: #E2E8F0;
     font-size: 19px;
     font-family: "JetBrains Mono", "DejaVu Sans Mono", "Consolas", monospace;
 }
 /* 关节型号不是数值，用无衬线体即可：等宽下这串型号会撑宽整列 */
-QLabel#modelText { color: #94A3B8; font-size: 18px; }
-QLabel#unitText { color: #64748B; font-size: 16px; }
-QWidget#unitRow { background: transparent; }
+QLabel#modelText { color: #94A3B8; font-size: 20px; }
+QLabel#unitText  { color: #64748B; font-size: 19px; }
+QWidget#unitRow  { background: transparent; }
 
 /* ============ 功能卡片 ============ */
 /* 注意：监控/控制/曲线面板都是 QWidget 子类（不是 QFrame），
@@ -268,9 +271,9 @@ QLabel#bigValue {
     border: 1px solid #1B1F2A;
     border-bottom: 1px solid #333C4E;
     border-radius: 5px;
-    padding: 3px 10px;
+    padding: 4px 14px;
     color: #38BDF8;
-    font-size: 30px;
+    font-size: 34px;
     font-weight: bold;
     font-family: "JetBrains Mono", "DejaVu Sans Mono", "Consolas", monospace;
 }
