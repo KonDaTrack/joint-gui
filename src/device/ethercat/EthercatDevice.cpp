@@ -189,6 +189,9 @@ bool EthercatDevice::moveToZero(quint16 slave)
 
     eth_setOperateMode(slave, eth_OperateMode_ProfilePosition);
     mode_ = Joint::OperateMode::ProfilePosition;
+    // 清掉旧方向记录：否则超限时残留的 PV/PT 方向会让限位拦下这次回0
+    lastCmdVelDps_[slave] = 0.0;
+    lastCmdTorqueNm_[slave] = 0.0;
 
     // 保守轮廓（回0 是辅助动作，慢一点更安全）：速度 30 deg/s，加/减速 30 deg/s²
     eth_setProfileVelocity(slave, (huint32)UnitConverter::degToPulses(
@@ -227,6 +230,10 @@ bool EthercatDevice::setTarget(quint16 slave, const Joint::TargetCommand& cmd)
     case Joint::OperateMode::ProfilePosition:
     case Joint::OperateMode::InterpolatedPosition:
         // 轮廓位置 PP：驱动内部生成平滑轨迹（对齐 test_pp_mode.cpp）
+        // PP 有绝对位置目标，不靠速度/力矩判断方向：清掉旧记录，
+        // 否则从 PV/PT 切过来时会残留旧方向，让限位误拦 PP 的回程命令
+        lastCmdVelDps_[slave] = 0.0;
+        lastCmdTorqueNm_[slave] = 0.0;
         eth_setProfileVelocity(slave, (huint32)UnitConverter::degToPulses(
             cmd.profileVelocity, p.encoderPulsesPerRev, p.gearRatio));
         eth_setProfileAcceleration(slave, (huint32)UnitConverter::degToPulses(
