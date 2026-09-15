@@ -39,6 +39,9 @@ private:
 
     Trace pos_, vel_, tor_;
     quint16 activeSlave_ = 1;
-    int bufferSize_ = 300;
+    int bufferSize_ = 5000;    // 10s @500Hz：一次完整运动通常几秒，300 点(0.6s)装不下
     bool recording_ = false;   // 仅在「下发目标」后为真；否则不采样也不绘制
+    bool moved_ = false;       // 本次记录中是否真的动过（用于判定"运动完成"）
+    qint64 stillSinceMs_ = 0;  // 连续静止的起点时间戳（0=当前不静止）
+    qint64 firstMs_ = 0, lastMs_ = 0;   // 本次记录的时间跨度（标题显示）
 };

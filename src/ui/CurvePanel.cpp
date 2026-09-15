@@ -2,6 +2,7 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QVBoxLayout>
+#include <cmath>
 
 CurvePanel::CurvePanel(QWidget* parent)
     : QWidget(parent)
@@ -39,6 +40,9 @@ void CurvePanel::beginCapture()
     pos_.buf.clear(); vel_.buf.clear(); tor_.buf.clear();
     pos_.scaled = vel_.scaled = tor_.scaled = false;   // 重新建立显示量程
     recording_ = true;
+    moved_ = false;
+    stillSinceMs_ = 0;
+    firstMs_ = lastMs_ = 0;
     update();
 }
 
@@ -60,9 +64,25 @@ void CurvePanel::onTelemetry(const QList<Joint::Telemetry>& list)
             // 若用固定量程，小关节够用、大关节（84 N·m）会被这点纹波占满整个面板。
             if (t.ratedTorqueNm > 0.0)
                 tor_.minSpan = t.ratedTorqueNm * 0.1;
+            if (firstMs_ == 0) firstMs_ = t.timestampMs;
+            lastMs_ = t.timestampMs;
             push(pos_, t.positionDeg);
             push(vel_, t.velocityDps);
             push(tor_, t.torqueNm);
+
+            // 运动完成自动收尾：先"动过"，再连续静止 ~500ms → 停止记录，
+            // 让完整波形留在屏上（不必手动点停止运动）
+            const double kStillDps = 0.5;   // 远高于速度噪声（实测约 0.05 deg/s）
+            if (std::fabs(t.velocityDps) > kStillDps) {
+                moved_ = true;
+                stillSinceMs_ = 0;
+            } else if (moved_) {
+                if (stillSinceMs_ == 0) stillSinceMs_ = t.timestampMs;
+                else if (t.timestampMs - stillSinceMs_ > 500) recording_ = false;
+            }
+            // 缓冲区写满也收尾，保住从指令下发起的完整过程
+            if (pos_.buf.size() >= bufferSize_) recording_ = false;
+
             update();
             return;
         }
@@ -104,10 +124,12 @@ void CurvePanel::drawTrace(QPainter& p, Trace& tr, int yPad)
     const double loDisp = tr.center - tr.span * 0.5;
     const double range = qMax(1e-9, tr.span);
 
+    // x 轴按实际样本数铺满：记录结束后整段波形充满面板宽度（不必横向留空）
+    const double xSpan = qMax(1, buf.size() - 1);
     p.setPen(QPen(tr.color, 1.5));
     QPainterPath path;
     for (int i = 0; i < buf.size(); ++i) {
-        const double x = (double)i / (bufferSize_ - 1) * (width() - 2 * yPad) + yPad;
+        const double x = (double)i / xSpan * (width() - 2 * yPad) + yPad;
         const double y = height() - yPad - (buf[i] - loDisp) / range * (height() - 2 * yPad);
         if (i == 0) path.moveTo(x, y); else path.lineTo(x, y);
     }
@@ -140,8 +162,9 @@ void CurvePanel::paintEvent(QPaintEvent* e)
         return;
     }
 
+    const double secs = (lastMs_ > firstMs_) ? (lastMs_ - firstMs_) / 1000.0 : 0.0;
     p.setPen(QColor(0xD0, 0xD6, 0xDD));
     p.drawText(10, 18, recording_
-               ? tr("● 记录中 —— 位置(蓝) 速度(绿) 力矩(橙)")
-               : tr("已停止记录 —— 位置(蓝) 速度(绿) 力矩(橙)"));
+               ? tr("● 记录中 %1s —— 位置(蓝) 速度(绿) 力矩(橙)").arg(secs, 0, 'f', 1)
+               : tr("记录完成 %1s —— 位置(蓝) 速度(绿) 力矩(橙)").arg(secs, 0, 'f', 1));
 }
