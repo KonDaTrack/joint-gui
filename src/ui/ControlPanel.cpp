@@ -20,7 +20,7 @@ ControlPanel::ControlPanel(QWidget* parent)
     // 控制目标：只显示，不提供切换控件（切换统一走左侧监控面板标签页，
     // 避免两个入口互相不同步）。显示里提示切换位置，方便操作者找到。
     targetLabel_ = new QLabel(this);
-    targetLabel_->setStyleSheet(QStringLiteral("color: #00E5FF; font-weight: bold;"));
+    targetLabel_->setStyleSheet(QStringLiteral("color: #38BDF8; font-weight: bold;"));
     refreshTargetLabel();
 
     // 急停按钮：最显眼（全局 QSS #dangerButton 红色醒目样式）
@@ -74,7 +74,7 @@ ControlPanel::ControlPanel(QWidget* parent)
     connect(sendBtn_, &QPushButton::clicked, this, &ControlPanel::onSendTarget);
 
     stopBtn_ = new QPushButton(QStringLiteral("停止运动"), this);
-    stopBtn_->setObjectName(QStringLiteral("warningButton"));
+    stopBtn_->setObjectName(QStringLiteral("dangerActionButton"));   // 与「故障复位」区分：停止是危险动作
     connect(stopBtn_, &QPushButton::clicked, this, &ControlPanel::onStopMotion);
 
     QHBoxLayout* estopRow = new QHBoxLayout;

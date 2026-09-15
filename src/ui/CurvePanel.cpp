@@ -12,9 +12,9 @@ CurvePanel::CurvePanel(QWidget* parent)
     setMinimumHeight(180);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 
-    pos_.color = QColor(0x4f, 0xc3, 0xf7);   // 蓝 位置
-    vel_.color = QColor(0x2e, 0xcc, 0x71);   // 绿 速度
-    tor_.color = QColor(0xf3, 0x9c, 0x12);   // 橙 力矩
+    pos_.color = QColor(0x38, 0xbd, 0xf8);   // 蓝 位置
+    vel_.color = QColor(0x34, 0xd3, 0x99);   // 绿 速度
+    tor_.color = QColor(0xfb, 0xbf, 0x24);   // 橙 力矩
     // 最小显示量程：按关节的典型量级设，信号小于它不再放大，
     // 否则静止时的微小抖动会被拉伸到满屏，看着像剧烈震荡
     pos_.minSpan = 1.0;    // deg
@@ -147,10 +147,12 @@ void CurvePanel::paintEvent(QPaintEvent* e)
 {
     Q_UNUSED(e);
     QPainter p(this);
-    // 内部绘图区略深，与外层卡片（#242830 边框）形成层次；留 1px 让 QSS 边框可见
-    p.fillRect(rect().adjusted(1, 1, -1, -1), QColor(0x1A, 0x1D, 0x21));
-    p.setPen(QColor(0x3A, 0x40, 0x46));
-    for (int i = 1; i < 4; ++i) {
+    // 本控件完全自绘（不调用基类 paintEvent），QSS 的背景/边框在此不生效，
+    // 所以卡片底色与边框必须自己画，才能和左右面板的卡片样式一致。
+    p.fillRect(rect().adjusted(1, 1, -1, -1), QColor(0x16, 0x18, 0x1D));
+    p.setPen(QColor(0x2B, 0x30, 0x3C));   // 卡片边框（同 QSS #PanelCard）
+    p.drawRect(rect().adjusted(0, 0, -1, -1));
+    for (int i = 1; i < 4; ++i) {         // 水平网格线
         const int y = height() * i / 4;
         p.drawLine(1, y, width() - 1, y);
     }
@@ -170,7 +172,7 @@ void CurvePanel::paintEvent(QPaintEvent* e)
     }
 
     const double secs = (lastMs_ > firstMs_) ? (lastMs_ - firstMs_) / 1000.0 : 0.0;
-    p.setPen(QColor(0xD0, 0xD6, 0xDD));
+    p.setPen(QColor(0x94, 0xa3, 0xb8));
     p.drawText(10, 18,
                (recording_ ? tr("● 记录中 %1s") : tr("记录完成 %1s")).arg(secs, 0, 'f', 1)
                + tr(" —— 位置(蓝) 速度(绿) 力矩(橙·显示已平滑)"));

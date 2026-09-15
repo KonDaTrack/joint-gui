@@ -141,12 +141,12 @@ void MonitorPanel::updatePage(Page& p, const Joint::Telemetry& t)
     }
     p.state->setText(QString::fromUtf8(stateStr));
     // 驱动状态按工业状态色着色：运行使能→绿 / 故障→红 / 故障反应·快速停机→黄
-    const char* stateColor = "#D0D6DD";
+    const char* stateColor = "#94A3B8";
     switch (t.driveState) {
-    case Joint::DriveState::OperationEnabled:  stateColor = "#00C853"; break;
-    case Joint::DriveState::Fault:             stateColor = "#FF5252"; break;
+    case Joint::DriveState::OperationEnabled:  stateColor = "#34D399"; break;
+    case Joint::DriveState::Fault:             stateColor = "#F87171"; break;
     case Joint::DriveState::FaultReactionActive:
-    case Joint::DriveState::QuickStopActive:   stateColor = "#FFAB00"; break;
+    case Joint::DriveState::QuickStopActive:   stateColor = "#F59E0B"; break;
     default: break;
     }
     p.state->setStyleSheet(QStringLiteral("color: %1; font-weight: bold;").arg(stateColor));
@@ -155,13 +155,13 @@ void MonitorPanel::updatePage(Page& p, const Joint::Telemetry& t)
                                : QStringLiteral("无"));
     // 断开时中性色，避免"离线"旁显示绿色"无"造成误导
     p.err->setStyleSheet(t.connected
-                         ? (t.errorCode ? QStringLiteral("color: #FF5252; font-weight: bold;")
-                                        : QStringLiteral("color: #00C853;"))
-                         : QStringLiteral("color: #D0D6DD;"));
+                         ? (t.errorCode ? QStringLiteral("color: #F87171; font-weight: bold;")
+                                        : QStringLiteral("color: #34D399;"))
+                         : QStringLiteral("color: #94A3B8;"));
 
     p.conn->setText(t.connected ? QStringLiteral("在线") : QStringLiteral("离线"));
-    p.conn->setStyleSheet(t.connected ? QStringLiteral("color: #00C853; font-weight: bold;")
-                                      : QStringLiteral("color: #FF5252; font-weight: bold;"));
+    p.conn->setStyleSheet(t.connected ? QStringLiteral("color: #34D399; font-weight: bold;")
+                                      : QStringLiteral("color: #F87171; font-weight: bold;"));
 
     ++p.samples;
     if (p.lastFreqMs == 0) p.lastFreqMs = QDateTime::currentMSecsSinceEpoch();
