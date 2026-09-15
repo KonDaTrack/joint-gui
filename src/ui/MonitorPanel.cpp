@@ -12,8 +12,8 @@ QLabel* MonitorPanel::value(const char* objectName)
     if (big) {
         // 数值框固定宽度并右对齐：否则 QFormLayout 会把它拉满整行，
         // 右边留一大条空白，重心失衡。右对齐符合工业仪表读数习惯。
-        lab->setFixedWidth(124);
-        lab->setFixedHeight(34);   // 固定高度，配合收紧的行距形成均匀节奏（随字号一起放大）
+        lab->setFixedWidth(150);
+        lab->setFixedHeight(42);   // 固定高度，配合收紧的行距形成均匀节奏（随字号一起放大）
         lab->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
     } else {
         lab->setMinimumHeight(24);
