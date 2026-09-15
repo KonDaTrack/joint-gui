@@ -44,9 +44,11 @@ private:
     QHash<quint16, QString> modelNameBySlave_;            // 识别出的型号名（或"未识别(…)"）
     QHash<quint16, QString> modelShortBySlave_;           // 型号短名（70mm/90mm/110mm）
     QHash<quint16, bool> modelUnknownBySlave_;            // 型号未识别 → 用对话框手填值
-    // 速度由位置差分计算（0x606C 速度寄存器在静止时读数不稳）
-    QHash<quint16, double> lastPosPulses_;
-    QHash<quint16, qint64> lastPosTimeMs_;
+    // 速度由位置差分计算（0x606C 速度寄存器在静止时读数不稳）。
+    // 保留一小段位置历史，用 ~20ms 基线做差分：2ms 基线会把位置读数本身
+    // 的 ±若干脉冲量化抖动放大成极大的速度噪声（实测静止时速度曲线满屏毛刺）。
+    struct PosSample { qint64 ms; double pulses; };
+    QHash<quint16, QList<PosSample>> posHist_;
     QHash<quint16, double> lastVelDps_;
     // 最近下发的速度/力矩，用于限位时判断运动方向（只拦"继续向外"，放行"反向回来"）
     QHash<quint16, double> lastCmdVelDps_;

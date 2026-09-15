@@ -119,6 +119,8 @@ bool EthercatDevice::open(const AppConfig& cfg)
     travelLimitDeg_ = cfg.travelLimitDeg;
     lastCmdVelDps_.clear();      // 重连后不沿用旧命令方向
     lastCmdTorqueNm_.clear();
+    posHist_.clear();            // 重连后位置历史失效
+    lastVelDps_.clear();
     modeBySlave_.clear();
     cycleMs_ = cfg.ethCycleMs;
     slaveId_ = cfg.slaveId;
@@ -158,6 +160,8 @@ void EthercatDevice::close()
         inited_ = false;
         slaveCount_ = 0;
         paramsBySlave_.clear();   // 与 CANopen 一致，断开后清掉从站参数
+        posHist_.clear();
+        lastVelDps_.clear();
         modelNameBySlave_.clear();
         modelShortBySlave_.clear();
         modelUnknownBySlave_.clear();
@@ -392,26 +396,29 @@ bool EthercatDevice::readTelemetry(quint16 slave, Joint::Telemetry& out)
     // 带符号能直观看出偏离零点的方向和距离；越限时数值会超出 ±limit 以醒目提示。
     const double posDeg = UnitConverter::pulsesToDeg(pos, p.encoderPulsesPerRev, p.gearRatio);
     out.positionDeg = posDeg;
-    // 速度 = 位置差分（脉冲/秒 → deg/s），轻滤波抑制编码器量化噪声
-    double velDps = 0.0;
+    // 速度 = 位置差分（脉冲/秒 → deg/s）。
+    // 基线取 ~20ms 而非单周期 2ms：位置读数本身有 ±若干脉冲的量化抖动，
+    // 除以 2ms 会被放大成极大的速度噪声（实测静止/匀速时速度曲线满屏毛刺）。
+    // 基线拉长后同样的脉冲抖动被摊薄 10 倍，再叠一阶滤波进一步压噪。
+    double velDps = lastVelDps_.value(slave, 0.0);
     const qint64 now = QDateTime::currentMSecsSinceEpoch();
-    qint64 dtMs = 2;   // 周期估计
-    const auto itPos = lastPosPulses_.find(slave);
-    const auto itTime = lastPosTimeMs_.find(slave);
-    if (itPos != lastPosPulses_.end() && itTime != lastPosTimeMs_.end()) {
-        const qint64 dt = now - *itTime;
-        if (dt > 0) {
-            dtMs = dt;
-            const double dpulses = pos - *itPos;
-            const double inst = UnitConverter::pulsesToDeg(dpulses * 1000.0 / dt,
-                                                           p.encoderPulsesPerRev, p.gearRatio);
-            const auto itVel = lastVelDps_.find(slave);
-            velDps = (itVel != lastVelDps_.end()) ? itVel.value() * 0.5 + inst * 0.5 : inst;
-            lastVelDps_[slave] = velDps;
-        }
+    QList<PosSample>& hist = posHist_[slave];
+    hist.append({now, static_cast<double>(pos)});
+    while (hist.size() > 2 && now - hist.first().ms > 60) hist.removeFirst();
+
+    // 找一个至少 20ms 前的样本作差分基准
+    double basePulses = hist.first().pulses;
+    qint64 baseMs = hist.first().ms;
+    for (const PosSample& s : hist) {
+        if (now - s.ms >= 20) { basePulses = s.pulses; baseMs = s.ms; break; }
     }
-    lastPosPulses_[slave] = pos;
-    lastPosTimeMs_[slave] = now;
+    const qint64 dt = now - baseMs;
+    if (dt >= 10) {
+        const double inst = UnitConverter::pulsesToDeg(
+            (pos - basePulses) * 1000.0 / dt, p.encoderPulsesPerRev, p.gearRatio);
+        velDps = lastVelDps_.contains(slave) ? velDps * 0.6 + inst * 0.4 : inst;
+        lastVelDps_[slave] = velDps;
+    }
     out.velocityDps = velDps;
     out.torqueNm = UnitConverter::permilleToNm(tor, p.ratedTorqueNm);
     out.ratedTorqueNm = p.ratedTorqueNm;
