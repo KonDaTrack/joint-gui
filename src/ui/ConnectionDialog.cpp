@@ -27,6 +27,13 @@ ConnectionDialog::ConnectionDialog(QWidget* parent)
     baudCombo_->addItem(QStringLiteral("500 kbps"), 500);
     baudCombo_->addItem(QStringLiteral("250 kbps"), 250);
 
+    // 关节型号预设：选定后自动填额定力矩（力矩换算的唯一标定参数，填错会超发/少发）
+    modelCombo_ = new QComboBox(this);
+    modelCombo_->addItem(QStringLiteral("PHU-14H-70-F-B（额定 9.6）"), 9.6);
+    modelCombo_->addItem(QStringLiteral("PHU-20H-90-F-B（额定 50）"), 50.0);
+    modelCombo_->addItem(QStringLiteral("PHU-25H-110-F-B（额定 84）"), 84.0);
+    modelCombo_->addItem(QStringLiteral("自定义"), 0.0);
+
     ifEdit_ = new QLineEdit(QStringLiteral("enx00e0bc4915ec"), this);
     slaveEdit_ = new QLineEdit(QStringLiteral("1"), this);
     cycleEdit_ = new QLineEdit(QStringLiteral("2"), this);
@@ -39,6 +46,7 @@ ConnectionDialog::ConnectionDialog(QWidget* parent)
     form->setHorizontalSpacing(14);
     form->setVerticalSpacing(10);
     form->addRow(QStringLiteral("总线类型"), busCombo_);
+    form->addRow(QStringLiteral("关节型号"), modelCombo_);
     form->addRow(QStringLiteral("EtherCAT 网卡"), ifEdit_);
     form->addRow(QStringLiteral("从站 ID"), slaveEdit_);
     form->addRow(QStringLiteral("CAN 波特率"), baudCombo_);
@@ -61,6 +69,18 @@ ConnectionDialog::ConnectionDialog(QWidget* parent)
     onBusChanged();
     connect(busCombo_, qOverload<int>(&QComboBox::currentIndexChanged),
             this, &ConnectionDialog::onBusChanged);
+    connect(modelCombo_, qOverload<int>(&QComboBox::currentIndexChanged),
+            this, &ConnectionDialog::onModelChanged);
+    onModelChanged();   // 按默认型号填好额定力矩
+}
+
+// 选型号只改「额定力矩」：它是力矩换算的唯一标定参数，且各型号差异达 5 倍，手填易错。
+// 减速比不自动填——设计文档该列不可靠（实物 90mm 是 101，文档写 100），以铭牌为准。
+void ConnectionDialog::onModelChanged()
+{
+    const double rated = modelCombo_->currentData().toDouble();
+    if (rated > 0.0)
+        ratedTorqueEdit_->setText(QString::number(rated, 'g', 4));
 }
 
 void ConnectionDialog::onBusChanged()

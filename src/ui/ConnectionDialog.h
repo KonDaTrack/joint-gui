@@ -16,9 +16,11 @@ public:
 
 private:
     void onBusChanged();
+    void onModelChanged();   // 选型号 → 自动填额定力矩
 
     QComboBox* busCombo_;
     QComboBox* baudCombo_;
+    QComboBox* modelCombo_;    // 关节型号预设
     QLineEdit* ifEdit_;        // EtherCAT 网卡
     QLineEdit* slaveEdit_;
     QLineEdit* cycleEdit_;
