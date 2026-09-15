@@ -47,6 +47,8 @@ add_executable(joint_gui
     src/device/sim/JointModel.h
     src/device/ethercat/EthercatDevice.cpp
     src/device/ethercat/EthercatDevice.h
+    src/device/ethercat/JointModelTable.cpp
+    src/device/ethercat/JointModelTable.h
     src/device/canopen/CanopenDevice.cpp
     src/device/canopen/CanopenDevice.h
     src/device/canopen/MitFrameCodec.cpp

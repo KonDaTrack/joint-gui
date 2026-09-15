@@ -53,6 +53,9 @@ bool ControlWorker::tryOpen(const AppConfig& c)
     emit connectionChanged(true, Joint::busTypeName(cfg_.busType),
                            device_->slaveCount(), QString());
     emit slavesDetected(slaves, activeSlave_);
+    QStringList models;
+    for (quint16 s : slaves) models << device_->modelInfo(s);
+    emit slaveModelsDetected(models);
     return true;
 }
 

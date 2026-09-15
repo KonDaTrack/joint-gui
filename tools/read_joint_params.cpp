@@ -10,6 +10,14 @@ static void dump(huint16 s, huint16 idx, huint8 sub, const char* name, eth_DataT
     printf("  0x%04X:%u %-24s = %u  (ret %d)\n", idx, sub, name, v, r);
 }
 
+// 有符号量（软限位/偏置/目标位置，CiA402 为 int32）
+static void dumps(huint16 s, huint16 idx, huint8 sub, const char* name)
+{
+    hint32 v = 0;
+    int r = eth_readSDO(s, idx, sub, &v, eth_DataType_int32, 2000);
+    printf("  0x%04X:%u %-24s = %d  (ret %d)\n", idx, sub, name, v, r);
+}
+
 int main(int argc, char** argv)
 {
     if (argc < 2) { printf("usage: %s <ifname>\n", argv[0]); return 1; }
@@ -33,10 +41,18 @@ int main(int argc, char** argv)
         dump(s, 0x6099, 0, "homing speed", eth_DataType_uint32);
         dump(s, 0x6098, 0, "homing method", eth_DataType_uint32);
         dump(s, 0x60C2, 0, "max following error", eth_DataType_uint32);
+        // 软限位（CiA402 0x607D）：判断关节是否限制行程，以及限位范围
+        dumps(s, 0x607D, 1, "software MIN position");
+        dumps(s, 0x607D, 2, "software MAX position");
+        dumps(s, 0x607C, 0, "home offset");
+        dumps(s, 0x607A, 0, "target position");
         hint16 act = 0; eth_getActualTorque(s, &act);
         hint32 pos = 0; eth_getActualPosition(s, &pos);
         printf("  actual torque(permille)   = %d\n", act);
         printf("  actual pos(pulses)        = %d\n", pos);
+        // 换算成圈数：每输出圈 = 编码器分辨率 × 减速比（本关节 524288 × 101）
+        const double pulsesPerRev = 524288.0 * 101.0;
+        printf("  actual pos(revs, 101:1)   = %.2f\n", pos / pulsesPerRev);
     }
     eth_freeDLL();
     return 0;

@@ -37,6 +37,8 @@ MonitorPanel::Page MonitorPanel::makePage(quint16 slave)
     QFormLayout* form = new QFormLayout(w);
     form->setHorizontalSpacing(16);
     form->setVerticalSpacing(8);
+    // 识别出的型号：供核对本从站参数（额定力矩/减速比）是否配对，避免多关节错配
+    p.model  = value();            form->addRow(tr("关节型号"), p.model);
     // 位置/速度/力矩为实时核心数据：大字号 + 科技青 + 等宽数字字体
     p.pos    = value("bigValue");  form->addRow(tr("位置 (deg)"), p.pos);
     p.vel    = value("bigValue");  form->addRow(tr("速度 (deg/s)"), p.vel);
@@ -68,6 +70,19 @@ void MonitorPanel::setSlaves(const QList<quint16>& slaves)
     }
     if (slaves.isEmpty()) {
         tabs_->addTab(new QLabel(QStringLiteral("未连接"), tabs_), QStringLiteral("--"));
+    }
+}
+
+// 下标 i ↔ 从站 i+1（与 slaveList() 同序）
+void MonitorPanel::setSlaveModels(const QStringList& modelInfos)
+{
+    for (quint16 s : order_) {
+        const int idx = s - 1;
+        if (idx < 0 || idx >= modelInfos.size()) continue;
+        const auto it = pages_.find(s);
+        if (it == pages_.end() || !it->model) continue;
+        const QString t = modelInfos.at(idx);
+        it->model->setText(t.isEmpty() ? QStringLiteral("--") : t);
     }
 }
 

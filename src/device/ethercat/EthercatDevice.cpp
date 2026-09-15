@@ -1,4 +1,5 @@
 #include "device/ethercat/EthercatDevice.h"
+#include "device/ethercat/JointModelTable.h"
 #include "core/UnitConverter.h"
 #include "eu_ethercat.h"
 #include <QDateTime>
@@ -11,11 +12,16 @@ EthercatDevice::~EthercatDevice()
     close();
 }
 
-// 逐从站读取设备参数。本驱动 OD 的减速比(0x6091=1/1，实物 101)与额定扭矩(0x6076 单位不明)
-// 均不可靠，只自动读取编码器分辨率（0x608F:1/2=524288/1，与 19 位编码器一致）。
+// 逐从站读取/识别设备参数。
+//  - 编码器分辨率：读 0x608F:1/2（自动读取可靠，与 19 位编码器一致）
+//  - 型号：读 0x6076 查型号表 → 得到该从站的减速比与额定力矩（多关节必须按从站区分，
+//    三轴额定差 5~9 倍，全局一个值会严重错配）
+//  - 0x6091(减速比=2)不可靠，不用；0x6076 不是物理力矩，只作型号指纹
 void EthercatDevice::readDeviceParams()
 {
-    paramsBySlave_.clear();   // 避免重连残留旧从站参数
+    paramsBySlave_.clear();     // 避免重连残留旧从站参数
+    modelNameBySlave_.clear();
+    modelUnknownBySlave_.clear();
     for (quint16 s : slaveList()) {
         Joint::DeviceParams p;
         // 编码器分辨率：优先 0x608F:1/2（分子/分母，PHU 用 524288/1）；sub0 单值作回退
@@ -28,13 +34,29 @@ void EthercatDevice::readDeviceParams()
             if (eth_readSDO(s, 0x608F, 0x00, &v0, eth_DataType_uint32, 1000) == ETH_SUCCESS && v0 > 0)
                 p.encoderPulsesPerRev = v0;
         }
-        // 减速比、额定扭矩：不自动读取，一律以连接对话框手动设置（cfg）为准
+
+        // 型号识别：0x6076 三个型号各不相同且随额定单调，作指纹
+        huint32 key = 0;
+        if (eth_readSDO(s, 0x6076, 0x00, &key, eth_DataType_uint32, 1000) == ETH_SUCCESS) {
+            const JointModelTable::ModelInfo mi =
+                JointModelTable::byRatedTorqueKey(static_cast<quint16>(key));
+            modelUnknownBySlave_.insert(s, !mi.found);
+            if (mi.found) {
+                p.ratedTorqueNm = mi.ratedNm;    // 用规格值，不用 0x6076 换算
+                p.gearRatio = mi.gearRatio;
+                modelNameBySlave_.insert(s, mi.name);
+            } else {
+                modelNameBySlave_.insert(s, QStringLiteral("未识别(0x6076=%1)").arg(key));
+            }
+        } else {
+            modelUnknownBySlave_.insert(s, true);
+            modelNameBySlave_.insert(s, QStringLiteral("未识别(读 0x6076 失败)"));
+        }
         paramsBySlave_.insert(s, p);
     }
 }
 
-// 某从站参数：编码器分辨率用自动读取值；减速比、额定扭矩用 cfg 手动值。
-// 本驱动 0x6091(减速比=1/1 实物 101)与 0x6076(额定扭矩单位不明)不可靠。
+// 某从站参数。识别到型号 → 用该型号的规格值；未识别 → 回退到连接对话框手填值。
 Joint::DeviceParams EthercatDevice::paramsFor(quint16 slave) const
 {
     Joint::DeviceParams p;
@@ -42,9 +64,28 @@ Joint::DeviceParams EthercatDevice::paramsFor(quint16 slave) const
     p.gearRatio = gearRatio_;
     p.ratedTorqueNm = ratedNm_;
     const auto it = paramsBySlave_.find(slave);
-    if (it != paramsBySlave_.end() && it->encoderPulsesPerRev > 0)
-        p.encoderPulsesPerRev = it->encoderPulsesPerRev;
+    if (it != paramsBySlave_.end()) {
+        if (it->encoderPulsesPerRev > 0) p.encoderPulsesPerRev = it->encoderPulsesPerRev;
+        if (it->gearRatio > 0)           p.gearRatio = it->gearRatio;
+        if (it->ratedTorqueNm > 0)       p.ratedTorqueNm = it->ratedTorqueNm;
+    }
     return p;
+}
+
+Joint::OperateMode EthercatDevice::modeFor(quint16 slave) const
+{
+    return modeBySlave_.value(slave, Joint::OperateMode::ProfilePosition);
+}
+
+// 给界面显示的型号文本。未识别时明确提示"用手填额定值"，
+// 避免操作者以为参数已自动配对（额定填错会超发/欠发 5 倍以上）。
+QString EthercatDevice::modelInfo(quint16 slave) const
+{
+    const QString name = modelNameBySlave_.value(slave, QString());
+    if (name.isEmpty()) return QString();
+    if (modelUnknownBySlave_.value(slave, false))
+        return QStringLiteral("%1 · 用手填额定 %2 N·m").arg(name).arg(ratedNm_);
+    return QStringLiteral("%1 · 额定 %2 N·m").arg(name).arg(paramsFor(slave).ratedTorqueNm);
 }
 
 bool EthercatDevice::open(const AppConfig& cfg)
@@ -55,6 +96,7 @@ bool EthercatDevice::open(const AppConfig& cfg)
     travelLimitDeg_ = cfg.travelLimitDeg;
     lastCmdVelDps_.clear();      // 重连后不沿用旧命令方向
     lastCmdTorqueNm_.clear();
+    modeBySlave_.clear();
     cycleMs_ = cfg.ethCycleMs;
     slaveId_ = cfg.slaveId;
 
@@ -93,23 +135,27 @@ void EthercatDevice::close()
         inited_ = false;
         slaveCount_ = 0;
         paramsBySlave_.clear();   // 与 CANopen 一致，断开后清掉从站参数
+        modelNameBySlave_.clear();
+        modelUnknownBySlave_.clear();
+        modeBySlave_.clear();
     }
 }
 
 bool EthercatDevice::enable(quint16 slave)
 {
+    const Joint::OperateMode m = modeFor(slave);
     // 位置类模式使能前，先把目标位置初始化为当前实际位置：
     // 否则使能瞬间"目标位置(旧值/0) vs 实际位置"偏差过大 → 0x8611 位置偏差故障
-    if (mode_ == Joint::OperateMode::ProfilePosition
-        || mode_ == Joint::OperateMode::InterpolatedPosition) {
+    if (m == Joint::OperateMode::ProfilePosition
+        || m == Joint::OperateMode::InterpolatedPosition) {
         hint32 pos = 0;
         if (eth_getActualPosition(slave, &pos) == ETH_SUCCESS)
             eth_setTargetPosition(slave, pos);
     }
     // 轮廓类模式按官方例程用控制字序列使能：0x06(Shutdown) → 0x07(Switch On) → 0x0F(Enable Operation)
-    if (mode_ == Joint::OperateMode::ProfilePosition
-        || mode_ == Joint::OperateMode::ProfileVelocity
-        || mode_ == Joint::OperateMode::ProfileTorque) {
+    if (m == Joint::OperateMode::ProfilePosition
+        || m == Joint::OperateMode::ProfileVelocity
+        || m == Joint::OperateMode::ProfileTorque) {
         eth_setControlWord(slave, 0x06);
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
         eth_setControlWord(slave, 0x07);
@@ -140,7 +186,7 @@ bool EthercatDevice::quickStop(quint16 slave)  { return eth_quickStop(slave) == 
 bool EthercatDevice::setOperateMode(quint16 slave, Joint::OperateMode mode)
 {
     const bool ok = eth_setOperateMode(slave, static_cast<eth_OperateMode>(mode)) == ETH_SUCCESS;
-    if (ok) mode_ = mode;
+    if (ok) modeBySlave_[slave] = mode;
     return ok;
 }
 
@@ -155,7 +201,7 @@ bool EthercatDevice::homing(quint16 slave)
     huint8 homeMode = 35;
     eth_writeSDO(slave, 0x6098, 0x00, &homeMode, eth_DataType_uint8, 200);
 
-    const Joint::OperateMode prev = mode_;   // 归航后恢复原模式
+    const Joint::OperateMode prev = modeFor(slave);   // 归航后恢复该从站原模式
     eth_setOperateMode(slave, eth_OperateMode_Homing);
     eth_setControlWord(slave, 0x06);
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
@@ -176,7 +222,7 @@ bool EthercatDevice::homing(quint16 slave)
     huint8 store = 1;
     eth_writeSDO(slave, 0x2130, 0x00, &store, eth_DataType_uint8, 200);   // 保存 home offset
     eth_setOperateMode(slave, static_cast<eth_OperateMode>(prev));
-    mode_ = prev;
+    modeBySlave_[slave] = prev;
     return true;
 }
 
@@ -188,7 +234,7 @@ bool EthercatDevice::moveToZero(quint16 slave)
     if (p.encoderPulsesPerRev <= 0 || p.gearRatio <= 0) return false;
 
     eth_setOperateMode(slave, eth_OperateMode_ProfilePosition);
-    mode_ = Joint::OperateMode::ProfilePosition;
+    modeBySlave_[slave] = Joint::OperateMode::ProfilePosition;
     // 清掉旧方向记录：否则超限时残留的 PV/PT 方向会让限位拦下这次回0
     lastCmdVelDps_[slave] = 0.0;
     lastCmdTorqueNm_[slave] = 0.0;
@@ -226,7 +272,7 @@ bool EthercatDevice::limitBlocksMotion(quint16 slave, double posDeg) const
 bool EthercatDevice::setTarget(quint16 slave, const Joint::TargetCommand& cmd)
 {
     const Joint::DeviceParams p = paramsFor(slave);
-    switch (mode_) {
+    switch (modeFor(slave)) {
     case Joint::OperateMode::ProfilePosition:
     case Joint::OperateMode::InterpolatedPosition:
         // 轮廓位置 PP：驱动内部生成平滑轨迹（对齐 test_pp_mode.cpp）
@@ -354,7 +400,7 @@ bool EthercatDevice::readTelemetry(quint16 slave, Joint::Telemetry& out)
     // PP 靠 setTarget 里夹紧目标。关键：只拦「继续向外」，反向回范围内的命令必须放行，
     // 否则到了 +170° 就再也回不到 -170°（旧实现每周期强改目标为"保持当前位置"，会把关节钉死）。
     if (limitBlocksMotion(slave, posDeg)) {
-        switch (mode_) {
+        switch (modeFor(slave)) {
         case Joint::OperateMode::ProfilePosition:
         case Joint::OperateMode::InterpolatedPosition:
             eth_setTargetPosition(slave, pos);       // 保持当前位置

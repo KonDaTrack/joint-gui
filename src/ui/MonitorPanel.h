@@ -16,10 +16,12 @@ public slots:
     void onTelemetry(const QList<Joint::Telemetry>& list);
     void setSlaves(const QList<quint16>& slaves);
     void setActiveSlave(quint16 address);
+    void setSlaveModels(const QStringList& modelInfos);   // 下标 i ↔ 从站 i+1
 
 private:
     struct Page {
         QWidget* page = nullptr;
+        QLabel *model = nullptr;   // 识别出的型号（供核对参数是否配对）
         QLabel *pos = nullptr, *vel = nullptr, *tor = nullptr, *temp = nullptr,
                *status = nullptr, *state = nullptr, *err = nullptr, *conn = nullptr, *freq = nullptr;
         int samples = 0;

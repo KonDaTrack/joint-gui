@@ -62,6 +62,7 @@ MainWindow::MainWindow(QWidget* parent)
                 control_->setActiveSlave(active);
                 curve_->setActiveSlave(active);
             });
+    connect(worker_, &ControlWorker::slaveModelsDetected, monitor_, &MonitorPanel::setSlaveModels);
 
     connect(control_, &ControlPanel::enableRequested, worker_, &ControlWorker::enableRequested);
     connect(control_, &ControlPanel::disableRequested, worker_, &ControlWorker::disableRequested);
