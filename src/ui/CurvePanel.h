@@ -19,10 +19,22 @@ protected:
     void paintEvent(QPaintEvent* e) override;
 
 private:
-    void push(QVector<double>& buf, double v);
-    void drawTrace(QPainter& p, const QVector<double>& buf, const QColor& c, int yPad);
+    // 一条轨迹：数据 + 显示量程状态。
+    // minSpan 是关键：信号平稳时不把微小抖动放大到满屏（否则噪声看着像剧烈震荡）。
+    // center/span 做平滑跟随，避免每帧重新缩放导致波形整体跳动。
+    struct Trace {
+        QVector<double> buf;
+        QColor color;
+        double minSpan = 1.0;        // 最小显示量程（该轨迹的单位）
+        double center = 0.0;         // 平滑后的显示中心
+        double span = 0.0;           // 平滑后的显示量程
+        bool scaled = false;         // 是否已初始化量程
+    };
 
-    QVector<double> pos_, vel_, tor_;
+    void push(Trace& tr, double v);
+    void drawTrace(QPainter& p, Trace& tr, int yPad);
+
+    Trace pos_, vel_, tor_;
     quint16 activeSlave_ = 1;
     int bufferSize_ = 300;
 };
