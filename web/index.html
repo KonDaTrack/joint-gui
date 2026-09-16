@@ -55,10 +55,11 @@
     </div>
   </section>
 
-  <!-- ============ 中：控制 ============ -->
-  <section class="card card-control">
+  <!-- ============ 中：操作（急停 / 使能 / 负载） ============ -->
+  <section class="card card-operate">
     <div class="card-core">
-    <h2 class="card-title">[ 控制 ]</h2>
+    <h2 class="card-title">[ 操作 ]</h2>
+
 
     <button id="btnEstop" class="btn btn-estop">急停 ESTOP</button>
 
@@ -73,6 +74,30 @@
       <button id="btnDisable" class="btn">失能</button>
       <button id="btnFaultReset" class="btn">故障复位</button>
     </div>
+    <div class="btn-row">
+      <button id="btnHome" class="btn">归零</button>
+      <button id="btnZero" class="btn">回0</button>
+    </div>
+
+    <h3 class="section-title">负载（RS485 · 0-10V）</h3>
+        <div class="load-row">
+      <input type="range" id="loadSlider" min="0" max="100" value="0" step="1">
+      <input type="number" id="loadValue" class="load-num" value="0" min="0" max="100" step="1">
+      <span class="unit">N·m</span>
+      <span class="load-volt" id="loadVolt">0.00 V</span>
+      <button id="btnLoadSet" class="btn btn-primary">下发</button>
+    </div>
+    <div id="loadHint" class="hint"></div>
+
+    </div>
+  </section>
+
+
+
+  <!-- ============ 右：目标下发 ============ -->
+  <section class="card card-target">
+    <div class="card-core">
+    <h2 class="card-title">[ 目标 ]</h2>
 
     <h3 class="section-title">目标设定</h3>
 
@@ -109,22 +134,6 @@
     </div>
 
     <div id="cmdHint" class="hint"></div>
-    </div>
-  </section>
-
-
-  <!-- ============ 负载控制（RS485 → 0-10V → 张力控制器） ============ -->
-  <section class="card card-load">
-    <div class="card-core">
-    <h2 class="card-title">[ 负载 ] <span class="chart-note">RS485 · 0-10V 模拟量</span></h2>
-    <div class="load-row">
-      <input type="range" id="loadSlider" min="0" max="100" value="0" step="1">
-      <input type="number" id="loadValue" class="load-num" value="0" min="0" max="100" step="1">
-      <span class="unit">N·m</span>
-      <span class="load-volt" id="loadVolt">0.00 V</span>
-      <button id="btnLoadSet" class="btn btn-primary">下发</button>
-    </div>
-    <div id="loadHint" class="hint"></div>
     </div>
   </section>
 

@@ -70,8 +70,9 @@ function renderCommandEnabled() {
   $('selMode').disabled = !mine;
   ['inpPos', 'inpVel', 'inpTor', 'inpProfVel', 'inpProfAcc', 'inpProfDec']
     .forEach((id) => { $(id).disabled = !mine; });
-  // 负载同样属于"命令类"，无控制权时置灰
-  ['loadSlider', 'loadValue', 'btnLoadSet'].forEach((id) => { $(id).disabled = !mine; });
+  // 归零/回0 与负载同属"命令类"，无控制权时置灰
+  ['btnHome', 'btnZero', 'loadSlider', 'loadValue', 'btnLoadSet']
+    .forEach((id) => { $(id).disabled = !mine; });
   // 没有控制权时说明原因，避免"点了没反应"
   $('cmdHint').textContent = mine
     ? (ready ? '' : '请先勾选「已确认现场安全」')
@@ -199,6 +200,9 @@ $('btnEnable').onclick = () => { link.command('setMode', { mode: +$('selMode').v
                                  link.command('enable'); };
 $('btnDisable').onclick = () => link.command('disable');
 $('btnFaultReset').onclick = () => link.command('faultReset');
+// 归零（标定零点）与回0（走回零点）——下位机已实现，这里补上入口与 Qt 端对齐
+$('btnHome').onclick = () => link.command('homing');
+$('btnZero').onclick = () => link.command('moveToZero');
 $('btnEstop').onclick = () => link.command('estop');       // 不受控制权限制
 $('btnStop').onclick = () => link.command('setTarget', { velocityDps: 0 });
 
