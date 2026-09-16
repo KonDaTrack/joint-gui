@@ -23,9 +23,9 @@ private slots:
 private:
     QThread thread_;        // 设备线程（SDK 调用都在这里）
     QThread serverThread_;  // 网络线程（与设备/UI 隔离，服务端问题不得影响控制）
-    ControlWorker* worker_;
-    ControlServer* server_;
-    MonitorPanel* monitor_;
-    ControlPanel* control_;
-    CurvePanel* curve_;
+    ControlWorker* worker_ = nullptr;
+    ControlServer* server_ = nullptr;
+    MonitorPanel* monitor_ = nullptr;
+    ControlPanel* control_ = nullptr;
+    CurvePanel* curve_ = nullptr;
 };

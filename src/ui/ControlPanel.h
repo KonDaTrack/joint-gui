@@ -60,26 +60,28 @@ private:
     QStringList shorts_;
     quint16 activeSlave_ = 0;
 
-    QCheckBox* readyCheck_;
-    QPushButton* estopBtn_;
-    QPushButton* enableBtn_;
-    QPushButton* disableBtn_;
-    QPushButton* faultResetBtn_;
-    QPushButton* homeBtn_;
-    QPushButton* zeroBtn_;
-    QLabel* targetLabel_;   // 醒目标注当前控制目标，避免命令发错轴
-    QLabel* ownerLabel_;    // 当前控制权归属（本地/上位机）
-    QCheckBox* remoteCheck_;  // 本地开关：允许上位机接管
+    // 一律给 nullptr 初值：构造期间若有代码（如 setControlOwner）在控件创建前
+    // 访问这些成员，未初始化的指针是随机值，会直接段错误
+    QCheckBox* readyCheck_ = nullptr;
+    QPushButton* estopBtn_ = nullptr;
+    QPushButton* enableBtn_ = nullptr;
+    QPushButton* disableBtn_ = nullptr;
+    QPushButton* faultResetBtn_ = nullptr;
+    QPushButton* homeBtn_ = nullptr;
+    QPushButton* zeroBtn_ = nullptr;
+    QLabel* targetLabel_ = nullptr;   // 醒目标注当前控制目标，避免命令发错轴
+    QLabel* ownerLabel_ = nullptr;    // 当前控制权归属（本地/上位机）
+    QCheckBox* remoteCheck_ = nullptr;  // 本地开关：允许上位机接管
     QString owner_ = QStringLiteral("local");   // 当前控制权（"local"/"remote"）
-    QComboBox* modeCombo_;
-    QLineEdit* posEdit_;
-    QLineEdit* velEdit_;
-    QLineEdit* torEdit_;
-    QLineEdit* profVelEdit_;
-    QLineEdit* profAccEdit_;
-    QLineEdit* profDecEdit_;
-    QLineEdit* torSlopeEdit_;
-    QPushButton* sendBtn_;
-    QPushButton* stopBtn_;
-    QFormLayout* form_;   // 目标设定表单，用于按模式隐藏/显示字段
+    QComboBox* modeCombo_ = nullptr;
+    QLineEdit* posEdit_ = nullptr;
+    QLineEdit* velEdit_ = nullptr;
+    QLineEdit* torEdit_ = nullptr;
+    QLineEdit* profVelEdit_ = nullptr;
+    QLineEdit* profAccEdit_ = nullptr;
+    QLineEdit* profDecEdit_ = nullptr;
+    QLineEdit* torSlopeEdit_ = nullptr;
+    QPushButton* sendBtn_ = nullptr;
+    QPushButton* stopBtn_ = nullptr;
+    QFormLayout* form_ = nullptr;   // 目标设定表单，用于按模式隐藏/显示字段
 };

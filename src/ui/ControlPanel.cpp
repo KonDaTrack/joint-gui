@@ -30,7 +30,6 @@ ControlPanel::ControlPanel(QWidget* parent)
         "勾选后，上位机可以请求接管控制权（接管时全部轴会先失能）。\n"
         "取消勾选会立即收回控制权，并让所有轴失能。"));
     connect(remoteCheck_, &QCheckBox::toggled, this, &ControlPanel::remoteAllowedChanged);
-    setControlOwner(QStringLiteral("local"));
 
     // 急停按钮：最显眼（全局 QSS #dangerButton 红色醒目样式）
     estopBtn_ = new QPushButton(QStringLiteral("急停 ESTOP"), this);
@@ -131,6 +130,9 @@ ControlPanel::ControlPanel(QWidget* parent)
     root->addLayout(form_);
     root->addLayout(targetRow);
     root->addStretch();
+
+    // 放在最后：此时所有控件都已创建，updateCommandEnabled() 才能安全访问它们
+    setControlOwner(QStringLiteral("local"));
 }
 
 Joint::OperateMode ControlPanel::currentMode() const
