@@ -135,10 +135,13 @@ body::after {
 .btn-row { display: flex; gap: 1px; margin: 10px 0; background: var(--rule); }
 .btn-row .btn { flex: 1; border: none; }
 
-/* ============ 布局：1px 缝隙即分隔线 ============ */
+/* ============ 布局：上两栏 + 下方全宽波形（同 Qt 端） ============
+   按 1080p 设计：视口高 ≈1080-浏览器边框≈944，减顶栏 54 = 890 可用。
+   上下按 3:2 分（同 Qt 的 splitter 比例）→ 上 534 / 波形 356，波形是全宽时间轴。 */
 .layout {
   display: grid;
-  grid-template-columns: 340px 440px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) 520px;
+  grid-template-rows: minmax(0, 3fr) minmax(0, 2fr);
   gap: 1px;                          /* 刀锋细线靠缝隙露底实现 */
   background: var(--rule);
   border-bottom: 1px solid var(--rule);
@@ -152,9 +155,10 @@ body::after {
   min-height: 0;
   min-width: 0;
 }
-.card-slaves  { grid-column: 1; display: flex; flex-direction: column; }
-.card-control { grid-column: 2; overflow-y: auto; }
-.card-chart   { grid-column: 3; display: flex; flex-direction: column; }
+/* 从站卡横跨上排左栏：内部再分两列，把 1080p 的横向空间用掉，不留大片空白 */
+.card-slaves  { grid-column: 1; grid-row: 1; display: flex; flex-direction: column; overflow: hidden; }
+.card-control { grid-column: 2; grid-row: 1; overflow-y: auto; }
+.card-chart   { grid-column: 1 / 3; grid-row: 2; display: flex; flex-direction: column; }
 
 /* 卡片标题：大字重、宽字距、下方一道粗结构线 */
 .card-title {
@@ -179,38 +183,47 @@ body::after {
   color: var(--dimmer);
 }
 
-/* ============ 从站列表 ============ */
-.slave-list { list-style: none; margin: 0 0 12px; padding: 0; }
+/* ============ 从站列表：横排紧凑块（从站数就 1~3 个，竖排会浪费横向空间） ============ */
+.slave-list {
+  list-style: none;
+  display: flex;
+  gap: 1px;
+  background: var(--rule);   /* 缝隙露底 = 分隔线 */
+  margin: 0 0 12px;
+  padding: 0;
+}
 .slave-list li {
-  padding: 7px 10px;
-  border: 1px solid var(--rule);
+  background: var(--panel);
+  border: none;
+  border-top: 2px solid transparent;
   border-radius: 0;
-  margin-bottom: 1px;
+  padding: 7px 16px;
   cursor: pointer;
   display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 8px;
+  flex-direction: column;   /* 名称与型号上下排，块更窄 */
+  gap: 2px;
   font-size: 12px;
   letter-spacing: 0.06em;
+  white-space: nowrap;
 }
 .slave-list li:hover { background: #1B1F23; }
 .slave-list li.active {
-  border-color: var(--fg);
   background: #1B1F23;
-  color: var(--fg);
+  border-top-color: var(--fg);   /* 选中用顶部粗线标记，像设备选择开关 */
   font-weight: 700;
 }
 .slave-list li .sub { color: var(--dimmer); font-size: 10px; letter-spacing: 0.08em; }
 
-/* ============ 读数槽：内凹 + 极端字号尺度 ============ */
+/* ============ 三块读数槽横排：宽屏下占满，数字更大 ============ */
 .readouts {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-evenly;
-  flex: 1;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
   margin-bottom: 12px;
+  /* 占满剩余高度并把这排读数纵向居中：左卡在 1080p 下很高，
+     不这样会在读数和遥测表之间空出一大块 */
+  flex: 1;
+  align-content: center;
 }
 .readout label {
   display: block;
@@ -218,36 +231,36 @@ body::after {
   letter-spacing: 0.2em;
   text-transform: uppercase;
   color: var(--dim);
-  margin-bottom: 3px;
+  margin-bottom: 4px;
 }
+.readout > div { display: flex; align-items: baseline; gap: 8px; }
 .readout .value {
-  display: inline-block;
-  min-width: 160px;
+  flex: 1;
+  min-width: 0;
   text-align: right;
   background: var(--sunken);
   border: 1px solid var(--rule);
   border-radius: 0;
-  padding: 2px 10px;
+  padding: 4px 12px;
   color: var(--fg);              /* 白磷光：数据不用装饰色 */
   font-family: var(--mono);
-  font-size: 34px;
+  font-size: 38px;
   font-weight: 700;
-  line-height: 1.15;
+  line-height: 1.25;
   letter-spacing: -0.01em;
 }
 .readout .unit {
   color: var(--dimmer);
-  margin-left: 8px;
   font-size: 11px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 
-/* ============ 遥测表：细线分行 ============ */
+/* ============ 遥测表：两列并排，用掉宽屏横向空间 ============ */
 .telemetry {
   display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 0;
+  grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr);
+  column-gap: 28px;
   margin: 0;
   border-top: 1px solid var(--rule);
 }
@@ -257,12 +270,13 @@ body::after {
   font-size: 10px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  padding: 6px 0;
+  padding: 7px 0;
   border-bottom: 1px solid var(--rule);
+  white-space: nowrap;
 }
 .telemetry dd {
   margin: 0;
-  padding: 6px 0 6px 14px;
+  padding: 7px 0 7px 12px;
   border-bottom: 1px solid var(--rule);
   font-size: 13px;
   letter-spacing: 0.06em;
