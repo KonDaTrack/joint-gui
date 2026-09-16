@@ -17,7 +17,7 @@ if(NOT DEFINED JOINT_ARCH)
 endif()
 message(STATUS "joint_gui target arch: ${JOINT_ARCH}")
 
-find_package(Qt5 REQUIRED COMPONENTS Widgets Network)
+find_package(Qt5 REQUIRED COMPONENTS Widgets Network WebSockets)
 
 add_executable(joint_gui
     src/main.cpp
@@ -71,7 +71,7 @@ target_link_directories(joint_gui PRIVATE "${EY_CANOPEN_SDK_DIR}/lib")
 target_link_libraries(joint_gui PRIVATE eu_canopen eu_eds eu_candrv eu_log eu_resources)
 
 target_include_directories(joint_gui PRIVATE ${JOINT_GUI_INCLUDE_DIRS})
-target_link_libraries(joint_gui PRIVATE Qt5::Widgets Qt5::Network)
+target_link_libraries(joint_gui PRIVATE Qt5::Widgets Qt5::Network Qt5::WebSockets)
 # 部署时 .so 与可执行文件同目录，避免依赖 LD_LIBRARY_PATH。
 # 注意：SDK 库自身带 DT_RUNPATH（指向厂商构建机路径），故运行时仍需 LD_LIBRARY_PATH
 # 才能解析传递依赖（libsoem/libcyhcs_log 等）——见 run.sh 与 DEPLOY.md。

@@ -41,7 +41,8 @@ cd joint-gui
 sudo dpkg --add-architecture arm64
 sudo apt update
 sudo apt install cmake gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
-                 qtbase5-dev-tools qtbase5-dev:arm64
+                 qtbase5-dev-tools qtbase5-dev:arm64 \
+                 libqt5websockets5-dev:arm64
 cd joint-gui
 ./build.sh arm          # 产出 build-arm/joint_gui（aarch64 原生二进制）
 ```
@@ -64,7 +65,7 @@ scp -r ../eyou_canopen_sdk_PHU_aarch64_linux_gnu_20260710/lib target:/opt/joint-
 
 ### 3.2 安装 Qt 运行库（板上仅需运行库，无需开发环境）
 ```bash
-sudo apt install libqt5widgets5 libqt5gui5 libqt5core5a libqt5network5
+sudo apt install libqt5widgets5 libqt5gui5 libqt5core5a libqt5network5 libqt5websockets5
 ```
 
 ### 3.3 运行
