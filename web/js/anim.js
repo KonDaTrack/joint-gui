@@ -38,8 +38,8 @@ const Anim = {
       { scale: 1 },
       { scale: 1.12, duration: 0.16, ease: 'power2.out', yoyo: true, repeat: 1 });
     gsap.fromTo('#dotState',
-      { boxShadow: '0 0 0 0 rgba(52,211,153,0.7)' },
-      { boxShadow: '0 0 0 10px rgba(52,211,153,0)', duration: 0.5, ease: 'power2.out' });
+      { boxShadow: '0 0 0 0 rgba(74,246,38,0.7)' },
+      { boxShadow: '0 0 0 10px rgba(74,246,38,0)', duration: 0.5, ease: 'power2.out' });
   },
 
   /** 故障出现：闪烁强调 2 次（这是最该被注意到的变化） */
@@ -75,8 +75,8 @@ const Anim = {
     if (!this.ok) return;
     const card = document.querySelector('.card-chart');
     gsap.fromTo(card,
-      { borderColor: '#38BDF8' },
-      { borderColor: '#2B313E', duration: 0.9, ease: 'power2.out' });
+      { borderColor: '#EAEAEA' },
+      { borderColor: '#2A3036', duration: 0.9, ease: 'power2.out' });
   },
 
   /** 按钮点击的轻微反馈（按下时缩一下） */

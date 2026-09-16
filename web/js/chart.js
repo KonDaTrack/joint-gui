@@ -7,9 +7,9 @@
 //  3) 量程平滑跟随，避免每帧重算导致波形整体跳动
 
 const TRACES = [
-  { key: 'positionDeg', color: '#38BDF8', label: '位置', minSpan: 1.0 },
-  { key: 'velocityDps', color: '#34D399', label: '速度', minSpan: 10.0 },
-  { key: 'torqueNm',    color: '#FBBF24', label: '力矩', minSpan: 1.0 },
+  { key: 'positionDeg', color: '#EAEAEA', label: '位置', minSpan: 1.0 },
+  { key: 'velocityDps', color: '#4AF626', label: '速度', minSpan: 10.0 },
+  { key: 'torqueNm',    color: '#F59E0B', label: '力矩', minSpan: 1.0 },
 ];
 
 const MAX_POINTS = 3000;   // 10s @300Hz 上限，够装下一次完整运动
@@ -84,7 +84,7 @@ class Chart {
     ctx.clearRect(0, 0, w, h);
 
     // 网格
-    ctx.strokeStyle = '#2B303C';
+    ctx.strokeStyle = '#2A3036';
     ctx.lineWidth = 1;
     for (let i = 1; i < 4; i++) {
       const y = (h * i) / 4;
@@ -93,7 +93,7 @@ class Chart {
 
     const hasData = this.traces.some((t) => t.buf.length > 1);
     if (!hasData) {
-      ctx.fillStyle = '#64748B';
+      ctx.fillStyle = '#4A5158';
       ctx.font = '15px sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText('点「下发目标」后开始记录波形', w / 2, h / 2);
@@ -128,16 +128,16 @@ class Chart {
     const secs = this.startTs ? ((this.lastTs - this.startTs) / 1000).toFixed(1) : '0.0';
     ctx.textAlign = 'left';
     ctx.font = '13px sans-serif';
-    ctx.fillStyle = '#94A3B8';
+    ctx.fillStyle = '#7C858F';
     let x = 12;
     this.traces.forEach((tr) => {
       ctx.fillStyle = tr.color;
       ctx.fillText('■', x, 20);
-      ctx.fillStyle = '#94A3B8';
+      ctx.fillStyle = '#7C858F';
       ctx.fillText(tr.label, x + 14, 20);
       x += 70;
     });
-    ctx.fillStyle = this.recording ? '#34D399' : '#94A3B8';
+    ctx.fillStyle = this.recording ? '#4AF626' : '#7C858F';
     ctx.fillText(`${this.recording ? '● 记录中' : '记录完成'} ${secs}s`, x + 10, 20);
   }
 }

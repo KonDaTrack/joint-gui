@@ -1,21 +1,31 @@
-/* 配色沿用 Qt 端（src/main.cpp 的 QSS），让两套界面看起来是同一个产品：
-   背景 #16181D / 卡片 #1E2128 / 边框 #2B313E / 主文字 #E2E8F0 / 次文字 #94A3B8
-   强调 #38BDF8 / 正常 #34D399 / 警示 #F59E0B / 危险 #F87171 */
+/* 工业仪器风（Tactical Telemetry）——依 .claude/skills/industrial-brutalist-ui
+ *
+ * 规则：禁止圆角（全部 90°）、禁止渐变/柔和阴影/半透明、可见分隔线、
+ *       等宽 + 大写 + 宽字距、极端字号尺度对比、CRT 扫描线、ASCII 框架。
+ *
+ * ⚠️ 一处**有意偏离**技能规则：技能要求"只用单一强调色（航空红）"。
+ *    但这是**安全相关的控制界面**——绿=正常/使能、红=故障、琥珀=控制权在上位机
+ *    是**语义编码而非装饰**。按"一色原则"砍掉会削弱状态可读性，那是安全退步。
+ *    故：**装饰/结构一律纯灰阶**，颜色只用于状态语义。 */
 
 :root {
-  --bg: #16181D;
-  --card: #1E2128;
-  --sunken: #111317;
-  --border: #2B313E;
-  --border-lit: #3E4656;
-  --text: #E2E8F0;
-  --muted: #94A3B8;
-  --dim: #64748B;
-  --accent: #38BDF8;
-  --ok: #34D399;
-  --warn: #F59E0B;
-  --danger: #F87171;
-  --mono: "JetBrains Mono", "DejaVu Sans Mono", Consolas, monospace;
+  --bg:      #0C0D0F;   /* 停用的 CRT 底（不用纯黑） */
+  --panel:   #14171A;
+  --sunken:  #08090B;   /* 比面板更深：读数槽 */
+  --rule:    #2A3036;   /* 分隔线 */
+  --rule-hi: #3D454D;   /* 结构强调线 */
+
+  --fg:      #EAEAEA;   /* 白磷光：主文字与全部数据 */
+  --dim:     #7C858F;   /* 次要：标签 */
+  --dimmer:  #4A5158;   /* 更弱：单位、注释 */
+
+  --red:     #E61919;   /* 航空红：急停、故障（技能指定的唯一强调色） */
+  --green:   #4AF626;   /* 磷光绿：仅「运行使能/在线」一处 */
+  --amber:   #F59E0B;   /* 仅「控制权在上位机」一处 */
+
+  --mono: "JetBrains Mono", "IBM Plex Mono", "DejaVu Sans Mono", Consolas, monospace;
+  --sans: "Archivo", "Inter", "Noto Sans CJK SC", "Source Han Sans SC",
+          "WenQuanYi Micro Hei", sans-serif;
 }
 
 * { box-sizing: border-box; }
@@ -23,213 +33,339 @@
 body {
   margin: 0;
   background: var(--bg);
-  color: var(--text);
-  font-family: "Noto Sans CJK SC", "Source Han Sans SC", "WenQuanYi Micro Hei",
-               "Microsoft YaHei", system-ui, sans-serif;
-  font-size: 15px;
+  color: var(--fg);
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+/* CRT 扫描线。压得很淡——太强会伤小字号数值的可读性（这是给人读数字的界面）。
+   不想要的话删掉这条即可。 */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  background: repeating-linear-gradient(
+    0deg, transparent, transparent 2px,
+    rgba(0, 0, 0, 0.16) 2px, rgba(0, 0, 0, 0.16) 3px);
 }
 
 /* ============ 顶栏 ============ */
 .topbar {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--border);
+  gap: 14px;
+  padding: 0 16px;
+  height: 54px;
+  border-bottom: 2px solid var(--rule-hi);
+  background: var(--panel);
 }
-.brand { font-weight: 700; letter-spacing: .5px; }
+.brand {
+  font-family: var(--sans);
+  font-weight: 800;
+  font-size: 15px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
 .spacer { flex: 1; }
 
+/* 徽章：方角 + 窄边框 + 大写宽字距，像设备铭牌 */
 .badge {
-  padding: 4px 12px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  font-weight: 600;
-  font-size: 14px;
+  padding: 4px 10px;
+  border: 1px solid var(--rule);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--dim);
 }
-.badge-idle  { color: var(--dim); }
-.badge-real  { color: var(--ok);    border-color: #14532D; background: #0F2419; }
-/* 仿真必须一眼可辨：数据长得和真机一样，只是假的 */
-.badge-sim   { color: var(--warn);  border-color: #78350F; background: #2A1D0B; }
-.badge-local { color: var(--ok); }
-.badge-remote{ color: var(--warn);  border-color: #78350F; background: #2A1D0B; }
+.badge-idle   { color: var(--dimmer); }
+.badge-real   { color: var(--green);  border-color: var(--green); }
+/* 仿真必须一眼可辨：数据与真机一样，只是假的 */
+.badge-sim    { color: var(--amber);  border-color: var(--amber); }
+.badge-local  { color: var(--dim); }
+.badge-remote { color: var(--amber);  border-color: var(--amber); }
 
-/* ============ 按钮 ============ */
+/* ============ 按钮：方角、窄边框、大写 ============ */
 .btn {
-  background: #262A34;
-  color: var(--text);
-  border: 1px solid #373D4B;
-  border-radius: 6px;
-  padding: 8px 14px;
-  font-size: 15px;
-  font-family: inherit;
+  background: #1B1F23;
+  color: var(--fg);
+  border: 1px solid var(--rule-hi);
+  border-radius: 0;              /* 工业风：一律 90° */
+  padding: 8px 12px;
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   cursor: pointer;
 }
-.btn:hover:not(:disabled) { background: #2B303C; border-color: var(--accent); }
-.btn:active:not(:disabled) { background: #1A1D24; }
-.btn:disabled { color: #646C7A; background: #1A1D24; border-color: #262A34; cursor: not-allowed; }
+.btn:hover:not(:disabled) { background: #24292E; border-color: var(--fg); }
+.btn:active:not(:disabled) { background: #101316; }
+.btn:disabled {
+  color: var(--dimmer);
+  background: #101214;
+  border-color: #22272B;
+  cursor: not-allowed;
+}
 
-.btn-primary { background: #0284C7; border-color: #0284C7; color: #fff; font-weight: 700; }
-.btn-primary:hover:not(:disabled) { background: #0369A1; border-color: var(--accent); }
-.btn-primary:disabled { background: #1A1D24; color: #646C7A; border-color: #262A34; }
+.btn-primary {
+  background: var(--red);
+  border-color: var(--red);
+  color: #fff;
+  font-weight: 700;
+}
+.btn-primary:hover:not(:disabled) { background: #FF2A2A; border-color: #FF2A2A; }
+.btn-primary:disabled { background: #101214; color: var(--dimmer); border-color: #22272B; }
 
+/* 急停：整块红 + 粗描边，是界面上唯一的实心红 */
 .btn-estop {
   width: 100%;
-  background: #DC2626;
-  border-color: #DC2626;
+  background: var(--red);
+  border: 2px solid #FF4D4D;
+  border-radius: 0;
   color: #fff;
+  font-family: var(--sans);
   font-size: 20px;
-  font-weight: 700;
-  letter-spacing: 1px;
-  padding: 16px;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  padding: 14px;
 }
-.btn-estop:hover { background: #EF4444; }
+.btn-estop:hover { background: #FF2A2A; }
 
-.btn-row { display: flex; gap: 8px; margin: 10px 0; }
-.btn-row .btn { flex: 1; }
+.btn-row { display: flex; gap: 1px; margin: 10px 0; background: var(--rule); }
+.btn-row .btn { flex: 1; border: none; }
 
-/* ============ 布局 ============ */
-/* 三列单行：从站 / 控制 / 波形。
-   波形放最右整列——它是试验台的主视觉，且原先放第二行时第三列整片空着。
-   列宽给控制面板留够（表单 150px 标签 + 字段），再窄会被挤压。 */
+/* ============ 布局：1px 缝隙即分隔线 ============ */
 .layout {
   display: grid;
   grid-template-columns: 340px 440px minmax(0, 1fr);
-  gap: 12px;
-  padding: 12px;
+  gap: 1px;                          /* 刀锋细线靠缝隙露底实现 */
+  background: var(--rule);
+  border-bottom: 1px solid var(--rule);
   height: calc(100vh - 54px);
 }
 .card {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-top-color: var(--border-lit);   /* 顶部受光边，同 Qt 端 */
-  border-radius: 8px;
+  background: var(--panel);
+  border: none;
+  border-radius: 0;
   padding: 14px;
-  /* 不加 overflow:auto——会让内容被截断却不明显（下发/停止按钮曾被切掉半个）。
-     内容确实放不下时，宁可让整页滚动，也不要卡片内部悄悄截断。 */
   min-height: 0;
+  min-width: 0;
 }
-/* 左列用 flex 纵向排布，读数槽才能 flex:1 撑满整列高 */
 .card-slaves  { grid-column: 1; display: flex; flex-direction: column; }
-/* 控制面板只在窗口过矮时才滚动（正常应放得下），作为兜底而非常态 */
 .card-control { grid-column: 2; overflow-y: auto; }
-.card-chart   { grid-column: 3; display: flex; flex-direction: column; min-width: 0; }
+.card-chart   { grid-column: 3; display: flex; flex-direction: column; }
 
+/* 卡片标题：大字重、宽字距、下方一道粗结构线 */
 .card-title {
   margin: 0 0 12px;
-  font-size: 16px;
-  color: var(--accent);
+  padding-bottom: 6px;
+  border-bottom: 2px solid var(--rule-hi);
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--fg);
   display: flex;
   align-items: baseline;
   gap: 10px;
 }
-.chart-note { font-size: 13px; color: var(--muted); font-weight: 400; }
+.chart-note {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.1em;
+  color: var(--dimmer);
+}
 
 /* ============ 从站列表 ============ */
-.slave-list { list-style: none; margin: 0 0 14px; padding: 0; }
+.slave-list { list-style: none; margin: 0 0 12px; padding: 0; }
 .slave-list li {
-  padding: 8px 12px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  margin-bottom: 6px;
+  padding: 7px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 0;
+  margin-bottom: 1px;
   cursor: pointer;
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+  letter-spacing: 0.06em;
 }
-.slave-list li:hover { background: #242831; }
-.slave-list li.active { border-color: var(--accent); color: var(--accent); font-weight: 700; }
-.slave-list li .sub { font-size: 13px; color: var(--muted); }
+.slave-list li:hover { background: #1B1F23; }
+.slave-list li.active {
+  border-color: var(--fg);
+  background: #1B1F23;
+  color: var(--fg);
+  font-weight: 700;
+}
+.slave-list li .sub { color: var(--dimmer); font-size: 10px; letter-spacing: 0.08em; }
 
-/* ============ 读数槽（内凹，与 Qt 端一致） ============ */
-/* flex:1 + space-evenly：左列现在是整列高，让三块读数槽均分剩余高度撑满，
-   否则数据都挤在顶部、下半截空着 */
+/* ============ 读数槽：内凹 + 极端字号尺度 ============ */
 .readouts {
   display: flex;
   flex-direction: column;
   justify-content: space-evenly;
   flex: 1;
-  gap: 10px;
-  margin-bottom: 14px;
+  gap: 8px;
+  margin-bottom: 12px;
 }
-.readout label { font-size: 14px; color: var(--dim); }
+.readout label {
+  display: block;
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--dim);
+  margin-bottom: 3px;
+}
 .readout .value {
   display: inline-block;
-  min-width: 150px;
+  min-width: 160px;
   text-align: right;
   background: var(--sunken);
-  border: 1px solid #1B1F2A;
-  border-bottom-color: #333C4E;   /* 槽底微亮线 */
-  border-radius: 5px;
-  padding: 4px 12px;
-  color: var(--accent);
+  border: 1px solid var(--rule);
+  border-radius: 0;
+  padding: 2px 10px;
+  color: var(--fg);              /* 白磷光：数据不用装饰色 */
   font-family: var(--mono);
-  font-size: 26px;
+  font-size: 34px;
   font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
 }
-.readout .unit { color: var(--dim); margin-left: 6px; font-size: 14px; }
+.readout .unit {
+  color: var(--dimmer);
+  margin-left: 8px;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
 
-/* ============ 遥测表 ============ */
+/* ============ 遥测表：细线分行 ============ */
 .telemetry {
   display: grid;
   grid-template-columns: auto 1fr;
-  gap: 2px 16px;
+  gap: 0;
   margin: 0;
-  font-size: 14px;
+  border-top: 1px solid var(--rule);
 }
-.telemetry dt { color: var(--dim); text-align: right; padding: 5px 0; border-bottom: 1px solid #232732; }
-.telemetry dd { margin: 0; padding: 5px 0; border-bottom: 1px solid #232732; }
+.telemetry dt {
+  color: var(--dim);
+  text-align: right;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--rule);
+}
+.telemetry dd {
+  margin: 0;
+  padding: 6px 0 6px 14px;
+  border-bottom: 1px solid var(--rule);
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  color: var(--fg);
+}
 .mono { font-family: var(--mono); }
 
+/* 状态灯：方角小方块（工业面板的指示灯就是方的），不用圆点 */
 .dot {
   display: inline-block;
-  width: 8px; height: 8px;
-  border-radius: 50%;
+  width: 8px;
+  height: 8px;
+  border-radius: 0;
   background: var(--dim);
-  margin-right: 7px;
+  margin-right: 8px;
   vertical-align: middle;
 }
-.dot.ok     { background: var(--ok);   box-shadow: 0 0 0 2px #14532D; }
-.dot.warn   { background: var(--warn); }
-.dot.fault  { background: var(--danger); }
-.dot.offline{ background: #4B5563; }
+.dot.ok      { background: var(--green); box-shadow: 0 0 6px rgba(74,246,38,0.6); }
+.dot.warn    { background: var(--amber); }
+.dot.fault   { background: var(--red); box-shadow: 0 0 6px rgba(230,25,25,0.7); }
+.dot.offline { background: var(--dimmer); }
 
 /* ============ 表单 ============ */
-.field { display: flex; align-items: center; gap: 10px; margin: 8px 0; }
-.field label { flex: 0 0 150px; text-align: right; color: var(--dim); font-size: 14px; }
+.field { display: flex; align-items: center; gap: 0; margin: 0; border-bottom: 1px solid var(--rule); }
+.field label {
+  flex: 0 0 150px;
+  text-align: right;
+  color: var(--dim);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 8px 10px 8px 0;
+}
 .field input, .field select {
   flex: 1;
-  background: var(--bg);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 5px;
+  background: var(--sunken);
+  color: var(--fg);
+  border: none;
+  border-left: 1px solid var(--rule);
+  border-radius: 0;
   padding: 8px 10px;
-  font-size: 15px;
-  font-family: inherit;
+  font-family: var(--mono);
+  font-size: 13px;
+  letter-spacing: 0.06em;
 }
-.field input:disabled, .field select:disabled { color: #646C7A; background: #1A1D24; }
-.field input:focus, .field select:focus { outline: none; border-color: var(--accent); }
+.field input:disabled, .field select:disabled { color: var(--dimmer); background: #101214; }
+.field input:focus, .field select:focus { outline: 1px solid var(--fg); outline-offset: -1px; }
 .field.hidden { display: none; }
 
-.check { display: flex; align-items: center; gap: 8px; margin: 12px 0; color: var(--muted); }
-.check input { width: 18px; height: 18px; accent-color: #0284C7; }
+.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0;
+  color: var(--dim);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.check input { width: 16px; height: 16px; accent-color: var(--red); }
 
-.section-title { font-size: 15px; color: var(--accent); margin: 16px 0 4px; }
+.section-title {
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--fg);
+  margin: 16px 0 0;
+  padding-bottom: 5px;
+  border-bottom: 2px solid var(--rule-hi);
+}
 
-.hint { min-height: 20px; font-size: 13px; color: var(--warn); margin-top: 8px; }
+.hint {
+  min-height: 18px;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--amber);
+  margin-top: 8px;
+}
 
-/* ============ 曲线 ============ */
-#chart { flex: 1; width: 100%; background: var(--bg); border-radius: 6px; }
+/* ============ 波形 ============ */
+#chart {
+  flex: 1;
+  width: 100%;
+  background: var(--sunken);
+  border: 1px solid var(--rule);
+  min-height: 0;
+}
 
 /* ============ 提示条 ============ */
 .toast {
   position: fixed;
-  bottom: 20px; left: 50%;
+  bottom: 16px;
+  left: 50%;
   transform: translateX(-50%);
-  background: #242831;
-  border: 1px solid var(--border-lit);
-  border-radius: 6px;
-  padding: 10px 20px;
-  font-size: 14px;
-  z-index: 10;
+  background: var(--panel);
+  border: 1px solid var(--fg);
+  border-radius: 0;
+  padding: 9px 18px;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  z-index: 10000;   /* 必须高于扫描线遮罩 */
 }
