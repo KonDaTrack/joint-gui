@@ -89,10 +89,12 @@ body {
 .btn-row .btn { flex: 1; }
 
 /* ============ 布局 ============ */
+/* 三列单行：从站 / 控制 / 波形。
+   波形放最右整列——它是试验台的主视觉，且原先放第二行时第三列整片空着。
+   列宽给控制面板留够（表单 150px 标签 + 字段），再窄会被挤压。 */
 .layout {
   display: grid;
-  grid-template-columns: 320px 380px 1fr;
-  grid-template-rows: 1fr 260px;
+  grid-template-columns: 340px 440px minmax(0, 1fr);
   gap: 12px;
   padding: 12px;
   height: calc(100vh - 54px);
@@ -103,11 +105,15 @@ body {
   border-top-color: var(--border-lit);   /* 顶部受光边，同 Qt 端 */
   border-radius: 8px;
   padding: 14px;
-  overflow: auto;
+  /* 不加 overflow:auto——会让内容被截断却不明显（下发/停止按钮曾被切掉半个）。
+     内容确实放不下时，宁可让整页滚动，也不要卡片内部悄悄截断。 */
+  min-height: 0;
 }
-.card-slaves  { grid-column: 1; grid-row: 1; }
-.card-control { grid-column: 2; grid-row: 1; }
-.card-chart   { grid-column: 1 / 4; grid-row: 2; display: flex; flex-direction: column; }
+/* 左列用 flex 纵向排布，读数槽才能 flex:1 撑满整列高 */
+.card-slaves  { grid-column: 1; display: flex; flex-direction: column; }
+/* 控制面板只在窗口过矮时才滚动（正常应放得下），作为兜底而非常态 */
+.card-control { grid-column: 2; overflow-y: auto; }
+.card-chart   { grid-column: 3; display: flex; flex-direction: column; min-width: 0; }
 
 .card-title {
   margin: 0 0 12px;
@@ -136,7 +142,16 @@ body {
 .slave-list li .sub { font-size: 13px; color: var(--muted); }
 
 /* ============ 读数槽（内凹，与 Qt 端一致） ============ */
-.readouts { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
+/* flex:1 + space-evenly：左列现在是整列高，让三块读数槽均分剩余高度撑满，
+   否则数据都挤在顶部、下半截空着 */
+.readouts {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-evenly;
+  flex: 1;
+  gap: 10px;
+  margin-bottom: 14px;
+}
 .readout label { font-size: 14px; color: var(--dim); }
 .readout .value {
   display: inline-block;
