@@ -8,20 +8,6 @@
 </head>
 <body>
 
-<!-- ============ 顶栏：连接 / 总线 / 控制权 ============ -->
-<header class="topbar">
-  <div class="brand">关节模组 · 上位机</div>
-
-  <!-- 总线类型必须醒目：仿真数据与真机数据长得一样，误判代价很大 -->
-  <div id="busBadge" class="badge badge-idle">未连接</div>
-
-  <div class="spacer"></div>
-
-  <div id="ownerBadge" class="badge badge-local">控制权：本机</div>
-  <button id="btnTakeControl" class="btn btn-primary" disabled>请求控制权</button>
-  <button id="btnReleaseControl" class="btn" hidden>交还控制权</button>
-</header>
-
 <main class="layout">
 
   <!-- ============ 左：从站与实时读数 ============ -->
@@ -30,6 +16,12 @@
     <div class="card-core">
     <h2 class="card-title card-title-inline">[ 在线从站 ]</h2>
     <ul id="slaveList" class="slave-list"></ul>
+    <div class="spacer"></div>
+    <!-- 总线状态 / 控制权 / 请求按钮：并到同一行，省掉一整条顶栏 -->
+    <div id="busBadge" class="badge badge-idle">未连接</div>
+    <div id="ownerBadge" class="badge badge-local">控制权：本机</div>
+    <button id="btnTakeControl" class="btn btn-primary" disabled>请求控制权</button>
+    <button id="btnReleaseControl" class="btn" hidden>交还控制权</button>
     </div>
   </section>
 

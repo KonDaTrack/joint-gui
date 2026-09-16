@@ -20,7 +20,7 @@ const Anim = {
     gsap.from('.layout > .card', {
       opacity: 0, y: 18, duration: 0.7, ease: 'expo.out', stagger: 0.09,
     });
-    gsap.from('.topbar', { opacity: 0, y: -12, duration: 0.6, ease: 'expo.out' });
+    gsap.from('.card-rack', { opacity: 0, y: -10, duration: 0.6, ease: 'expo.out' });
   },
 
   /** 切换从站：读数区做一次短促的刷新过渡（动画作用在容器上，不碰数字本身） */

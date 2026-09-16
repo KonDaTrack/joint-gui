@@ -87,29 +87,6 @@ body::after {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
-/* ============ 顶栏：悬浮玻璃条（技能签名手法，不用贴边死条） ============ */
-.topbar {
-  position: relative;
-  z-index: 2;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin: 14px 14px 0;
-  padding: 0 18px;
-  height: 56px;
-  border-radius: 18px;
-  background: rgba(255,255,255,0.045);
-  border: 1px solid var(--hair);
-  backdrop-filter: blur(20px);
-  box-shadow: 0 18px 36px -22px rgba(0,0,0,0.95),
-              inset 0 1px 0 rgba(255,255,255,0.07);
-}
-.brand {
-  font-weight: 700;
-  font-size: 15px;
-  letter-spacing: 0.02em;
-}
-.spacer { flex: 1; }
 
 /* 徽章：药丸形 + 微光边（技能要求状态标签为 pill + 极小号宽字距） */
 .badge {
@@ -132,6 +109,8 @@ body::after {
 .badge-local  { color: var(--dim); }
 .badge-remote { color: var(--warn);   border-color: rgba(245,165,36,0.4);
                 background: rgba(245,165,36,0.08); }
+
+.spacer { flex: 1; }   /* 通栏里把从站列表与右侧状态区分开 */
 
 /* ============ 按钮：药丸形 + 顶部内高光 + 悬浮微抬升 ============ */
 .btn {
@@ -238,7 +217,7 @@ body::after {
   grid-template-rows: auto minmax(0, 3fr) minmax(0, 2fr);
   gap: 12px;
   padding: 12px;
-  height: calc(100vh - 80px);
+  height: 100vh;   /* 顶栏已并入通栏，布局直接吃满整屏 */
 }
 
 /* ============ 卡片：Double-Bezel 双层嵌套（技能核心手法） ============ */
@@ -376,7 +355,17 @@ body::after {
   gap: 10px;
 }
 /* 通栏卡：标题与从站列表并排，整条只有一行高 */
-.card-rack .card-core { flex-direction: row; align-items: center; gap: 16px; padding: 10px 16px; }
+.card-rack .card-core {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+}
+/* 通栏是悬浮玻璃条（原来是独立顶栏承担这个角色） */
+.card-rack {
+  background: rgba(255,255,255,0.045);
+  backdrop-filter: blur(20px);
+}
 .card-title-inline {
   margin: 0;
   padding: 0 16px 0 0;
