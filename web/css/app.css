@@ -14,11 +14,13 @@
 @font-face { font-family: 'JetBrains Mono'; src: url('../fonts/jbmono-700.woff2') format('woff2'); font-weight: 700; font-display: swap; }
 
 :root {
-  --bg:        #04070C;
-  --core:      rgba(10, 20, 33, 0.62);   /* 玻璃芯 */
-  --sunken:    rgba(2, 6, 12, 0.85);     /* 凹陷槽 */
-  --hair:      rgba(90, 190, 235, 0.16); /* 微光发丝线 */
-  --hair-lit:  rgba(110, 215, 255, 0.42);
+  /* 亚光炭黑基底：中性、不透明、无玻璃模糊。
+     原来的蓝黑 + backdrop-blur 是"亮面"质感，与亚光正相反。 */
+  --bg:        #0B0D10;
+  --core:      #15181D;                  /* 哑光面（不透明） */
+  --sunken:    #0A0C0F;                  /* 凹陷槽 */
+  --hair:      rgba(255, 255, 255, 0.09);   /* 中性发丝线，不带青 */
+  --hair-lit:  rgba(255, 255, 255, 0.20);
 
   --fg:        #E6F3FA;
   --dim:       #7E93A6;
@@ -55,13 +57,9 @@ body::before {
   inset: 0;
   pointer-events: none;
   z-index: 0;
+  /* 亚光底：不放网格、不放强光晕——只在顶部给一道极淡的冷色环境光 */
   background-image:
-    linear-gradient(rgba(56,225,255,0.030) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(56,225,255,0.030) 1px, transparent 1px),
-    radial-gradient(60% 50% at 8% -6%,  rgba(56,225,255,0.13), transparent 65%),
-    radial-gradient(50% 45% at 96% 2%,  rgba(90,120,255,0.12), transparent 65%),
-    radial-gradient(70% 50% at 50% 110%, rgba(0,180,220,0.10), transparent 70%);
-  background-size: 44px 44px, 44px 44px, 100% 100%, 100% 100%, 100% 100%;
+    radial-gradient(80% 50% at 50% -10%, rgba(120, 190, 225, 0.055), transparent 70%);
 }
 
 /* 极淡颗粒：给纯数字画面一点物理质感（不闪烁、不滚动） */
@@ -96,11 +94,11 @@ body::after {
   padding: 1px;
   min-height: 0;
   min-width: 0;
-  backdrop-filter: blur(16px);
+  /* 亚光：不透明、无 backdrop-blur（模糊=亮面）、无青色外发光，
+     只用一道柔和黑投影把面板从底色里托起来 */
   box-shadow:
-    inset 0 1px 0 rgba(140, 220, 255, 0.10),
-    0 0 26px -8px rgba(56, 225, 255, 0.20),
-    0 22px 48px -26px rgba(0, 0, 0, 0.98);
+    inset 0 1px 0 rgba(255, 255, 255, 0.045),
+    0 18px 40px -26px rgba(0, 0, 0, 0.95);
 }
 
 /* 四角 L 形标记——HUD 面板的典型特征，成本极低但"仪器感"很强 */
@@ -155,7 +153,7 @@ body::after {
   letter-spacing: 0.2em;
   text-transform: uppercase;
   color: var(--cyan);
-  text-shadow: 0 0 14px rgba(56, 225, 255, 0.5);
+  text-shadow: none;   /* 亚光：标题不加发光，靠颜色与字距区分 */
   position: relative;
   display: flex;
   align-items: baseline;
@@ -321,9 +319,9 @@ body::after {
 .slave-list li:hover { transform: translateY(-1px); border-color: var(--hair-lit);
                        background: rgba(56,225,255,0.10); }
 .slave-list li.active {
-  background: linear-gradient(180deg, rgba(56,225,255,0.24), rgba(56,225,255,0.08));
-  border-color: var(--cyan);
-  box-shadow: inset 0 1px 0 rgba(180,240,255,0.2), 0 0 22px -6px rgba(56,225,255,0.9);
+  background: rgba(56, 225, 255, 0.13);
+  border-color: rgba(56, 225, 255, 0.6);
+  box-shadow: inset 0 1px 0 rgba(180, 240, 255, 0.14);
   font-weight: 600;
 }
 .slave-list li .sub { color: var(--dimmer); font-size: 11px; }
@@ -377,7 +375,7 @@ body::after {
   min-width: 0;
   text-align: right;
   background: linear-gradient(180deg, rgba(0, 10, 20, 0.95), rgba(0, 20, 34, 0.80));
-  border: 1px solid rgba(56, 225, 255, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 10px;
   padding: 3px 12px;
   color: var(--cyan);
@@ -387,11 +385,11 @@ body::after {
   line-height: 1.25;
   letter-spacing: -0.015em;
   /* 内阴影=凹陷，外发光=数值自身在发光 */
+  /* 亚光处理：槽体只做凹陷，不外发光；光只留在**数字本身** */
   box-shadow:
     inset 0 2px 10px rgba(0, 0, 0, 0.95),
-    inset 0 -1px 0 rgba(120, 225, 255, 0.14),
-    0 0 18px -6px rgba(56, 225, 255, 0.6);
-  text-shadow: 0 0 16px rgba(56, 225, 255, 0.75);
+    inset 0 -1px 0 rgba(255, 255, 255, 0.05);
+  text-shadow: 0 0 14px rgba(56, 225, 255, 0.55);
   /* 槽内极淡横向扫描纹——纯装饰，**不放任何假数据流**
      （控制界面上编造数据会被当真数据读，装饰只能做无信息量的纹理） */
   background-image: repeating-linear-gradient(
