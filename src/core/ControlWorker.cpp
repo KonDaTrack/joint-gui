@@ -1,8 +1,26 @@
 #include "core/ControlWorker.h"
 #include "device/DeviceFactory.h"
 #include <QDateTime>
+#include <QDebug>
 #include <QJsonObject>
 #include <QNetworkInterface>
+
+// 诊断：SDK 调用失败时会阻塞调用线程（实测约 2 秒/次），把同线程上的
+// 心跳与遥测饿死。凡是超过该阈值的操作都打日志，用来定位到底是哪一次调用。
+// 排查完可删。
+static const qint64 kSlowOpWarnMs = 150;
+static void warnIfSlow(const char* what, qint64 ms)
+{
+    if (ms > kSlowOpWarnMs)
+        qDebug("[slow] %s 耗时 %lld ms（阻塞了心跳/遥测所在的线程）", what, ms);
+}
+// RAII 计时：在函数任意 return 路径都会结算
+struct OpTimer {
+    const char* what;
+    qint64 t0;
+    explicit OpTimer(const char* w) : what(w), t0(QDateTime::currentMSecsSinceEpoch()) {}
+    ~OpTimer() { warnIfSlow(what, QDateTime::currentMSecsSinceEpoch() - t0); }
+};
 
 // 远程心跳超时（毫秒）。PC 端 200ms 一次。
 //
@@ -122,6 +140,7 @@ void ControlWorker::disconnectDevice()
 
 void ControlWorker::onCycle()
 {
+    OpTimer _t("onCycle");
     if (!device_ || !connected_) return;
 
     QList<Joint::Telemetry> list;
@@ -205,6 +224,7 @@ void ControlWorker::disableAllAxes()
 
 void ControlWorker::grantRemote(const QString& reason)
 {
+    OpTimer _t("grantRemote");
     if (owner_ == ControlOwner::Remote) return;
     owner_ = ControlOwner::Remote;
     lastHeartbeatMs_ = QDateTime::currentMSecsSinceEpoch();
@@ -214,6 +234,7 @@ void ControlWorker::grantRemote(const QString& reason)
 
 void ControlWorker::revokeRemote(const QString& reason)
 {
+    OpTimer _t("revokeRemote");
     if (owner_ != ControlOwner::Remote) return;
     owner_ = ControlOwner::Local;
     disableAllAxes();   // 规则 2：切换即失能
@@ -321,6 +342,7 @@ void ControlWorker::doSelectSlave(quint16 address)
 
 void ControlWorker::doEnable()
 {
+    OpTimer _t("doEnable");
     if (!device_) return;
     if (!device_->enable(activeSlave_)) {
         // 如实反馈：驱动器可能停在「禁止合闸」不接受控制字（STO/硬件使能未给、
@@ -332,30 +354,36 @@ void ControlWorker::doEnable()
 }
 void ControlWorker::doDisable()
 {
+    OpTimer _t("doDisable");
     if (device_) device_->disable(activeSlave_);
     emit motionStopped();
 }
 void ControlWorker::doQuickStop()
 {
+    OpTimer _t("doQuickStop");
     if (device_) device_->quickStop(activeSlave_);
     emit motionStopped();
 }
 void ControlWorker::doFaultReset()
 {
+    OpTimer _t("doFaultReset");
     if (device_) device_->faultReset(activeSlave_);
 }
 void ControlWorker::doSetMode(Joint::OperateMode mode)
 {
+    OpTimer _t("doSetMode");
     if (device_) device_->setOperateMode(activeSlave_, mode);
 }
 void ControlWorker::doSetTarget(const Joint::TargetCommand& cmd)
 {
+    OpTimer _t("doSetTarget");
     if (!device_) return;
     device_->setTarget(activeSlave_, cmd);
     emit targetCommanded();   // 波形记录由 worker 统一触发，本地/远程两条路都覆盖
 }
 void ControlWorker::doHoming()
 {
+    OpTimer _t("doHoming");
     if (!device_ || !connected_) return;
     emit detectionMessage(QStringLiteral("归航中，请稍候..."));
     // 归航是阻塞操作：期间暂停看门狗（lastTelemetryMs_ 归零复位），结束后恢复，
@@ -367,6 +395,7 @@ void ControlWorker::doHoming()
 }
 void ControlWorker::doMoveToZero()
 {
+    OpTimer _t("doMoveToZero");
     if (!device_ || !connected_) return;
     lastTelemetryMs_ = QDateTime::currentMSecsSinceEpoch();
     const bool ok = device_->moveToZero(activeSlave_);
