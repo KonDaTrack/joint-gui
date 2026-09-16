@@ -1,0 +1,220 @@
+/* 配色沿用 Qt 端（src/main.cpp 的 QSS），让两套界面看起来是同一个产品：
+   背景 #16181D / 卡片 #1E2128 / 边框 #2B313E / 主文字 #E2E8F0 / 次文字 #94A3B8
+   强调 #38BDF8 / 正常 #34D399 / 警示 #F59E0B / 危险 #F87171 */
+
+:root {
+  --bg: #16181D;
+  --card: #1E2128;
+  --sunken: #111317;
+  --border: #2B313E;
+  --border-lit: #3E4656;
+  --text: #E2E8F0;
+  --muted: #94A3B8;
+  --dim: #64748B;
+  --accent: #38BDF8;
+  --ok: #34D399;
+  --warn: #F59E0B;
+  --danger: #F87171;
+  --mono: "JetBrains Mono", "DejaVu Sans Mono", Consolas, monospace;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Noto Sans CJK SC", "Source Han Sans SC", "WenQuanYi Micro Hei",
+               "Microsoft YaHei", system-ui, sans-serif;
+  font-size: 15px;
+}
+
+/* ============ 顶栏 ============ */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.brand { font-weight: 700; letter-spacing: .5px; }
+.spacer { flex: 1; }
+
+.badge {
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-weight: 600;
+  font-size: 14px;
+}
+.badge-idle  { color: var(--dim); }
+.badge-real  { color: var(--ok);    border-color: #14532D; background: #0F2419; }
+/* 仿真必须一眼可辨：数据长得和真机一样，只是假的 */
+.badge-sim   { color: var(--warn);  border-color: #78350F; background: #2A1D0B; }
+.badge-local { color: var(--ok); }
+.badge-remote{ color: var(--warn);  border-color: #78350F; background: #2A1D0B; }
+
+/* ============ 按钮 ============ */
+.btn {
+  background: #262A34;
+  color: var(--text);
+  border: 1px solid #373D4B;
+  border-radius: 6px;
+  padding: 8px 14px;
+  font-size: 15px;
+  font-family: inherit;
+  cursor: pointer;
+}
+.btn:hover:not(:disabled) { background: #2B303C; border-color: var(--accent); }
+.btn:active:not(:disabled) { background: #1A1D24; }
+.btn:disabled { color: #646C7A; background: #1A1D24; border-color: #262A34; cursor: not-allowed; }
+
+.btn-primary { background: #0284C7; border-color: #0284C7; color: #fff; font-weight: 700; }
+.btn-primary:hover:not(:disabled) { background: #0369A1; border-color: var(--accent); }
+.btn-primary:disabled { background: #1A1D24; color: #646C7A; border-color: #262A34; }
+
+.btn-estop {
+  width: 100%;
+  background: #DC2626;
+  border-color: #DC2626;
+  color: #fff;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  padding: 16px;
+}
+.btn-estop:hover { background: #EF4444; }
+
+.btn-row { display: flex; gap: 8px; margin: 10px 0; }
+.btn-row .btn { flex: 1; }
+
+/* ============ 布局 ============ */
+.layout {
+  display: grid;
+  grid-template-columns: 320px 380px 1fr;
+  grid-template-rows: 1fr 260px;
+  gap: 12px;
+  padding: 12px;
+  height: calc(100vh - 54px);
+}
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-top-color: var(--border-lit);   /* 顶部受光边，同 Qt 端 */
+  border-radius: 8px;
+  padding: 14px;
+  overflow: auto;
+}
+.card-slaves  { grid-column: 1; grid-row: 1; }
+.card-control { grid-column: 2; grid-row: 1; }
+.card-chart   { grid-column: 1 / 4; grid-row: 2; display: flex; flex-direction: column; }
+
+.card-title {
+  margin: 0 0 12px;
+  font-size: 16px;
+  color: var(--accent);
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.chart-note { font-size: 13px; color: var(--muted); font-weight: 400; }
+
+/* ============ 从站列表 ============ */
+.slave-list { list-style: none; margin: 0 0 14px; padding: 0; }
+.slave-list li {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-bottom: 6px;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.slave-list li:hover { background: #242831; }
+.slave-list li.active { border-color: var(--accent); color: var(--accent); font-weight: 700; }
+.slave-list li .sub { font-size: 13px; color: var(--muted); }
+
+/* ============ 读数槽（内凹，与 Qt 端一致） ============ */
+.readouts { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
+.readout label { font-size: 14px; color: var(--dim); }
+.readout .value {
+  display: inline-block;
+  min-width: 150px;
+  text-align: right;
+  background: var(--sunken);
+  border: 1px solid #1B1F2A;
+  border-bottom-color: #333C4E;   /* 槽底微亮线 */
+  border-radius: 5px;
+  padding: 4px 12px;
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 26px;
+  font-weight: 700;
+}
+.readout .unit { color: var(--dim); margin-left: 6px; font-size: 14px; }
+
+/* ============ 遥测表 ============ */
+.telemetry {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 16px;
+  margin: 0;
+  font-size: 14px;
+}
+.telemetry dt { color: var(--dim); text-align: right; padding: 5px 0; border-bottom: 1px solid #232732; }
+.telemetry dd { margin: 0; padding: 5px 0; border-bottom: 1px solid #232732; }
+.mono { font-family: var(--mono); }
+
+.dot {
+  display: inline-block;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--dim);
+  margin-right: 7px;
+  vertical-align: middle;
+}
+.dot.ok     { background: var(--ok);   box-shadow: 0 0 0 2px #14532D; }
+.dot.warn   { background: var(--warn); }
+.dot.fault  { background: var(--danger); }
+.dot.offline{ background: #4B5563; }
+
+/* ============ 表单 ============ */
+.field { display: flex; align-items: center; gap: 10px; margin: 8px 0; }
+.field label { flex: 0 0 150px; text-align: right; color: var(--dim); font-size: 14px; }
+.field input, .field select {
+  flex: 1;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 8px 10px;
+  font-size: 15px;
+  font-family: inherit;
+}
+.field input:disabled, .field select:disabled { color: #646C7A; background: #1A1D24; }
+.field input:focus, .field select:focus { outline: none; border-color: var(--accent); }
+.field.hidden { display: none; }
+
+.check { display: flex; align-items: center; gap: 8px; margin: 12px 0; color: var(--muted); }
+.check input { width: 18px; height: 18px; accent-color: #0284C7; }
+
+.section-title { font-size: 15px; color: var(--accent); margin: 16px 0 4px; }
+
+.hint { min-height: 20px; font-size: 13px; color: var(--warn); margin-top: 8px; }
+
+/* ============ 曲线 ============ */
+#chart { flex: 1; width: 100%; background: var(--bg); border-radius: 6px; }
+
+/* ============ 提示条 ============ */
+.toast {
+  position: fixed;
+  bottom: 20px; left: 50%;
+  transform: translateX(-50%);
+  background: #242831;
+  border: 1px solid var(--border-lit);
+  border-radius: 6px;
+  padding: 10px 20px;
+  font-size: 14px;
+  z-index: 10;
+}
