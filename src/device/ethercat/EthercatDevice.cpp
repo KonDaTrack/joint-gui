@@ -205,14 +205,10 @@ bool EthercatDevice::enable(quint16 slave)
             eth_setTargetPosition(slave, pos);
     }
 
-    // 非轮廓类模式仍走 SDK 的 eth_enable（本项目 GUI 只用 PP/PV/PT，实际不会走到）
-    if (m != Joint::OperateMode::ProfilePosition
-        && m != Joint::OperateMode::ProfileVelocity
-        && m != Joint::OperateMode::ProfileTorque) {
-        return eth_enable(slave) == ETH_SUCCESS;
-    }
-
-    // 轮廓类模式按官方例程的控制字序列使能：0x06 → 0x07 → 0x0F。
+    // CiA402 的使能序列与操作模式无关，所以**所有模式统一走下面这条有界路径**，
+    // 不再对"非轮廓模式"单独调用 eth_enable（那条路同样无界阻塞）。
+    //
+    // 控制字序列：0x06 → 0x07 → 0x0F。
     //
     // **不用 eth_setControlWord**：它内部会等状态迁移，失败时阻塞调用线程约 2 秒。
     // 连续使能失败（驱动器停在「禁止合闸」不接受控制字）时，工作线程会被反复占死，
@@ -235,12 +231,22 @@ bool EthercatDevice::enable(quint16 slave)
     writeCw(0x0F);                                   // Enable Op     → 运行使能
     return waitDriveState(slave, 0x27, 300);
 }
-bool EthercatDevice::disable(quint16 slave) { return eth_disable(slave) == ETH_SUCCESS; }
+// 失能：用**有界 SDO 写控制字 0x0000**（CiA402 Operation Enabled → Switch On Disabled），
+// 不用 eth_disable —— 后者内部等状态迁移，驱动器不配合时阻塞调用线程约 6 秒（实测）。
+//
+// 这一条曾经把远程控制权彻底搞坏：grant/revoke 都要失能所有轴，
+// 而它们阻塞的 6 秒里，同线程的心跳处理不到 → 心跳被判超时 → 又触发 revoke
+// → 再失能再阻塞，形成循环。控制权切换恰恰依赖心跳，切换本身却饿死了心跳。
+bool EthercatDevice::disable(quint16 slave)
+{
+    huint16 cw = 0x0000;
+    return eth_writeSDO(slave, 0x6040, 0x00, &cw, eth_DataType_uint16, 100) == ETH_SUCCESS;
+}
 bool EthercatDevice::faultReset(quint16 slave)
 {
-    if (eth_faultReset(slave) == ETH_SUCCESS) return true;
-    // 手册推荐：控制字 bit7 上升沿复位（0x0F→0x8F→0x0F）。
-    // 用 SDO 直写 0x6040，绕过 eth_setControlWord 在故障态的状态等待。
+    // 直接用 SDO 写控制字 bit7 上升沿复位（0x0F→0x8F→0x0F），手册推荐的做法。
+    // **不先调 eth_faultReset**：它内部同样等状态迁移，故障态下大概率等不到，
+    // 白阻塞 6 秒；而 SDO 这条路径实测有效（故障确实被清掉了）。
     huint16 cw = 0x0F;
     eth_writeSDO(slave, 0x6040, 0, &cw, eth_DataType_uint16, 200);
     std::this_thread::sleep_for(std::chrono::milliseconds(20));
@@ -251,6 +257,11 @@ bool EthercatDevice::faultReset(quint16 slave)
     eth_writeSDO(slave, 0x6040, 0, &cw, eth_DataType_uint16, 200);
     return true;
 }
+// 急停/快速停机。⚠️ 唯一仍走 SDK 无界调用的路径：
+// eth_quickStop 内部等状态迁移，驱动器不配合时会阻塞约 6 秒、同样会饿死心跳。
+// **暂不改写**——CiA402 的快速停机控制字是 0x02，但改错会让安全路径失效，
+// 必须先在硬件上验证"写 0x02 确实等于 eth_quickStop 的行为"再动。
+// 正常情况（驱动器响应正常）此调用很快，不影响使用。
 bool EthercatDevice::quickStop(quint16 slave)  { return eth_quickStop(slave) == ETH_SUCCESS; }
 
 bool EthercatDevice::setOperateMode(quint16 slave, Joint::OperateMode mode)
