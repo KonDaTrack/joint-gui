@@ -6,6 +6,7 @@
 class MonitorPanel;
 class ControlPanel;
 class CurvePanel;
+class ControlServer;
 
 class MainWindow : public QMainWindow
 {
@@ -20,8 +21,10 @@ private slots:
     void onFaultDetected(QString message);
 
 private:
-    QThread thread_;
+    QThread thread_;        // 设备线程（SDK 调用都在这里）
+    QThread serverThread_;  // 网络线程（与设备/UI 隔离，服务端问题不得影响控制）
     ControlWorker* worker_;
+    ControlServer* server_;
     MonitorPanel* monitor_;
     ControlPanel* control_;
     CurvePanel* curve_;

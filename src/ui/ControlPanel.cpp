@@ -23,6 +23,15 @@ ControlPanel::ControlPanel(QWidget* parent)
     targetLabel_->setStyleSheet(QStringLiteral("color: #38BDF8; font-weight: bold;"));
     refreshTargetLabel();
 
+    // 控制权显示 + 本地开关。仲裁权在本机：上位机只能"请求"，本地可随时收回
+    ownerLabel_ = new QLabel(this);
+    remoteCheck_ = new QCheckBox(QStringLiteral("允许上位机接管控制"), this);
+    remoteCheck_->setToolTip(QStringLiteral(
+        "勾选后，上位机可以请求接管控制权（接管时全部轴会先失能）。\n"
+        "取消勾选会立即收回控制权，并让所有轴失能。"));
+    connect(remoteCheck_, &QCheckBox::toggled, this, &ControlPanel::remoteAllowedChanged);
+    setControlOwner(QStringLiteral("local"));
+
     // 急停按钮：最显眼（全局 QSS #dangerButton 红色醒目样式）
     estopBtn_ = new QPushButton(QStringLiteral("急停 ESTOP"), this);
     estopBtn_->setObjectName(QStringLiteral("dangerButton"));
@@ -32,7 +41,6 @@ ControlPanel::ControlPanel(QWidget* parent)
     enableBtn_ = new QPushButton(QStringLiteral("使能"), this);
     enableBtn_->setObjectName(QStringLiteral("primaryButton"));
     enableBtn_->setEnabled(false);
-    connect(readyCheck_, &QCheckBox::toggled, enableBtn_, &QPushButton::setEnabled);
     connect(enableBtn_, &QPushButton::clicked, this, &ControlPanel::onEnableClicked);
 
     disableBtn_ = new QPushButton(QStringLiteral("失能"), this);
@@ -48,12 +56,12 @@ ControlPanel::ControlPanel(QWidget* parent)
     homeBtn_ = new QPushButton(QStringLiteral("归零"), this);
     homeBtn_->setEnabled(false);
     connect(homeBtn_, &QPushButton::clicked, this, &ControlPanel::homingRequested);
-    connect(readyCheck_, &QCheckBox::toggled, homeBtn_, &QPushButton::setEnabled);
+
 
     zeroBtn_ = new QPushButton(QStringLiteral("回0"), this);
     zeroBtn_->setEnabled(false);
     connect(zeroBtn_, &QPushButton::clicked, this, &ControlPanel::moveToZeroRequested);
-    connect(readyCheck_, &QCheckBox::toggled, zeroBtn_, &QPushButton::setEnabled);
+    connect(readyCheck_, &QCheckBox::toggled, this, &ControlPanel::updateCommandEnabled);
 
     modeCombo_ = new QComboBox(this);
     // 轮廓模式：驱动内部生成平滑轨迹，主站一发目标即可（对齐官方 PP/PV/PT 例程）
@@ -115,6 +123,8 @@ ControlPanel::ControlPanel(QWidget* parent)
     root->setContentsMargins(16, 16, 16, 16);
     root->setSpacing(10);
     root->addWidget(targetLabel_);
+    root->addWidget(ownerLabel_);
+    root->addWidget(remoteCheck_);
     root->addLayout(estopRow);
     root->addLayout(btnRow);
     root->addWidget(targetTitle);
@@ -201,6 +211,44 @@ void ControlPanel::setSlaveModels(const QStringList& shortNames)
     shorts_ = shortNames;
     refreshTargetLabel();   // 型号变了，显示跟着更新
 }
+
+// 命令类控件的可用性 = 本地持控制权 AND 已勾选安全确认。
+// 使能/归零/回0 两个条件都要满足，所以两处变更都调这里，避免互相覆盖。
+void ControlPanel::updateCommandEnabled()
+{
+    const bool local = (owner_ != QLatin1String("remote"));
+    const bool ready = readyCheck_ && readyCheck_->isChecked();
+    const bool en = local && ready;
+
+    if (enableBtn_) enableBtn_->setEnabled(en);
+    if (homeBtn_)   homeBtn_->setEnabled(en);
+    if (zeroBtn_)   zeroBtn_->setEnabled(en);
+    // 故障复位/模式/下发目标：只受控制权约束
+    if (faultResetBtn_) faultResetBtn_->setEnabled(local);
+    if (modeCombo_)     modeCombo_->setEnabled(local);
+    if (sendBtn_)       sendBtn_->setEnabled(local);
+    for (QLineEdit* e : {posEdit_, velEdit_, torEdit_, profVelEdit_,
+                         profAccEdit_, profDecEdit_, torSlopeEdit_}) {
+        if (e) e->setEnabled(local);
+    }
+    // 失能/停止运动/急停：安全类，任何时候都可用，不参与置灰
+}
+
+// 远程持有时禁用本地操作按钮。急停不在此列——安全命令任何时候都要能按。
+void ControlPanel::setControlOwner(const QString& owner)
+{
+    owner_ = owner;
+    const bool local = (owner != QLatin1String("remote"));
+    if (ownerLabel_) {
+        ownerLabel_->setText(local ? tr("▶ 控制权：本机（下位机）")
+                                   : tr("▶ 控制权：上位机（远程）"));
+        ownerLabel_->setStyleSheet(local
+            ? QStringLiteral("color: #34D399; font-weight: bold;")
+            : QStringLiteral("color: #F59E0B; font-weight: bold;"));
+    }
+    updateCommandEnabled();
+}
+
 
 void ControlPanel::setActiveSlave(quint16 address)
 {

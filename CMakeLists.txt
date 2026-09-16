@@ -45,6 +45,8 @@ add_executable(joint_gui
     src/device/sim/SimulatedDevice.h
     src/device/sim/JointModel.cpp
     src/device/sim/JointModel.h
+    src/core/ControlServer.cpp
+    src/core/ControlServer.h
     src/device/ethercat/EthercatDevice.cpp
     src/device/ethercat/EthercatDevice.h
     src/device/ethercat/JointModelTable.cpp

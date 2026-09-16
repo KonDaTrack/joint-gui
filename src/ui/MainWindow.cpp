@@ -3,12 +3,16 @@
 #include "ui/ControlPanel.h"
 #include "ui/CurvePanel.h"
 #include "ui/ConnectionDialog.h"
+#include "core/ControlServer.h"
 #include <QMessageBox>
 #include <QScrollArea>
 #include <QSplitter>
 #include <QStatusBar>
 #include <QTimer>
 #include <QVBoxLayout>
+
+// 上位机接入端口。P1 固定，后续可做成配置项。
+static const quint16 kRemotePort = 9002;
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
@@ -19,6 +23,14 @@ MainWindow::MainWindow(QWidget* parent)
     worker_ = new ControlWorker;
     worker_->moveToThread(&thread_);
     thread_.start();
+
+    // 上位机接入服务：跑在独立线程。端口占用/客户端异常都只影响远程功能，
+    // 本地控制不受任何影响（这是"下位机必须可靠"的前提）。
+    server_ = new ControlServer;
+    server_->moveToThread(&serverThread_);
+    serverThread_.start();
+    QMetaObject::invokeMethod(server_, "startServer", Qt::QueuedConnection,
+                              Q_ARG(quint16, kRemotePort));
 
     monitor_ = new MonitorPanel(this);
     control_ = new ControlPanel(this);
@@ -83,6 +95,36 @@ MainWindow::MainWindow(QWidget* parent)
         statusBar()->showMessage(QStringLiteral("控制目标已切换到 %1").arg(label), 5000);
     });
 
+    // ---- 上位机接入 / 控制权 ----
+    // 设备 → 服务（下行）
+    connect(worker_, &ControlWorker::telemetryUpdatedAll, server_, &ControlServer::onTelemetry);
+    connect(worker_, &ControlWorker::connectionChanged, server_, &ControlServer::onConnectionChanged);
+    connect(worker_, &ControlWorker::slavesDetected, server_, &ControlServer::onSlavesDetected);
+    connect(worker_, &ControlWorker::slaveModelsDetected, server_, &ControlServer::onSlaveModels);
+    connect(worker_, &ControlWorker::faultDetected, server_, &ControlServer::onFault);
+    // 服务 → 设备（上行）：控制权与命令
+    connect(server_, &ControlServer::requestControlReceived, worker_, &ControlWorker::requestRemoteControl);
+    connect(server_, &ControlServer::releaseControlReceived, worker_, &ControlWorker::releaseRemoteControl);
+    connect(server_, &ControlServer::heartbeatReceived, worker_, &ControlWorker::remoteHeartbeat);
+    connect(server_, &ControlServer::remoteCommandReceived, worker_, &ControlWorker::remoteCommand);
+    // 控制权状态：本地开关 → 设备；设备结果 → 界面 + 服务
+    connect(control_, &ControlPanel::remoteAllowedChanged, worker_, &ControlWorker::setRemoteAllowed);
+    connect(worker_, &ControlWorker::controlOwnerChanged, this,
+            [this](const QString& owner, const QString& reason) {
+                control_->setControlOwner(owner);
+                statusBar()->showMessage(
+                    owner == QLatin1String("remote")
+                        ? QStringLiteral("控制权已交给上位机：%1").arg(reason)
+                        : QStringLiteral("控制权在本机：%1").arg(reason), 6000);
+            });
+    connect(worker_, &ControlWorker::controlOwnerChanged, server_, &ControlServer::onControlOwnerChanged);
+    connect(worker_, &ControlWorker::remoteCommandRejected, this,
+            [this](const QString& name, const QString& reason) {
+                statusBar()->showMessage(QStringLiteral("上位机命令 %1 被拒：%2").arg(name, reason), 5000);
+            });
+    connect(server_, &ControlServer::serverLog, this,
+            [this](const QString& m) { statusBar()->showMessage(m, 5000); });
+
     connect(control_, &ControlPanel::enableRequested, worker_, &ControlWorker::enableRequested);
     connect(control_, &ControlPanel::disableRequested, worker_, &ControlWorker::disableRequested);
     connect(control_, &ControlPanel::quickStopRequested, worker_, &ControlWorker::quickStopRequested);
@@ -109,6 +151,17 @@ MainWindow::MainWindow(QWidget* parent)
 
 MainWindow::~MainWindow()
 {
+    if (server_) {
+        // 先关网络：在服务线程内关监听与连接，再退出线程
+        QMetaObject::invokeMethod(server_, "stopServer", Qt::BlockingQueuedConnection);
+        serverThread_.quit();
+        if (!serverThread_.wait(1000)) {
+            qWarning("Server thread did not stop within 1s; terminating");
+            serverThread_.terminate();
+            serverThread_.wait();
+        }
+        delete server_;
+    }
     if (worker_) {
         // 在 Worker 线程内安全关闭设备，再退出线程
         QMetaObject::invokeMethod(worker_, "disconnectDevice", Qt::BlockingQueuedConnection);
