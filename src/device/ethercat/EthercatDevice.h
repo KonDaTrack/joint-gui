@@ -41,6 +41,12 @@ private:
     // 操作模式按从站存：多关节时各轴可跑各的模式（全局一个值会互相覆盖）
     QHash<quint16, Joint::OperateMode> modeBySlave_;
     QHash<quint16, Joint::DeviceParams> paramsBySlave_;   // 每从站识别/读取的参数
+    // 控制字 0x6040 在 RxPDO 输出缓冲里的字节偏移（连接时读 0x1600 映射表算出）。
+    // -1 = 未在 PDO 里 / 读取失败 → 退回 eth_setControlWord。
+    // 为什么要直接写缓冲：0x6040 被映射进 RxPDO，主站每周期都发 PDO，
+    // 用 SDO 写会被立刻覆盖（实测使能失效）；而 eth_setControlWord 虽然写的是
+    // PDO，却会在状态不迁移时阻塞 6 秒。直接写缓冲两头都避开。
+    QHash<quint16, int> cwOffsetBySlave_;
     QHash<quint16, QString> modelNameBySlave_;            // 识别出的型号名（或"未识别(…)"）
     QHash<quint16, QString> modelShortBySlave_;           // 型号短名（70mm/90mm/110mm）
     QHash<quint16, bool> modelUnknownBySlave_;            // 型号未识别 → 用对话框手填值
@@ -55,6 +61,7 @@ private:
     QHash<quint16, double> lastCmdTorqueNm_;
     void readDeviceParams();
     Joint::OperateMode modeFor(quint16 slave) const;              // 该从站的操作模式
+    void writeControlWord(quint16 slave, quint16 word);           // 写 0x6040（走 PDO 缓冲，不阻塞）
     bool limitBlocksMotion(quint16 slave, double posDeg) const;   // 超限且朝外运动才拦
     Joint::DeviceParams paramsFor(quint16 slave) const;   // 有效参数或 cfg 回退
 };

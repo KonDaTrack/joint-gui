@@ -2,6 +2,7 @@
 // 用法: sudo LD_LIBRARY_PATH=<SDK>/lib ./odtorque <网卡名>   例: ./odtorque enx00e04c3a41c0
 #include "eu_ethercat.h"
 #include <cstdio>
+#include <initializer_list>
 
 static void dump(huint16 s, huint16 idx, huint8 sub, const char* name, eth_DataType dt)
 {
@@ -46,6 +47,31 @@ int main(int argc, char** argv)
         dumps(s, 0x607D, 2, "software MAX position");
         dumps(s, 0x607C, 0, "home offset");
         dumps(s, 0x607A, 0, "target position");
+        // ---- PDO 映射表：判断哪些对象是"每周期由 PDO 覆盖"的。
+        // 若 0x6040(控制字) 出现在 RxPDO 里，则用 SDO 写控制字会被下个周期覆盖回旧值，
+        // 使能/失能就必须走 PDO 路径（eth_setControlWord）而非 SDO。 ----
+        printf("  --- PDO 映射 ---\n");
+        for (huint16 base : {(huint16)0x1600, (huint16)0x1A00}) {
+            huint8 cnt = 0;
+            if (eth_readSDO(s, base, 0x00, &cnt, eth_DataType_uint8, 2000) != ETH_SUCCESS
+                || cnt == 0 || cnt > 16) {
+                printf("  0x%04X 无映射或读取失败\n", base);
+                continue;
+            }
+            printf("  0x%04X (%sPDO) 共 %d 项:",
+                   base, base == 0x1600 ? "Rx" : "Tx", cnt);
+            for (huint8 i = 1; i <= cnt; ++i) {
+                huint32 e = 0;
+                if (eth_readSDO(s, base, i, &e, eth_DataType_uint32, 2000) != ETH_SUCCESS)
+                    continue;
+                const huint16 idx = (e >> 16) & 0xFFFF;
+                const huint8  sub = (e >> 8) & 0xFF;
+                const huint8  bits = e & 0xFF;
+                printf(" 0x%04X:%02X/%d", idx, sub, bits);
+            }
+            printf("\n");
+        }
+
         // ---- 遥测快照（PDO 路径）。多从站时若两个从站的这些值完全相同，
         //      说明 SDK 的 PDO 遥测在多从站下串了（走 SDO 的对象索引不会串） ----
         hint32 tpos = 0, ttemp = 0;

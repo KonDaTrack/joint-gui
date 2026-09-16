@@ -4,6 +4,7 @@
 #include "eu_ethercat.h"
 #include <QDateTime>
 #include <cmath>
+#include <cstring>
 #include <thread>
 #include <chrono>
 
@@ -27,14 +28,25 @@ bool readSdoRetry(huint16 slave, huint16 index, huint8 sub, void* value,
     return false;
 }
 
-// 写控制字（0x6040）。**一律走 SDO + 100ms 超时，不用 eth_setControlWord**：
-// 后者内部会等状态字迁移到控制字隐含的状态，等不到就阻塞调用线程约 2 秒。
-// 本项目所有命令都在同一个工作线程上，一旦被反复阻塞，
-// 排队的心跳与遥测就处理不到 —— 实测表现为"远程心跳被误判超时、控制权被自动收回"。
-// 需要确认状态的地方（使能）自己轮询状态字，不依赖 SDK 的内部等待。
-void writeControlWord(huint16 slave, huint16 word)
+// 从 RxPDO 映射表(0x1600)算出 0x6040 控制字在输出缓冲里的字节偏移。
+// 返回 -1 表示未映射或读取失败。
+int computeControlWordOffset(huint16 slave)
 {
-    eth_writeSDO(slave, 0x6040, 0x00, &word, eth_DataType_uint16, 100);
+    huint8 cnt = 0;
+    if (eth_readSDO(slave, 0x1600, 0x00, &cnt, eth_DataType_uint8, 2000) != ETH_SUCCESS
+        || cnt == 0 || cnt > 16)
+        return -1;
+    int bitOff = 0;
+    for (huint8 i = 1; i <= cnt; ++i) {
+        huint32 e = 0;
+        if (eth_readSDO(slave, 0x1600, i, &e, eth_DataType_uint32, 2000) != ETH_SUCCESS)
+            return -1;
+        const huint16 idx = (e >> 16) & 0xFFFF;
+        const huint8 bits = e & 0xFF;
+        if (idx == 0x6040 && bits == 16) return bitOff / 8;
+        bitOff += bits;
+    }
+    return -1;
 }
 
 // 轮询状态字直到匹配（或超时）。替代 SDK 内部不可控的状态等待。
@@ -59,6 +71,7 @@ bool waitDriveState(huint16 slave, huint16 expect, int timeoutMs)
 void EthercatDevice::readDeviceParams()
 {
     paramsBySlave_.clear();     // 避免重连残留旧从站参数
+    cwOffsetBySlave_.clear();
     modelNameBySlave_.clear();
     modelShortBySlave_.clear();
     modelUnknownBySlave_.clear();
@@ -94,6 +107,8 @@ void EthercatDevice::readDeviceParams()
             modelNameBySlave_.insert(s, QStringLiteral("未识别(读 0x6076 失败)"));
         }
         paramsBySlave_.insert(s, p);
+        // 算出控制字在 RxPDO 输出缓冲里的偏移——写控制字要用（见 writeControlWord）
+        cwOffsetBySlave_.insert(s, computeControlWordOffset(s));
     }
 }
 
@@ -116,6 +131,23 @@ Joint::DeviceParams EthercatDevice::paramsFor(quint16 slave) const
 Joint::OperateMode EthercatDevice::modeFor(quint16 slave) const
 {
     return modeBySlave_.value(slave, Joint::OperateMode::ProfilePosition);
+}
+
+// 写控制字 0x6040。三条路径的取舍（都实测过）：
+//   1. SDO 写 0x6040 → **无效**：0x6040 被映射进 RxPDO，主站每周期发 PDO 会覆盖掉
+//   2. eth_setControlWord → 写的是 PDO，正确；但状态不迁移时**阻塞 6 秒**，饿死心跳
+//   3. **直接写 PDO 输出缓冲**（本函数采用）→ 走 PDO 不被覆盖，且不经过 SDK 状态等待
+// 缓冲偏移由连接时读 0x1600 映射表算出；算不出来才退回路径 2。
+void EthercatDevice::writeControlWord(quint16 slave, huint16 word)
+{
+    const int off = cwOffsetBySlave_.value(slave, -1);
+    huint8* buf = eth_getOutputsPtr(slave);
+    if (off >= 0 && buf) {
+        // memcpy 避免未对齐/别名问题
+        std::memcpy(buf + off, &word, sizeof(word));
+        return;
+    }
+    eth_setControlWord(slave, word);   // 兜底：偏移未知时只能走 SDK
 }
 
 // 给界面显示的型号文本。未识别时明确提示"用手填额定值"，
@@ -171,13 +203,13 @@ void EthercatDevice::close()
 {
     if (inited_) {
         // 多从站安全：断开前对全部从站尽力失能。
-        // 用带短超时的 SDO 写控制字 0x0000（解除使能）替代 eth_disable：
-        // eth_disable 内部走 SDK 默认超时，从站挂死时可能阻塞数秒 → 电机失控时间更长。
-        // 写失败（从站无响应）也继续释放网卡，由从站自身 EtherCAT 看门狗触发 Quick Stop。
+        // 不用 eth_disable —— 它内部等状态迁移，从站挂死时可阻塞约 6 秒。
+        // 用 writeControlWord 直接写 PDO 缓冲，既不阻塞又确实生效（见该函数注释）。
         const QList<quint16> slaves = slaveList();
         for (quint16 s : slaves) {
-            huint16 cw = 0x0000;   // CiA402 控制字：Operation Enabled → Switch On Disabled
-            eth_writeSDO(s, 0x6040, 0x00, &cw, eth_DataType_uint16, 200);
+            // 走 PDO 缓冲（writeControlWord）。**不能用 SDO 写**：0x6040 在 RxPDO 里，
+            // 主站每周期发的 PDO 会把 SDO 写值覆盖回去，失能实际不生效。
+            writeControlWord(s, 0x0000);   // Operation Enabled → Switch On Disabled
         }
         eth_freeDLL();
         inited_ = false;
@@ -188,6 +220,7 @@ void EthercatDevice::close()
         modelNameBySlave_.clear();
         modelShortBySlave_.clear();
         modelUnknownBySlave_.clear();
+        cwOffsetBySlave_.clear();
         modeBySlave_.clear();
     }
 }
@@ -221,9 +254,9 @@ bool EthercatDevice::enable(quint16 slave)
     if (eth_getStatusWord(slave, &sw) != ETH_SUCCESS) return false;
     if ((sw & 0x08) != 0) return false;      // bit3 = Fault：先复位故障再来
 
-    auto writeCw = [&](huint16 w) {
-        eth_writeSDO(slave, 0x6040, 0x00, &w, eth_DataType_uint16, 100);
-    };
+    // 走 writeControlWord（PDO 缓冲）。**不能用 SDO 写**：0x6040 在 RxPDO 里，
+    // 主站每周期发的 PDO 会把 SDO 写值覆盖回去，使能实际不生效（实测）。
+    auto writeCw = [&](huint16 w) { writeControlWord(slave, w); };
     writeCw(0x06);                                   // Shutdown      → 待合闸
     if (!waitDriveState(slave, 0x21, 300)) return false;
     writeCw(0x07);                                   // Switch On     → 已合闸
@@ -239,22 +272,21 @@ bool EthercatDevice::enable(quint16 slave)
 // → 再失能再阻塞，形成循环。控制权切换恰恰依赖心跳，切换本身却饿死了心跳。
 bool EthercatDevice::disable(quint16 slave)
 {
-    huint16 cw = 0x0000;
-    return eth_writeSDO(slave, 0x6040, 0x00, &cw, eth_DataType_uint16, 100) == ETH_SUCCESS;
+    writeControlWord(slave, 0x0000);   // 走 PDO 缓冲；SDO 写会被 RxPDO 覆盖
+    return true;
 }
 bool EthercatDevice::faultReset(quint16 slave)
 {
     // 直接用 SDO 写控制字 bit7 上升沿复位（0x0F→0x8F→0x0F），手册推荐的做法。
     // **不先调 eth_faultReset**：它内部同样等状态迁移，故障态下大概率等不到，
     // 白阻塞 6 秒；而 SDO 这条路径实测有效（故障确实被清掉了）。
-    huint16 cw = 0x0F;
-    eth_writeSDO(slave, 0x6040, 0, &cw, eth_DataType_uint16, 200);
+    // 同样必须走 PDO 缓冲：bit7 上升沿要真的被驱动器看到，
+    // SDO 写会被 RxPDO 覆盖，只能靠"写入与下个 PDO 周期之间的空隙"碰运气。
+    writeControlWord(slave, 0x0F);
     std::this_thread::sleep_for(std::chrono::milliseconds(20));
-    cw = 0x8F;
-    eth_writeSDO(slave, 0x6040, 0, &cw, eth_DataType_uint16, 200);
+    writeControlWord(slave, 0x8F);   // bit7 上升沿 = 故障复位
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
-    cw = 0x0F;
-    eth_writeSDO(slave, 0x6040, 0, &cw, eth_DataType_uint16, 200);
+    writeControlWord(slave, 0x0F);
     return true;
 }
 // 急停/快速停机。⚠️ 唯一仍走 SDK 无界调用的路径：
@@ -284,13 +316,13 @@ bool EthercatDevice::homing(quint16 slave)
 
     const Joint::OperateMode prev = modeFor(slave);   // 归航后恢复该从站原模式
     eth_setOperateMode(slave, eth_OperateMode_Homing);
-    writeControlWord(slave, 0x06);
+    writeControlWord(slave, 0x06);  // 成员函数（走 PDO 缓冲）
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
-    writeControlWord(slave, 0x07);
+    writeControlWord(slave, 0x07);  // 成员函数（走 PDO 缓冲）
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
-    writeControlWord(slave, 0x0F);
+    writeControlWord(slave, 0x0F);  // 成员函数（走 PDO 缓冲）
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
-    writeControlWord(slave, 0x0F | 0x10);   // 启动归航（bit4 上升沿，保持 bit0=1）
+    writeControlWord(slave, 0x0F | 0x10);  // 成员函数（走 PDO 缓冲）   // 启动归航（bit4 上升沿，保持 bit0=1）
 
     // 轮询等待归航完成，超时 10s
     const qint64 deadline = QDateTime::currentMSecsSinceEpoch() + 10000;
@@ -329,9 +361,9 @@ bool EthercatDevice::moveToZero(quint16 slave)
         30.0, p.encoderPulsesPerRev, p.gearRatio));
 
     eth_setTargetPosition(slave, 0);   // 0 度 = 归零后的零点的绝对脉冲位置
-    writeControlWord(slave, 0x0F | 0x20);        // 立即变更
+    writeControlWord(slave, 0x0F | 0x20);  // 成员函数（走 PDO 缓冲）        // 立即变更
     std::this_thread::sleep_for(std::chrono::milliseconds(20));
-    writeControlWord(slave, 0x0F | 0x20 | 0x10); // 新设定点上升沿
+    writeControlWord(slave, 0x0F | 0x20 | 0x10);  // 成员函数（走 PDO 缓冲） // 新设定点上升沿
     return true;
 }
 
