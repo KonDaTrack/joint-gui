@@ -26,6 +26,29 @@ bool readSdoRetry(huint16 slave, huint16 index, huint8 sub, void* value,
     }
     return false;
 }
+
+// 写控制字（0x6040）。**一律走 SDO + 100ms 超时，不用 eth_setControlWord**：
+// 后者内部会等状态字迁移到控制字隐含的状态，等不到就阻塞调用线程约 2 秒。
+// 本项目所有命令都在同一个工作线程上，一旦被反复阻塞，
+// 排队的心跳与遥测就处理不到 —— 实测表现为"远程心跳被误判超时、控制权被自动收回"。
+// 需要确认状态的地方（使能）自己轮询状态字，不依赖 SDK 的内部等待。
+void writeControlWord(huint16 slave, huint16 word)
+{
+    eth_writeSDO(slave, 0x6040, 0x00, &word, eth_DataType_uint16, 100);
+}
+
+// 轮询状态字直到匹配（或超时）。替代 SDK 内部不可控的状态等待。
+bool waitDriveState(huint16 slave, huint16 expect, int timeoutMs)
+{
+    const qint64 deadline = QDateTime::currentMSecsSinceEpoch() + timeoutMs;
+    while (QDateTime::currentMSecsSinceEpoch() < deadline) {
+        huint16 sw = 0;
+        if (eth_getStatusWord(slave, &sw) == ETH_SUCCESS && (sw & 0x6F) == expect)
+            return true;
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    return false;
+}
 } // namespace
 
 // 逐从站读取/识别设备参数。
@@ -169,6 +192,7 @@ void EthercatDevice::close()
     }
 }
 
+
 bool EthercatDevice::enable(quint16 slave)
 {
     const Joint::OperateMode m = modeFor(slave);
@@ -180,18 +204,36 @@ bool EthercatDevice::enable(quint16 slave)
         if (eth_getActualPosition(slave, &pos) == ETH_SUCCESS)
             eth_setTargetPosition(slave, pos);
     }
-    // 轮廓类模式按官方例程用控制字序列使能：0x06(Shutdown) → 0x07(Switch On) → 0x0F(Enable Operation)
-    if (m == Joint::OperateMode::ProfilePosition
-        || m == Joint::OperateMode::ProfileVelocity
-        || m == Joint::OperateMode::ProfileTorque) {
-        eth_setControlWord(slave, 0x06);
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
-        eth_setControlWord(slave, 0x07);
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
-        eth_setControlWord(slave, 0x0F);
-        return true;
+
+    // 非轮廓类模式仍走 SDK 的 eth_enable（本项目 GUI 只用 PP/PV/PT，实际不会走到）
+    if (m != Joint::OperateMode::ProfilePosition
+        && m != Joint::OperateMode::ProfileVelocity
+        && m != Joint::OperateMode::ProfileTorque) {
+        return eth_enable(slave) == ETH_SUCCESS;
     }
-    return eth_enable(slave) == ETH_SUCCESS;
+
+    // 轮廓类模式按官方例程的控制字序列使能：0x06 → 0x07 → 0x0F。
+    //
+    // **不用 eth_setControlWord**：它内部会等状态迁移，失败时阻塞调用线程约 2 秒。
+    // 连续使能失败（驱动器停在「禁止合闸」不接受控制字）时，工作线程会被反复占死，
+    // 同线程上排队的心跳/遥测处理不到 → 远程心跳被误判超时、控制权被自动收回。
+    // 改用「SDO 写控制字(100ms 超时) + 自己轮询状态字」，把最坏耗时压到 ~1s 且可控。
+    //
+    // 同时这里**如实返回结果**：以前无论成功与否都 return true，
+    // 导致界面以为使能成功、而驱动器其实一直拒绝。
+    huint16 sw = 0;
+    if (eth_getStatusWord(slave, &sw) != ETH_SUCCESS) return false;
+    if ((sw & 0x08) != 0) return false;      // bit3 = Fault：先复位故障再来
+
+    auto writeCw = [&](huint16 w) {
+        eth_writeSDO(slave, 0x6040, 0x00, &w, eth_DataType_uint16, 100);
+    };
+    writeCw(0x06);                                   // Shutdown      → 待合闸
+    if (!waitDriveState(slave, 0x21, 300)) return false;
+    writeCw(0x07);                                   // Switch On     → 已合闸
+    if (!waitDriveState(slave, 0x23, 300)) return false;
+    writeCw(0x0F);                                   // Enable Op     → 运行使能
+    return waitDriveState(slave, 0x27, 300);
 }
 bool EthercatDevice::disable(quint16 slave) { return eth_disable(slave) == ETH_SUCCESS; }
 bool EthercatDevice::faultReset(quint16 slave)
@@ -231,13 +273,13 @@ bool EthercatDevice::homing(quint16 slave)
 
     const Joint::OperateMode prev = modeFor(slave);   // 归航后恢复该从站原模式
     eth_setOperateMode(slave, eth_OperateMode_Homing);
-    eth_setControlWord(slave, 0x06);
+    writeControlWord(slave, 0x06);
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
-    eth_setControlWord(slave, 0x07);
+    writeControlWord(slave, 0x07);
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
-    eth_setControlWord(slave, 0x0F);
+    writeControlWord(slave, 0x0F);
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
-    eth_setControlWord(slave, 0x0F | 0x10);   // 启动归航（bit4 上升沿，保持 bit0=1）
+    writeControlWord(slave, 0x0F | 0x10);   // 启动归航（bit4 上升沿，保持 bit0=1）
 
     // 轮询等待归航完成，超时 10s
     const qint64 deadline = QDateTime::currentMSecsSinceEpoch() + 10000;
@@ -276,9 +318,9 @@ bool EthercatDevice::moveToZero(quint16 slave)
         30.0, p.encoderPulsesPerRev, p.gearRatio));
 
     eth_setTargetPosition(slave, 0);   // 0 度 = 归零后的零点的绝对脉冲位置
-    eth_setControlWord(slave, 0x0F | 0x20);        // 立即变更
+    writeControlWord(slave, 0x0F | 0x20);        // 立即变更
     std::this_thread::sleep_for(std::chrono::milliseconds(20));
-    eth_setControlWord(slave, 0x0F | 0x20 | 0x10); // 新设定点上升沿
+    writeControlWord(slave, 0x0F | 0x20 | 0x10); // 新设定点上升沿
     return true;
 }
 
@@ -321,17 +363,17 @@ bool EthercatDevice::setTarget(quint16 slave, const Joint::TargetCommand& cmd)
             eth_setTargetPosition(slave, (hint32)UnitConverter::degToPulses(
                 target, p.encoderPulsesPerRev, p.gearRatio));
             // 新设定点：控制字 bit5(立即变更) → bit4(新设定点) 上升沿
-            eth_setControlWord(slave, 0x0F | 0x20);
+            writeControlWord(slave, 0x0F | 0x20);
             std::this_thread::sleep_for(std::chrono::milliseconds(20));
-            eth_setControlWord(slave, 0x0F | 0x20 | 0x10);
+            writeControlWord(slave, 0x0F | 0x20 | 0x10);
         } else if (cmd.hasVelocity && cmd.velocityDps == 0.0) {
             // "停止运动"：目标置为当前实际位置并触发新设定点
             hint32 curPos = 0;
             if (eth_getActualPosition(slave, &curPos) == ETH_SUCCESS) {
                 eth_setTargetPosition(slave, curPos);
-                eth_setControlWord(slave, 0x0F | 0x20);
+                writeControlWord(slave, 0x0F | 0x20);
                 std::this_thread::sleep_for(std::chrono::milliseconds(20));
-                eth_setControlWord(slave, 0x0F | 0x20 | 0x10);
+                writeControlWord(slave, 0x0F | 0x20 | 0x10);
             }
         }
         return true;
@@ -346,7 +388,7 @@ bool EthercatDevice::setTarget(quint16 slave, const Joint::TargetCommand& cmd)
             eth_setTargetVelocity(slave, (hint32)UnitConverter::degToPulses(
                 cmd.velocityDps, p.encoderPulsesPerRev, p.gearRatio));
             lastCmdVelDps_[slave] = cmd.velocityDps;   // 供限位方向判断
-            eth_setControlWord(slave, 0x0F);
+            writeControlWord(slave, 0x0F);
         }
         return true;
     case Joint::OperateMode::ProfileTorque:
@@ -356,11 +398,11 @@ bool EthercatDevice::setTarget(quint16 slave, const Joint::TargetCommand& cmd)
             eth_setTargetTorque(slave, (hint32)UnitConverter::nmToPermille(
                 cmd.torqueNm, p.ratedTorqueNm));
             lastCmdTorqueNm_[slave] = cmd.torqueNm;   // 供限位方向判断
-            eth_setControlWord(slave, 0x0F);
+            writeControlWord(slave, 0x0F);
         } else if (cmd.hasVelocity && cmd.velocityDps == 0.0) {
             eth_setTargetTorque(slave, 0);   // "停止运动"：力矩归零
             lastCmdTorqueNm_[slave] = 0.0;
-            eth_setControlWord(slave, 0x0F);
+            writeControlWord(slave, 0x0F);
         }
         return true;
     default:

@@ -321,7 +321,14 @@ void ControlWorker::doSelectSlave(quint16 address)
 
 void ControlWorker::doEnable()
 {
-    if (device_) device_->enable(activeSlave_);
+    if (!device_) return;
+    if (!device_->enable(activeSlave_)) {
+        // 如实反馈：驱动器可能停在「禁止合闸」不接受控制字（STO/硬件使能未给、
+        // 或故障未复位）。以前静默失败，界面看起来"点了没反应"，很难排查。
+        emit detectionMessage(QStringLiteral(
+            "使能失败：驱动器未进入「运行使能」。请检查故障码、STO/硬件使能信号，"
+            "以及是否被官方调试工具占用控制权"));
+    }
 }
 void ControlWorker::doDisable()
 {
