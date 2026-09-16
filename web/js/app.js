@@ -15,6 +15,8 @@ const state = {
   deviceConnected: false,   // 下位机是否已连上设备（区别于"已连上下位机"）
   slaves: [], active: 0, telemetry: new Map(), lastTelemetry: null,
   rate: { n: 0, t0: 0, hz: 0 },
+  // 用于识别"变化"以触发动画（动画只该由变化触发，而不是每次刷新）
+  prevDriveState: null, prevHadError: false,
 };
 
 // ============ 提示条 ============
@@ -90,9 +92,14 @@ function renderSlaves() {
     li.innerHTML = `<span>从站${s.slave} · ${s.shortName || '未知'}</span>
                     <span class="sub">${s.model || ''}</span>`;
     li.onclick = () => {
+      if (state.active === s.slave) return;
       state.active = s.slave;
       chart.stop();
+      // 换轴后重新识别"变化"基线，避免把另一轴的旧状态误判成新变化
+      state.prevDriveState = null;
+      state.prevHadError = false;
       renderSlaves();
+      Anim.slaveSwitch();
       link.command('selectSlave', { slave: s.slave });
     };
     ul.appendChild(li);
@@ -117,6 +124,15 @@ function renderTelemetry() {
   $('valError').textContent = t.errorCode ? '0x' + t.errorCode.toString(16).padStart(4, '0') : '无';
   $('valTemp').textContent = t.temperatureC > 0 ? t.temperatureC.toFixed(1) + ' ℃' : 'N/A';
   $('valRate').textContent = state.rate.hz.toFixed(1) + ' Hz';
+
+  // 动效只由「变化」触发，不随每次刷新播放——否则 50Hz 下会一直闪
+  if (state.prevDriveState !== t.driveState) {
+    if (t.driveState === OP_ENABLED) Anim.driveEnabled();
+    state.prevDriveState = t.driveState;
+  }
+  const hadError = !!t.errorCode;
+  if (hadError && !state.prevHadError) Anim.faultAppeared();
+  state.prevHadError = hadError;
 }
 
 // ============ 事件 ============
@@ -149,8 +165,11 @@ link.on('open', () => { renderTopbar(); toast('已连接下位机'); })
       if (t && t.connected) chart.push(t, m.ts);
     })
     .on('controlOwner', (m) => {
+      const changed = state.owner !== m.owner;
       state.owner = m.owner;
       renderTopbar(); renderCommandEnabled();
+      // 只在真正变化时脉冲（renderTopbar 会被多处调用，不能都触发动画）
+      if (changed) Anim.ownershipChanged();
       toast(m.owner === 'remote' ? `控制权已接管：${m.reason}` : `控制权在本机：${m.reason}`);
     })
     .on('fault', (m) => toast('下位机异常：' + m.message))
@@ -192,17 +211,23 @@ $('btnSend').onclick = () => {
   link.command('setTarget', args);
   const t = state.telemetry.get(state.active);
   chart.start(t ? t.ratedTorqueNm : 0);   // 每次下发都重新记录本次响应
+  Anim.chartStarted();
 };
 
 // 模式切换时只显示相关字段
-$('selMode').onchange = () => {
+// 按模式显示相关字段。初始状态不播动画——否则会和入场动画叠在一起
+function applyModeFields(animate) {
   const mode = +$('selMode').value;
   const want = mode === 1 ? 'pos' : mode === 3 ? 'vel' : 'tor';
   document.querySelectorAll('.field[data-mode]').forEach((f) => {
     f.classList.toggle('hidden', !f.dataset.mode.split(' ').includes(want));
   });
-};
-$('selMode').dispatchEvent(new Event('change'));
+  if (animate) Anim.fieldsChanged();
+}
+$('selMode').onchange = () => applyModeFields(true);
+applyModeFields(false);
 
 renderTopbar(); renderCommandEnabled(); renderSlaves();
+Anim.entrance();
+Anim.bindButtonFeedback();
 link.connect();
