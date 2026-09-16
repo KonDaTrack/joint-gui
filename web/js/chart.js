@@ -7,9 +7,9 @@
 //  3) 量程平滑跟随，避免每帧重算导致波形整体跳动
 
 const TRACES = [
-  { key: 'positionDeg', color: '#4F8DF7', label: '位置', minSpan: 1.0 },
-  { key: 'velocityDps', color: '#31D0AA', label: '速度', minSpan: 10.0 },
-  { key: 'torqueNm',    color: '#F5A524', label: '力矩', minSpan: 1.0 },
+  { key: 'positionDeg', color: '#38E1FF', label: '位置', minSpan: 1.0 },
+  { key: 'velocityDps', color: '#31FFB0', label: '速度', minSpan: 10.0 },
+  { key: 'torqueNm',    color: '#FFB74D', label: '力矩', minSpan: 1.0 },
 ];
 
 const MAX_POINTS = 3000;   // 10s @300Hz 上限，够装下一次完整运动
@@ -84,7 +84,7 @@ class Chart {
     ctx.clearRect(0, 0, w, h);
 
     // 网格：比原来密（6×8），像仪器刻度
-    ctx.strokeStyle = '#1A1E24';
+    ctx.strokeStyle = 'rgba(56,225,255,0.10)';
     ctx.lineWidth = 1;
     for (let i = 1; i < 6; i++) {
       const y = (h * i) / 6;
@@ -97,7 +97,7 @@ class Chart {
 
     const hasData = this.traces.some((t) => t.buf.length > 1);
     if (!hasData) {
-      ctx.fillStyle = '#5A626C';
+      ctx.fillStyle = '#4E6577';
       ctx.font = '15px sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText('点「下发目标」后开始记录波形', w / 2, h / 2);
@@ -117,8 +117,12 @@ class Chart {
       const range = Math.max(1e-9, tr.span);
       const xSpan = Math.max(1, tr.buf.length - 1);
 
+      // 轨迹带发光（HUD 感来源）。blur 控制在 8px——再大就糊成一片，
+      // 而波形是给人读数值趋势的，锐利比炫更重要。
       ctx.strokeStyle = tr.color;
       ctx.lineWidth = 1.5;
+      ctx.shadowColor = tr.color;
+      ctx.shadowBlur = 8;
       ctx.beginPath();
       tr.buf.forEach((v, i) => {
         const x = (i / xSpan) * (w - 2 * pad) + pad;
@@ -126,6 +130,7 @@ class Chart {
         i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
       });
       ctx.stroke();
+      ctx.shadowBlur = 0;   // 复位：否则后续文字也会带上发光而发虚
     });
 
     // 图例 + **每条轨迹当前的显示量程** + 记录状态。
@@ -139,13 +144,13 @@ class Chart {
     this.traces.forEach((tr) => {
       ctx.fillStyle = tr.color;
       ctx.fillText('■', x, 19);
-      ctx.fillStyle = '#8A929C';
+      ctx.fillStyle = '#7E93A6';
       const lo = tr.center - tr.span / 2, hi = tr.center + tr.span / 2;
       const txt = `${tr.label} ${fmt(lo)}~${fmt(hi)}`;
       ctx.fillText(txt, x + 14, 19);
       x += ctx.measureText(txt).width + 34;
     });
-    ctx.fillStyle = this.recording ? '#31D0AA' : '#8A929C';
+    ctx.fillStyle = this.recording ? '#31FFB0' : '#7E93A6';
     ctx.fillText(`${this.recording ? '● 记录中' : '记录完成'} ${secs}s`, x, 19);
   }
 }

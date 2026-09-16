@@ -38,8 +38,8 @@ const Anim = {
       { scale: 1 },
       { scale: 1.12, duration: 0.22, ease: 'back.out(2.2)', yoyo: true, repeat: 1 });
     gsap.fromTo('#dotState',
-      { boxShadow: '0 0 0 0 rgba(49,208,170,0.75)' },
-      { boxShadow: '0 0 0 10px rgba(49,208,170,0)', duration: 0.5, ease: 'power2.out' });
+      { boxShadow: '0 0 0 0 rgba(49,255,176,0.8)' },
+      { boxShadow: '0 0 0 10px rgba(49,255,176,0)', duration: 0.5, ease: 'power2.out' });
   },
 
   /** 故障出现：闪烁强调 2 次（这是最该被注意到的变化） */
@@ -66,8 +66,8 @@ const Anim = {
       { scale: 1 },
       { scale: 1.1, duration: 0.26, yoyo: true, repeat: 1, ease: 'back.out(2.2)' });
     gsap.fromTo('#ownerBadge',
-      { boxShadow: '0 0 0 0 rgba(245,165,36,0.65)' },
-      { boxShadow: '0 0 0 8px rgba(245,165,36,0)', duration: 0.5, ease: 'power2.out' });
+      { boxShadow: '0 0 0 0 rgba(255,183,77,0.7)' },
+      { boxShadow: '0 0 0 8px rgba(255,183,77,0)', duration: 0.5, ease: 'power2.out' });
   },
 
   /** 开始记录波形：曲线卡片亮一下边框 */
@@ -75,8 +75,8 @@ const Anim = {
     if (!this.ok) return;
     const card = document.querySelector('.card-chart');
     gsap.fromTo(card,
-      { borderColor: '#4F8DF7' },
-      { borderColor: 'rgba(255,255,255,0.08)', duration: 0.9, ease: 'power2.out' });
+      { borderColor: '#38E1FF' },
+      { borderColor: 'rgba(90,190,235,0.16)', duration: 0.9, ease: 'power2.out' });
   },
 
   /** 按钮点击的轻微反馈（按下时缩一下） */
