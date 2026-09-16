@@ -56,14 +56,22 @@ function renderTopbar() {
 
 /** 无控制权或未确认安全时，命令类按钮置灰；急停/失能/停止始终可用 */
 function renderCommandEnabled() {
-  const local = state.owner !== 'remote';
+  // 注意：owner 的含义在下位机侧与本页**相反**——
+  //   下位机侧 "remote" = 别的端持有 → 本地禁用
+  //   本页     "remote" = 本页自己持有 → 应当启用
+  // 照抄下位机的判断会把本页反锁（踩过）。
+  const mine = state.owner === 'remote';
   const ready = $('chkReady').checked;
-  $('btnEnable').disabled = !(local && ready);
-  $('btnFaultReset').disabled = !local;
-  $('btnSend').disabled = !local;
-  $('selMode').disabled = !local;
+  $('btnEnable').disabled = !(mine && ready);
+  $('btnFaultReset').disabled = !mine;
+  $('btnSend').disabled = !mine;
+  $('selMode').disabled = !mine;
   ['inpPos', 'inpVel', 'inpTor', 'inpProfVel', 'inpProfAcc', 'inpProfDec']
-    .forEach((id) => { $(id).disabled = !local; });
+    .forEach((id) => { $(id).disabled = !mine; });
+  // 没有控制权时说明原因，避免"点了没反应"
+  $('cmdHint').textContent = mine
+    ? (ready ? '' : '请先勾选「已确认现场安全」')
+    : '当前控制权在下位机（本机）—— 请先点右上角「请求控制权」';
 }
 
 function renderSlaves() {
