@@ -4,8 +4,14 @@
 #include <QJsonObject>
 #include <QNetworkInterface>
 
-// 远程心跳超时（毫秒）。PC 端建议 200ms 一次，给 5 倍余量容忍网络抖动。
-static const qint64 kRemoteHeartbeatTimeoutMs = 1000;
+// 远程心跳超时（毫秒）。PC 端 200ms 一次。
+//
+// 为什么给到 3s 而不是 1s：心跳槽与超时判断都在工作线程上，而 SDK 的阻塞调用
+// （eth_setControlWord 等状态迁移、eth_disable）会把该线程占住约 2 秒/次——
+// 实测过驱动使能失败时连续报 "faile to Wait for state"，每次阻塞 ~2s。
+// 那期间排队的心跳处理不了，1s 窗口会误判成"心跳超时"。
+// 3s = 网络抖动的容忍 + 单次 SDK 阻塞的余量。
+static const qint64 kRemoteHeartbeatTimeoutMs = 3000;
 
 ControlWorker::ControlWorker(QObject* parent)
     : QObject(parent)
