@@ -25,10 +25,16 @@
 <main class="layout">
 
   <!-- ============ 左：从站与实时读数 ============ -->
+  <!-- ============ 顶栏：在线从站（通栏，横向排） ============ -->
+  <section class="card card-rack">
+    <div class="card-core">
+    <h2 class="card-title card-title-inline">[ 在线从站 ]</h2>
+    <ul id="slaveList" class="slave-list"></ul>
+    </div>
+  </section>
+
   <section class="card card-slaves">
     <div class="card-core">
-    <h2 class="card-title">[ 从站 ]</h2>
-    <ul id="slaveList" class="slave-list"></ul>
 
     <div class="readouts">
       <div class="readout">
@@ -98,8 +104,6 @@
   <section class="card card-target">
     <div class="card-core">
     <h2 class="card-title">[ 目标 ]</h2>
-
-    <h3 class="section-title">目标设定</h3>
 
     <div class="field">
       <label>操作模式</label>
