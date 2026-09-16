@@ -248,11 +248,12 @@ body::after {
 .card-operate { grid-column: 2; grid-row: 2; }
 .card-target  { grid-column: 3; grid-row: 2; }
 .card-chart   { grid-column: 1 / 4; grid-row: 3; }
-/* 三栏内容都该塞得进各自高度。留 auto 只作兜底——
-   用 hidden 会让放不下的内容【静默消失】，比出现滚动条更糟（用户看不到丢的是什么）。 */
-.card-slaves .card-core,
+/* 操作/目标两栏是表单，放不下时滚动（表单内容不该被压扁）。
+   监控栏不同：它的主体是三块读数槽，**可收缩**——
+   空间不足时让读数槽自己压缩，比冒出滚动条好，也不会丢数据（遥测表是固定行，始终可见）。 */
 .card-operate .card-core,
-.card-target .card-core { overflow-y: auto; }
+.card-target  .card-core { overflow-y: auto; }
+.card-slaves  .card-core { overflow: hidden; }
 
 /* ============ 负载控制条 ============ */
 .load-row {
@@ -428,10 +429,12 @@ body::after {
   display: flex;
   flex-direction: column;
   justify-content: space-evenly;
-  gap: 10px;
-  margin-bottom: 14px;
-  flex: 1;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex: 1 1 auto;
+  min-height: 0;   /* 允许在空间不足时收缩，而不是把卡片撑出滚动条 */
 }
+.readout { min-height: 0; }
 .readout label {
   display: block;
   font-size: 11px;
@@ -451,9 +454,9 @@ body::after {
   padding: 3px 12px;
   color: var(--fg);
   font-family: var(--mono);
-  font-size: 30px;
+  font-size: 28px;
   font-weight: 700;
-  line-height: 1.28;
+  line-height: 1.25;
   letter-spacing: -0.015em;
   /* 内阴影 = 凹槽；底部一道内高光 = 槽底反光。这两条是"厚度"的关键 */
   box-shadow: inset 0 3px 8px rgba(0,0,0,0.95),
@@ -485,7 +488,7 @@ body::after {
 }
 .telemetry dd {
   margin: 0;
-  padding: 5px 0 5px 12px;
+  padding: 4px 0 4px 12px;
   border-bottom: 1px solid var(--hair);
   font-family: var(--mono);
   font-size: 13px;
