@@ -34,9 +34,8 @@ signals:
     void faultResetRequested();
     void operateModeChanged(Joint::OperateMode mode);
     void targetRequested(const Joint::TargetCommand& cmd);
-    // 波形采集控制：下发目标→开始记录本次响应；停止/失能/急停→停止记录
-    void captureStarted();
-    void captureStopped();
+    // 波形采集的触发在 ControlWorker（targetCommanded/motionStopped）——
+    // 放那儿才能同时覆盖本地与远程两条命令路径
     void homingRequested();
     void moveToZeroRequested();
     void remoteAllowedChanged(bool allowed);   // 本地是否允许上位机接管

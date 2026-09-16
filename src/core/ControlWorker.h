@@ -57,6 +57,10 @@ signals:
     // 控制权变化。owner: "local"/"remote"；reason 给界面提示用
     void controlOwnerChanged(QString owner, QString reason);
     void remoteCommandRejected(QString name, QString reason);   // 远程命令被拒（无控制权等）
+    // 波形记录统一由 worker 触发：本地和远程两条路都要覆盖，
+    // 否则从网页下发目标时 Qt 端曲线不会开始记录
+    void targetCommanded();   // 已下发目标 → 开始记录本次响应
+    void motionStopped();     // 停止/失能 → 停止记录
 
 private slots:
     void onCycle();
@@ -66,7 +70,18 @@ private:
     void detectAndConnect();                   // Auto：EtherCAT → CANopen → 仿真
 
     // 命令来源校验。急停不走这里——安全命令不该被权限挡住。
+    // 只在两个入口检查：本地的槽 + remoteCommand；下面的 do* 实现里**绝不**再查，
+    // 否则远程路径会被第二次检查挡掉（踩过：使能可用但下发目标毫无反应）。
     bool mayCommand(bool fromRemote) const;
+    void doSelectSlave(quint16 address);
+    void doEnable();
+    void doDisable();
+    void doQuickStop();
+    void doFaultReset();
+    void doSetMode(Joint::OperateMode mode);
+    void doSetTarget(const Joint::TargetCommand& cmd);
+    void doHoming();
+    void doMoveToZero();
     // 控制权切换一律先失能所有轴：否则接手方会继承一个"目标未知但仍在运动"的轴
     void disableAllAxes();
     void grantRemote(const QString& reason);

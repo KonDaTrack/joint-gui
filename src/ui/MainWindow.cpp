@@ -131,9 +131,11 @@ MainWindow::MainWindow(QWidget* parent)
     connect(control_, &ControlPanel::faultResetRequested, worker_, &ControlWorker::faultResetRequested);
     connect(control_, &ControlPanel::operateModeChanged, worker_, &ControlWorker::setOperateModeRequested);
     connect(control_, &ControlPanel::targetRequested, worker_, &ControlWorker::setTargetRequested);
-    // 波形只在「下发目标」后记录，避免平时一直被噪声刷新
-    connect(control_, &ControlPanel::captureStarted, curve_, &CurvePanel::beginCapture);
-    connect(control_, &ControlPanel::captureStopped, curve_, &CurvePanel::stopCapture);
+    // 波形只在「下发目标」后记录，避免平时一直被噪声刷新。
+    // 触发源放在 worker（而非 ControlPanel）：本地和远程两条命令路径都能覆盖到，
+    // 否则从网页下发目标时 Qt 端曲线不会开始记录。
+    connect(worker_, &ControlWorker::targetCommanded, curve_, &CurvePanel::beginCapture);
+    connect(worker_, &ControlWorker::motionStopped, curve_, &CurvePanel::stopCapture);
     connect(control_, &ControlPanel::homingRequested, worker_, &ControlWorker::homingRequested);
     connect(control_, &ControlPanel::moveToZeroRequested, worker_, &ControlWorker::moveToZeroRequested);
     connect(worker_, &ControlWorker::homingFinished, this, [this](bool ok) {

@@ -44,7 +44,6 @@ ControlPanel::ControlPanel(QWidget* parent)
 
     disableBtn_ = new QPushButton(QStringLiteral("失能"), this);
     connect(disableBtn_, &QPushButton::clicked, this, [this] {
-        emit captureStopped();
         emit disableRequested();
     });
 
@@ -269,7 +268,6 @@ void ControlPanel::onEnableClicked()
 
 void ControlPanel::onEstopClicked()
 {
-    emit captureStopped();
     emit quickStopRequested();
     emit disableRequested();
     // 急停后复位安全确认勾选，再次使能必须重新确认现场安全
@@ -314,7 +312,6 @@ void ControlPanel::onSendTarget()
         break;
     }
     emit targetRequested(c);
-    emit captureStarted();   // 每次下发目标都重新开始记录本次响应
 }
 
 void ControlPanel::onStopMotion()
@@ -323,5 +320,4 @@ void ControlPanel::onStopMotion()
     c.hasVelocity = true;
     c.velocityDps = 0.0;
     emit targetRequested(c);
-    emit captureStopped();
 }

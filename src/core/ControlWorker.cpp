@@ -254,8 +254,8 @@ void ControlWorker::remoteCommand(const QString& name, const QJsonObject& args)
 
     // 急停例外：安全命令任何时候都放行，不受控制权限制
     if (name == QLatin1String("estop")) {
-        device_->quickStop(activeSlave_);
-        device_->disable(activeSlave_);
+        doQuickStop();
+        doDisable();
         emit detectionMessage(QStringLiteral("远程急停"));
         return;
     }
@@ -265,19 +265,21 @@ void ControlWorker::remoteCommand(const QString& name, const QJsonObject& args)
         return;
     }
 
+    // 一律调用 do*（**不带权限检查**的实现）。绝不能转交本地的槽——
+    // 那些槽里还有一次 mayCommand(false)，远程调用时必然为 false，
+    // 命令会被静默丢弃（踩过：使能能用但下发目标毫无反应）。
     if (name == QLatin1String("enable")) {
-        device_->enable(activeSlave_);
+        doEnable();
     } else if (name == QLatin1String("disable")) {
-        device_->disable(activeSlave_);
+        doDisable();
     } else if (name == QLatin1String("quickStop")) {
-        device_->quickStop(activeSlave_);
+        doQuickStop();
     } else if (name == QLatin1String("faultReset")) {
-        device_->faultReset(activeSlave_);
+        doFaultReset();
     } else if (name == QLatin1String("selectSlave")) {
-        selectSlave(static_cast<quint16>(args.value(QStringLiteral("slave")).toInt()));
+        doSelectSlave(static_cast<quint16>(args.value(QStringLiteral("slave")).toInt()));
     } else if (name == QLatin1String("setMode")) {
-        setOperateModeRequested(
-            static_cast<Joint::OperateMode>(args.value(QStringLiteral("mode")).toInt()));
+        doSetMode(static_cast<Joint::OperateMode>(args.value(QStringLiteral("mode")).toInt()));
     } else if (name == QLatin1String("setTarget")) {
         Joint::TargetCommand c;
         c.hasPosition = args.contains(QStringLiteral("positionDeg"));
@@ -290,51 +292,58 @@ void ControlWorker::remoteCommand(const QString& name, const QJsonObject& args)
         c.profileAcceleration = args.value(QStringLiteral("profileAcceleration")).toDouble();
         c.profileDeceleration = args.value(QStringLiteral("profileDeceleration")).toDouble();
         c.torqueSlopeNmPerSec = args.value(QStringLiteral("torqueSlope")).toDouble();
-        setTargetRequested(c);
+        doSetTarget(c);
     } else if (name == QLatin1String("homing")) {
-        homingRequested();
+        doHoming();
     } else if (name == QLatin1String("moveToZero")) {
-        moveToZeroRequested();
+        doMoveToZero();
     } else {
         emit remoteCommandRejected(name, QStringLiteral("未知命令"));
     }
 }
 
-// ============================ 命令实现 ============================
-// 本地命令同样受控制权约束：远程持有时本地按钮应已置灰，
-// 这里再兜一层，防止界面状态与实际不一致时误下发。
+// ============================ 命令实现（do*，不带权限检查） ============================
+// 权限检查只放在两个入口：本地的槽、以及 remoteCommand。
+// do* 里绝不能再查一次——否则远程路径会被第二次检查挡掉（踩过）。
 
-void ControlWorker::enableRequested()
+void ControlWorker::doSelectSlave(quint16 address)
 {
-    if (!mayCommand(false)) return;
+    // 忽略不在从站列表里的地址，避免命令发给不存在的从站并触发整总线断连
+    if (device_ && !device_->slaveList().contains(address)) return;
+    activeSlave_ = address;
+    lastTelemetryMs_ = QDateTime::currentMSecsSinceEpoch();   // 重置看门狗计时
+}
+
+void ControlWorker::doEnable()
+{
     if (device_) device_->enable(activeSlave_);
 }
-void ControlWorker::disableRequested()
+void ControlWorker::doDisable()
 {
-    if (device_) device_->disable(activeSlave_);   // 失能任何时候都允许
+    if (device_) device_->disable(activeSlave_);
+    emit motionStopped();
 }
-void ControlWorker::quickStopRequested()
+void ControlWorker::doQuickStop()
 {
-    if (device_) device_->quickStop(activeSlave_); // 停止类任何时候都允许
+    if (device_) device_->quickStop(activeSlave_);
+    emit motionStopped();
 }
-void ControlWorker::faultResetRequested()
+void ControlWorker::doFaultReset()
 {
-    if (!mayCommand(false)) return;
     if (device_) device_->faultReset(activeSlave_);
 }
-void ControlWorker::setOperateModeRequested(Joint::OperateMode mode)
+void ControlWorker::doSetMode(Joint::OperateMode mode)
 {
-    if (!mayCommand(false)) return;
     if (device_) device_->setOperateMode(activeSlave_, mode);
 }
-void ControlWorker::setTargetRequested(const Joint::TargetCommand& cmd)
+void ControlWorker::doSetTarget(const Joint::TargetCommand& cmd)
 {
-    if (!mayCommand(false)) return;
-    if (device_) device_->setTarget(activeSlave_, cmd);
+    if (!device_) return;
+    device_->setTarget(activeSlave_, cmd);
+    emit targetCommanded();   // 波形记录由 worker 统一触发，本地/远程两条路都覆盖
 }
-void ControlWorker::homingRequested()
+void ControlWorker::doHoming()
 {
-    if (!mayCommand(false)) return;
     if (!device_ || !connected_) return;
     emit detectionMessage(QStringLiteral("归航中，请稍候..."));
     // 归航是阻塞操作：期间暂停看门狗（lastTelemetryMs_ 归零复位），结束后恢复，
@@ -344,13 +353,53 @@ void ControlWorker::homingRequested()
     lastTelemetryMs_ = QDateTime::currentMSecsSinceEpoch();
     emit homingFinished(ok);
 }
-void ControlWorker::moveToZeroRequested()
+void ControlWorker::doMoveToZero()
 {
-    if (!mayCommand(false)) return;
     if (!device_ || !connected_) return;
     lastTelemetryMs_ = QDateTime::currentMSecsSinceEpoch();
     const bool ok = device_->moveToZero(activeSlave_);
     lastTelemetryMs_ = QDateTime::currentMSecsSinceEpoch();
     emit detectionMessage(ok ? QStringLiteral("已下发回0（切轮廓位置模式走到 0°）")
                              : QStringLiteral("回0 失败"));
+}
+
+// ============================ 本地命令槽（带权限检查） ============================
+
+void ControlWorker::enableRequested()
+{
+    if (!mayCommand(false)) return;
+    doEnable();
+}
+void ControlWorker::disableRequested()
+{
+    doDisable();     // 失能任何时候都允许
+}
+void ControlWorker::quickStopRequested()
+{
+    doQuickStop();   // 停止类任何时候都允许
+}
+void ControlWorker::faultResetRequested()
+{
+    if (!mayCommand(false)) return;
+    doFaultReset();
+}
+void ControlWorker::setOperateModeRequested(Joint::OperateMode mode)
+{
+    if (!mayCommand(false)) return;
+    doSetMode(mode);
+}
+void ControlWorker::setTargetRequested(const Joint::TargetCommand& cmd)
+{
+    if (!mayCommand(false)) return;
+    doSetTarget(cmd);
+}
+void ControlWorker::homingRequested()
+{
+    if (!mayCommand(false)) return;
+    doHoming();
+}
+void ControlWorker::moveToZeroRequested()
+{
+    if (!mayCommand(false)) return;
+    doMoveToZero();
 }
