@@ -84,4 +84,5 @@ private:
     ControlOwner owner_ = ControlOwner::Local;   // 默认本地（下位机在设备旁，本地优先）
     bool remoteAllowed_ = false;                 // 本地是否允许远程接管
     qint64 lastHeartbeatMs_ = 0;                 // 远程心跳时间戳
+    quint64 heartbeatCount_ = 0;                 // 收到的心跳总数（诊断用）
 };

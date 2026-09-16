@@ -153,7 +153,10 @@ void ControlWorker::onCycle()
     if (owner_ == ControlOwner::Remote) {
         const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
         if (lastHeartbeatMs_ > 0 && nowMs - lastHeartbeatMs_ > kRemoteHeartbeatTimeoutMs) {
-            revokeRemote(QStringLiteral("远程心跳超时，已自动收回控制权"));
+            // 带上累计心跳数：0 表示心跳根本没到达 worker（接收链路问题），
+            // >0 表示到达过但中断了（发送侧或节流问题）
+            revokeRemote(QStringLiteral("远程心跳超时（累计收到 %1 次），已自动收回控制权")
+                         .arg(heartbeatCount_));
             emit faultDetected(QStringLiteral("远程心跳超时，控制权已收回本地"));
         }
     }
@@ -235,6 +238,7 @@ void ControlWorker::releaseRemoteControl()
 
 void ControlWorker::remoteHeartbeat()
 {
+    ++heartbeatCount_;
     lastHeartbeatMs_ = QDateTime::currentMSecsSinceEpoch();
 }
 
