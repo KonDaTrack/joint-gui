@@ -89,6 +89,16 @@ function renderSlaves() {
     ul.appendChild(li);
     return;
   }
+  // 关节标识卡：当前控制的是哪个关节、型号、额定力矩（一眼可见，不用去翻别处）
+  const cur = state.slaves.find((s) => s.slave === state.active);
+  if (cur) {
+    $('moduleTitle').textContent = `SLAVE MODULE ${cur.slave} · ${cur.shortName || '未知型号'}`;
+    $('moduleModel').textContent = cur.model || '--';
+  } else {
+    $('moduleTitle').textContent = '从站 --';
+    $('moduleModel').textContent = '--';
+  }
+
   state.slaves.forEach((s) => {
     const li = document.createElement('li');
     li.className = s.slave === state.active ? 'active' : '';

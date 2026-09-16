@@ -329,6 +329,30 @@ body::after {
 .slave-list li .sub { color: var(--dimmer); font-size: 11px; }
 .slave-list li.active .sub { color: var(--cyan-dim); }
 
+/* ============ 关节标识卡：一眼看出在控制哪个关节 ============ */
+.module-badge {
+  position: relative;
+  margin-bottom: 12px;
+  padding: 9px 12px 9px 14px;
+  border: 1px solid rgba(56, 225, 255, 0.28);
+  border-radius: 10px;
+  background: linear-gradient(90deg, rgba(56,225,255,0.12), rgba(56,225,255,0.02));
+  box-shadow: inset 0 1px 0 rgba(160, 230, 255, 0.12), 0 0 18px -8px rgba(56,225,255,0.7);
+}
+.module-badge::before {   /* 左侧发光竖条 */
+  content: '';
+  position: absolute;
+  left: 0; top: 8px; bottom: 8px;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--cyan);
+  box-shadow: var(--glow);
+}
+.module-line1 { font-family: var(--sans); font-size: 15px; font-weight: 700;
+                letter-spacing: 0.06em; color: var(--fg); }
+.module-line2 { font-family: var(--mono); font-size: 11px; color: var(--cyan-dim);
+                margin-top: 2px; }
+
 /* ============ 读数槽：发光数据（界面的主角） ============ */
 .readouts {
   display: flex;
@@ -368,7 +392,15 @@ body::after {
     inset 0 -1px 0 rgba(120, 225, 255, 0.14),
     0 0 18px -6px rgba(56, 225, 255, 0.6);
   text-shadow: 0 0 16px rgba(56, 225, 255, 0.75);
+  /* 槽内极淡横向扫描纹——纯装饰，**不放任何假数据流**
+     （控制界面上编造数据会被当真数据读，装饰只能做无信息量的纹理） */
+  background-image: repeating-linear-gradient(
+    0deg, transparent, transparent 2px,
+    rgba(56, 225, 255, 0.035) 2px, rgba(56, 225, 255, 0.035) 3px);
 }
+
+/* 当前聚焦的输入行高亮整行（图里"目标位置"那样） */
+.field:focus-within { background: rgba(56, 225, 255, 0.05); border-radius: 8px; }
 .readout .unit { color: var(--dimmer); font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; }
 
 /* ============ 遥测表 ============ */
