@@ -18,9 +18,9 @@ const Anim = {
   entrance() {
     if (!this.ok) return;
     gsap.from('.layout > .card', {
-      opacity: 0, y: 18, duration: 0.45, ease: 'power2.out', stagger: 0.08,
+      opacity: 0, y: 18, duration: 0.7, ease: 'expo.out', stagger: 0.09,
     });
-    gsap.from('.topbar', { opacity: 0, y: -12, duration: 0.35, ease: 'power2.out' });
+    gsap.from('.topbar', { opacity: 0, y: -12, duration: 0.6, ease: 'expo.out' });
   },
 
   /** 切换从站：读数区做一次短促的刷新过渡（动画作用在容器上，不碰数字本身） */
@@ -28,7 +28,7 @@ const Anim = {
     if (!this.ok) return;
     gsap.fromTo('.readouts, .telemetry',
       { opacity: 0.35 },
-      { opacity: 1, duration: 0.22, ease: 'power1.out' });
+      { opacity: 1, duration: 0.4, ease: 'expo.out' });
   },
 
   /** 驱动状态变为「运行使能」：圆点+文字脉冲一下，提示"现在有电了" */
@@ -36,10 +36,10 @@ const Anim = {
     if (!this.ok) return;
     gsap.fromTo('#valState',
       { scale: 1 },
-      { scale: 1.12, duration: 0.16, ease: 'power2.out', yoyo: true, repeat: 1 });
+      { scale: 1.12, duration: 0.22, ease: 'back.out(2.2)', yoyo: true, repeat: 1 });
     gsap.fromTo('#dotState',
-      { boxShadow: '0 0 0 0 rgba(74,246,38,0.7)' },
-      { boxShadow: '0 0 0 10px rgba(74,246,38,0)', duration: 0.5, ease: 'power2.out' });
+      { boxShadow: '0 0 0 0 rgba(49,208,170,0.75)' },
+      { boxShadow: '0 0 0 10px rgba(49,208,170,0)', duration: 0.5, ease: 'power2.out' });
   },
 
   /** 故障出现：闪烁强调 2 次（这是最该被注意到的变化） */
@@ -56,7 +56,7 @@ const Anim = {
   fieldsChanged() {
     if (!this.ok) return;
     const shown = document.querySelectorAll('.field:not(.hidden)');
-    gsap.from(shown, { opacity: 0, x: -10, duration: 0.25, ease: 'power2.out', stagger: 0.03 });
+    gsap.from(shown, { opacity: 0, x: -10, duration: 0.5, ease: 'expo.out', stagger: 0.04 });
   },
 
   /** 控制权变化：顶栏徽章脉冲 */
@@ -64,10 +64,10 @@ const Anim = {
     if (!this.ok) return;
     gsap.fromTo('#ownerBadge',
       { scale: 1 },
-      { scale: 1.1, duration: 0.18, yoyo: true, repeat: 1, ease: 'power2.out' });
+      { scale: 1.1, duration: 0.26, yoyo: true, repeat: 1, ease: 'back.out(2.2)' });
     gsap.fromTo('#ownerBadge',
-      { boxShadow: '0 0 0 0 rgba(245,158,11,0.6)' },
-      { boxShadow: '0 0 0 8px rgba(245,158,11,0)', duration: 0.5, ease: 'power2.out' });
+      { boxShadow: '0 0 0 0 rgba(245,165,36,0.65)' },
+      { boxShadow: '0 0 0 8px rgba(245,165,36,0)', duration: 0.5, ease: 'power2.out' });
   },
 
   /** 开始记录波形：曲线卡片亮一下边框 */
@@ -75,8 +75,8 @@ const Anim = {
     if (!this.ok) return;
     const card = document.querySelector('.card-chart');
     gsap.fromTo(card,
-      { borderColor: '#EAEAEA' },
-      { borderColor: '#2A3036', duration: 0.9, ease: 'power2.out' });
+      { borderColor: '#4F8DF7' },
+      { borderColor: 'rgba(255,255,255,0.08)', duration: 0.9, ease: 'power2.out' });
   },
 
   /** 按钮点击的轻微反馈（按下时缩一下） */

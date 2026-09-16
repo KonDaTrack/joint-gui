@@ -26,6 +26,7 @@
 
   <!-- ============ 左：从站与实时读数 ============ -->
   <section class="card card-slaves">
+    <div class="card-core">
     <h2 class="card-title">[ 从站 ]</h2>
     <ul id="slaveList" class="slave-list"></ul>
 
@@ -51,10 +52,12 @@
       <dt>温度</dt><dd id="valTemp" class="mono">--</dd>
       <dt>刷新率</dt><dd id="valRate" class="mono">--</dd>
     </dl>
+    </div>
   </section>
 
   <!-- ============ 中：控制 ============ -->
   <section class="card card-control">
+    <div class="card-core">
     <h2 class="card-title">[ 控制 ]</h2>
 
     <button id="btnEstop" class="btn btn-estop">急停 ESTOP</button>
@@ -105,15 +108,18 @@
     </div>
 
     <div id="cmdHint" class="hint"></div>
+    </div>
   </section>
 
   <!-- ============ 曲线 ============ -->
   <section class="card card-chart">
+    <div class="card-core">
     <h2 class="card-title">
       [ 波形 ]
       <span id="chartNote" class="chart-note">点「下发目标」后开始记录</span>
     </h2>
     <canvas id="chart"></canvas>
+    </div>
   </section>
 
 </main>
