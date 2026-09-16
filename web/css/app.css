@@ -19,8 +19,10 @@
   --bg:        #0B0D10;
   --core:      #15181D;                  /* 哑光面（不透明） */
   --sunken:    #0A0C0F;                  /* 凹陷槽 */
-  --hair:      rgba(255, 255, 255, 0.09);   /* 中性发丝线，不带青 */
-  --hair-lit:  rgba(255, 255, 255, 0.20);
+  /* 青色做「线」不做「光」：表面保持哑光不发光，但边框/分隔线是青色的——
+     这是该风格的技术图纸/HUD 框线感来源。全用中性灰会丢掉这个特征（上一版就是）。 */
+  --hair:      rgba(56, 225, 255, 0.14);    /* 常规分隔线 */
+  --hair-lit:  rgba(56, 225, 255, 0.34);    /* 强调线（卡片边框、槽边框） */
 
   --fg:        #E6F3FA;
   --dim:       #7E93A6;
@@ -57,9 +59,13 @@ body::before {
   inset: 0;
   pointer-events: none;
   z-index: 0;
-  /* 亚光底：不放网格、不放强光晕——只在顶部给一道极淡的冷色环境光 */
+  /* 亚光底 + 极淡青色网格：网格是"图纸感"的来源，但必须很淡，
+     否则会变成上一版那种满屏发光的亮面感 */
   background-image:
-    radial-gradient(80% 50% at 50% -10%, rgba(120, 190, 225, 0.055), transparent 70%);
+    linear-gradient(rgba(56,225,255,0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(56,225,255,0.018) 1px, transparent 1px),
+    radial-gradient(80% 50% at 50% -10%, rgba(120, 190, 225, 0.045), transparent 70%);
+  background-size: 48px 48px, 48px 48px, 100% 100%;
 }
 
 /* 极淡颗粒：给纯数字画面一点物理质感（不闪烁、不滚动） */
@@ -89,7 +95,7 @@ body::after {
 .card {
   position: relative;
   background: var(--core);
-  border: 1px solid var(--hair);
+  border: 1px solid var(--hair-lit);   /* 青色细线框，非发光 */
   border-radius: 14px;
   padding: 1px;
   min-height: 0;
@@ -374,8 +380,8 @@ body::after {
   flex: 1;
   min-width: 0;
   text-align: right;
-  background: linear-gradient(180deg, rgba(0, 10, 20, 0.95), rgba(0, 20, 34, 0.80));
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, #060C13, #0A1520);
+  border: 1px solid rgba(56, 225, 255, 0.34);   /* 青色描边是这风格的特征 */
   border-radius: 10px;
   padding: 3px 12px;
   color: var(--cyan);
@@ -455,7 +461,7 @@ body::after {
   flex: 1;
   background: var(--sunken);
   color: var(--cyan);
-  border: 1px solid rgba(56, 225, 255, 0.16);
+  border: 1px solid rgba(56, 225, 255, 0.26);
   border-radius: 8px;
   margin: 4px 0;
   padding: 7px 12px;
@@ -539,7 +545,7 @@ body::after {
   width: 84px;
   background: var(--sunken);
   color: var(--cyan);
-  border: 1px solid rgba(56,225,255,0.16);
+  border: 1px solid rgba(56,225,255,0.26);
   border-radius: 8px;
   padding: 7px 10px;
   font-family: var(--mono);
@@ -557,7 +563,7 @@ body::after {
   width: 100%;
   min-height: 0;
   background: linear-gradient(180deg, rgba(0, 8, 16, 0.95), rgba(0, 16, 28, 0.85));
-  border: 1px solid rgba(56, 225, 255, 0.16);
+  border: 1px solid rgba(56, 225, 255, 0.28);
   border-radius: 10px;
   box-shadow: inset 0 2px 12px rgba(0,0,0,0.9), inset 0 -1px 0 rgba(120,225,255,0.10);
 }
