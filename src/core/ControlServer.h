@@ -34,6 +34,8 @@ public slots:
     void onSlaveModels(const QStringList& shortNames, const QStringList& modelInfos);
     void onControlOwnerChanged(const QString& owner, const QString& reason);
     void onFault(const QString& message);
+    // 负载设定值已收到（硬件后端未接线，回给客户端由界面如实提示）
+    void onLoadCommand(double torqueNm, double volt);
 
 signals:
     // 上行命令转发给 ControlWorker（队列连接，天然跨线程）

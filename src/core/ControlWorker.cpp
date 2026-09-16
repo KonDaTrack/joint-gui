@@ -297,6 +297,11 @@ void ControlWorker::remoteCommand(const QString& name, const QJsonObject& args)
         doHoming();
     } else if (name == QLatin1String("moveToZero")) {
         doMoveToZero();
+    } else if (name == QLatin1String("setLoad")) {
+        // 负载走 RS485（独立于 EtherCAT），硬件后端尚未接线。
+        // 只回报"收到"，由界面如实提示——不能让人以为负载已经生效。
+        emit loadCommandReceived(args.value(QStringLiteral("torqueNm")).toDouble(),
+                                 args.value(QStringLiteral("volt")).toDouble());
     } else {
         emit remoteCommandRejected(name, QStringLiteral("未知命令"));
     }

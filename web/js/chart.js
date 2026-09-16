@@ -83,12 +83,16 @@ class Chart {
     const w = this.canvas.clientWidth, h = this.canvas.clientHeight;
     ctx.clearRect(0, 0, w, h);
 
-    // 网格
+    // 网格：比原来密（6×8），像仪器刻度
     ctx.strokeStyle = '#1A1E24';
     ctx.lineWidth = 1;
-    for (let i = 1; i < 4; i++) {
-      const y = (h * i) / 4;
+    for (let i = 1; i < 6; i++) {
+      const y = (h * i) / 6;
       ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+    }
+    for (let i = 1; i < 8; i++) {
+      const x = (w * i) / 8;
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
     }
 
     const hasData = this.traces.some((t) => t.buf.length > 1);
@@ -124,20 +128,24 @@ class Chart {
       ctx.stroke();
     });
 
-    // 图例 + 记录状态
+    // 图例 + **每条轨迹当前的显示量程** + 记录状态。
+    // 标出量程很关键：三条轨迹各自独立自动缩放，不标的话根本判断不出
+    // "这点毛刺"到底是 0.1 还是 5 N·m（实际踩过这个坑）。
     const secs = this.startTs ? ((this.lastTs - this.startTs) / 1000).toFixed(1) : '0.0';
+    const fmt = (v) => (Math.abs(v) < 10 ? v.toFixed(2) : v.toFixed(1));
     ctx.textAlign = 'left';
-    ctx.font = '13px sans-serif';
-    ctx.fillStyle = '#8A929C';
+    ctx.font = '12px monospace';
     let x = 12;
     this.traces.forEach((tr) => {
       ctx.fillStyle = tr.color;
-      ctx.fillText('■', x, 20);
+      ctx.fillText('■', x, 19);
       ctx.fillStyle = '#8A929C';
-      ctx.fillText(tr.label, x + 14, 20);
-      x += 70;
+      const lo = tr.center - tr.span / 2, hi = tr.center + tr.span / 2;
+      const txt = `${tr.label} ${fmt(lo)}~${fmt(hi)}`;
+      ctx.fillText(txt, x + 14, 19);
+      x += ctx.measureText(txt).width + 34;
     });
     ctx.fillStyle = this.recording ? '#31D0AA' : '#8A929C';
-    ctx.fillText(`${this.recording ? '● 记录中' : '记录完成'} ${secs}s`, x + 10, 20);
+    ctx.fillText(`${this.recording ? '● 记录中' : '记录完成'} ${secs}s`, x, 19);
   }
 }

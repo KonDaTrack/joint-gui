@@ -209,3 +209,15 @@ void ControlServer::onFault(const QString& message)
     o[QStringLiteral("message")] = message;
     send(o);
 }
+
+void ControlServer::onLoadCommand(double torqueNm, double volt)
+{
+    QJsonObject o;
+    o[QStringLiteral("type")] = QStringLiteral("loadState");
+    o[QStringLiteral("torqueNm")] = torqueNm;
+    o[QStringLiteral("volt")] = volt;
+    // 如实告诉客户端后端未接线：否则界面会显示"已下发"，而制动器毫无反应
+    o[QStringLiteral("implemented")] = false;
+    o[QStringLiteral("note")] = QStringLiteral("RS485 后端未接线");
+    send(o);
+}

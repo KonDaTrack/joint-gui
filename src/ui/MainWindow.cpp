@@ -102,6 +102,7 @@ MainWindow::MainWindow(QWidget* parent)
     connect(worker_, &ControlWorker::slavesDetected, server_, &ControlServer::onSlavesDetected);
     connect(worker_, &ControlWorker::slaveModelsDetected, server_, &ControlServer::onSlaveModels);
     connect(worker_, &ControlWorker::faultDetected, server_, &ControlServer::onFault);
+    connect(worker_, &ControlWorker::loadCommandReceived, server_, &ControlServer::onLoadCommand);
     // 服务 → 设备（上行）：控制权与命令
     connect(server_, &ControlServer::requestControlReceived, worker_, &ControlWorker::requestRemoteControl);
     connect(server_, &ControlServer::releaseControlReceived, worker_, &ControlWorker::releaseRemoteControl);

@@ -62,9 +62,10 @@
 
     <button id="btnEstop" class="btn btn-estop">急停 ESTOP</button>
 
-    <label class="check">
+    <label class="toggle" for="chkReady">
       <input type="checkbox" id="chkReady">
-      <span>已确认现场安全</span>
+      <span class="toggle-track"><span class="toggle-thumb"></span></span>
+      <span class="toggle-text">已确认现场安全</span>
     </label>
 
     <div class="btn-row">
@@ -108,6 +109,22 @@
     </div>
 
     <div id="cmdHint" class="hint"></div>
+    </div>
+  </section>
+
+
+  <!-- ============ 负载控制（RS485 → 0-10V → 张力控制器） ============ -->
+  <section class="card card-load">
+    <div class="card-core">
+    <h2 class="card-title">[ 负载 ] <span class="chart-note">RS485 · 0-10V 模拟量</span></h2>
+    <div class="load-row">
+      <input type="range" id="loadSlider" min="0" max="100" value="0" step="1">
+      <input type="number" id="loadValue" class="load-num" value="0" min="0" max="100" step="1">
+      <span class="unit">N·m</span>
+      <span class="load-volt" id="loadVolt">0.00 V</span>
+      <button id="btnLoadSet" class="btn btn-primary">下发</button>
+    </div>
+    <div id="loadHint" class="hint"></div>
     </div>
   </section>
 

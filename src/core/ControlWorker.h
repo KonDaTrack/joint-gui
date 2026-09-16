@@ -61,6 +61,10 @@ signals:
     // 否则从网页下发目标时 Qt 端曲线不会开始记录
     void targetCommanded();   // 已下发目标 → 开始记录本次响应
     void motionStopped();     // 停止/失能 → 停止记录
+    // 负载（磁粉制动器）设定值已收到。走 RS485 → Modbus → 0-10V，
+    // 与关节的 EtherCAT 是**两条独立链路**。硬件后端尚未接线，
+    // 所以只回报收到，界面据此如实提示，不让人以为已经生效。
+    void loadCommandReceived(double torqueNm, double volt);
 
 private slots:
     void onCycle();

@@ -70,6 +70,8 @@ function renderCommandEnabled() {
   $('selMode').disabled = !mine;
   ['inpPos', 'inpVel', 'inpTor', 'inpProfVel', 'inpProfAcc', 'inpProfDec']
     .forEach((id) => { $(id).disabled = !mine; });
+  // 负载同样属于"命令类"，无控制权时置灰
+  ['loadSlider', 'loadValue', 'btnLoadSet'].forEach((id) => { $(id).disabled = !mine; });
   // 没有控制权时说明原因，避免"点了没反应"
   $('cmdHint').textContent = mine
     ? (ready ? '' : '请先勾选「已确认现场安全」')
@@ -173,6 +175,14 @@ link.on('open', () => { renderTopbar(); toast('已连接下位机'); })
       toast(m.owner === 'remote' ? `控制权已接管：${m.reason}` : `控制权在本机：${m.reason}`);
     })
     .on('fault', (m) => toast('下位机异常：' + m.message))
+    .on('loadState', (m) => {
+      // 下位机如实回报后端状态。未接线时必须说清楚，
+      // 否则界面显示"已下发"而制动器毫无反应，排查时会被误导。
+      loadHint(m.implemented
+        ? `已生效：${m.torqueNm} N·m（${m.volt.toFixed(2)} V）`
+        : `下位机已收到 ${m.torqueNm} N·m（${m.volt.toFixed(2)} V），但 ${m.note}`,
+        !!m.implemented);
+    })
     .on('connection', (m) => {
       state.deviceConnected = !!m.connected;
       state.bus = m.bus || '';   // 断开时下位机传空串，不能沿用旧值否则仍显示"已连接"
@@ -226,6 +236,39 @@ function applyModeFields(animate) {
 }
 $('selMode').onchange = () => applyModeFields(true);
 applyModeFields(false);
+
+// ============ 负载控制（磁粉制动器 / 张力控制器） ============
+// 走 RS485 → Modbus → 0-10V，与关节的 EtherCAT 是**两条独立链路**，
+// 所以它不受"控制从站"影响，只受控制权约束。
+// 负载上限取制动器额定：90mm 关节配 100 N·m，70mm 配 25 N·m。
+const LOAD_MAX_NM = 100;
+
+const loadHint = (msg, ok) => {
+  $('loadHint').textContent = msg || '';
+  $('loadHint').style.color = ok ? 'var(--ok)' : 'var(--warn)';
+};
+
+/** 把 N·m 换算成 0-10V 并刷新界面（斜率由负载额定决定） */
+function renderLoad(nm) {
+  nm = Math.max(0, Math.min(LOAD_MAX_NM, nm || 0));
+  $('loadSlider').max = LOAD_MAX_NM;
+  $('loadSlider').value = nm;
+  $('loadSlider').style.setProperty('--fill', ((nm / LOAD_MAX_NM) * 100) + '%');
+  $('loadValue').value = nm;
+  $('loadVolt').textContent = ((nm / LOAD_MAX_NM) * 10).toFixed(2) + ' V';
+}
+
+$('loadSlider').oninput = () => { renderLoad(+$('loadSlider').value); loadHint(''); };
+$('loadValue').oninput  = () => { renderLoad(+$('loadValue').value);  loadHint(''); };
+
+$('btnLoadSet').onclick = () => {
+  const nm = Math.max(0, Math.min(LOAD_MAX_NM, +$('loadValue').value || 0));
+  const volt = (nm / LOAD_MAX_NM) * 10;
+  link.command('setLoad', { torqueNm: nm, maxNm: LOAD_MAX_NM, volt });
+  loadHint(`已下发 ${nm} N·m（${volt.toFixed(2)} V）`);
+};
+
+renderLoad(0);
 
 renderTopbar(); renderCommandEnabled(); renderSlaves();
 Anim.entrance();
