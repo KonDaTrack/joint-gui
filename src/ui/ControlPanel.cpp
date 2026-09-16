@@ -242,8 +242,11 @@ void ControlPanel::setControlOwner(const QString& owner)
     owner_ = owner;
     const bool local = (owner != QLatin1String("remote"));
     if (ownerLabel_) {
-        ownerLabel_->setText(local ? tr("▶ 控制权：本机（下位机）")
-                                   : tr("▶ 控制权：上位机（远程）"));
+        // 远程持有时把"为什么按不动"写在脸上：否则用户只会看到按钮变灰却不知缘由，
+        // 也容易误以为失能按钮该一起灰（它属安全类，始终可用）
+        ownerLabel_->setText(local
+            ? tr("▶ 控制权：本机（下位机）")
+            : tr("▶ 控制权：上位机（远程）—— 本地命令已禁用，失能/急停仍可用"));
         ownerLabel_->setStyleSheet(local
             ? QStringLiteral("color: #34D399; font-weight: bold;")
             : QStringLiteral("color: #F59E0B; font-weight: bold;"));
