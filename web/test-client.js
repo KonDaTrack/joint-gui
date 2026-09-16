@@ -41,7 +41,9 @@ ws.addEventListener('message', (ev) => {
   const m = JSON.parse(ev.data);
   switch (m.type) {
     case 'hello':
-      console.log(`[hello] 控制权=${m.owner} 从站数=${m.slaveCount}`);
+      // 仿真/真机必须一眼可辨（仿真数据看着和真机一样，容易误判）
+      console.log(`[hello] 总线=${m.bus}${m.simulated ? ' ⚠️仿真数据' : ''} ` +
+                  `控制权=${m.owner} 从站数=${m.slaveCount}`);
       (m.slaves || []).forEach((s) =>
         console.log(`  从站${s.slave} ${s.shortName} ${s.model}${s.active ? ' （当前）' : ''}`));
       break;

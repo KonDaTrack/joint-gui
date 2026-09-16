@@ -69,6 +69,9 @@ void ControlServer::onNewConnection()
     hello[QStringLiteral("type")] = QStringLiteral("hello");
     hello[QStringLiteral("owner")] = owner_;
     hello[QStringLiteral("slaveCount")] = slaveCount_;
+    // 仿真/真机必须让上位机一眼可辨——否则操作者可能把仿真数据当真
+    hello[QStringLiteral("bus")] = busName_;
+    hello[QStringLiteral("simulated")] = (busName_ == QStringLiteral("仿真"));
     QJsonArray arr;
     for (int i = 0; i < slaves_.size(); ++i) {
         QJsonObject s;
@@ -167,6 +170,7 @@ void ControlServer::onConnectionChanged(bool connected, const QString& busName, 
 {
     connected_ = connected;
     slaveCount_ = slaveCount;
+    busName_ = busName;
     if (!client_) return;
     QJsonObject o;
     o[QStringLiteral("type")] = QStringLiteral("connection");

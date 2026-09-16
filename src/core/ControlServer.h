@@ -64,5 +64,6 @@ private:
     quint16 activeSlave_ = 0;
     bool connected_ = false;
     int slaveCount_ = 0;
+    QString busName_;   // 总线类型（"EtherCAT"/"CANopen"/"仿真"）——界面须显著区分仿真与真机
     QString owner_ = QStringLiteral("local");
 };
