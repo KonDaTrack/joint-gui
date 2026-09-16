@@ -59,13 +59,9 @@ body::before {
   inset: 0;
   pointer-events: none;
   z-index: 0;
-  /* 亚光底 + 极淡青色网格：网格是"图纸感"的来源，但必须很淡，
-     否则会变成上一版那种满屏发光的亮面感 */
+  /* 纯哑光底：图里没有任何网格，只有一道极淡的顶光 */
   background-image:
-    linear-gradient(rgba(56,225,255,0.018) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(56,225,255,0.018) 1px, transparent 1px),
-    radial-gradient(80% 50% at 50% -10%, rgba(120, 190, 225, 0.045), transparent 70%);
-  background-size: 48px 48px, 48px 48px, 100% 100%;
+    radial-gradient(90% 60% at 50% -12%, rgba(120, 190, 225, 0.05), transparent 72%);
 }
 
 /* 极淡颗粒：给纯数字画面一点物理质感（不闪烁、不滚动） */
@@ -95,7 +91,7 @@ body::after {
 .card {
   position: relative;
   background: var(--core);
-  border: 1px solid var(--hair-lit);   /* 青色细线框，非发光 */
+  border: 1px solid rgba(255,255,255,0.07);   /* 卡片边很轻；存在感靠四角标记 */
   border-radius: 14px;
   padding: 1px;
   min-height: 0;
@@ -194,28 +190,37 @@ body::after {
 .spacer { flex: 1; }
 
 /* ============ 徽章：药丸 + 发光边 ============ */
+/* 徽章：暗底 + 细边，状态靠左侧小圆点表达（图里的做法），不靠整块发光 */
 .badge {
   padding: 5px 13px;
   border-radius: 999px;
-  border: 1px solid var(--hair);
-  background: rgba(56, 225, 255, 0.05);
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.035);
   font-family: var(--mono);
   font-size: 11px;
   letter-spacing: 0.06em;
   color: var(--dim);
   white-space: nowrap;
 }
+.badge::before {
+  content: '';
+  display: inline-block;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  margin-right: 7px;
+  vertical-align: middle;
+  background: var(--dimmer);
+}
+.badge-real::before   { background: var(--ok);     box-shadow: 0 0 8px rgba(49,255,176,0.9); }
+.badge-sim::before    { background: var(--warn);   box-shadow: 0 0 8px rgba(255,183,77,0.9); }
+.badge-remote::before { background: var(--warn);   box-shadow: 0 0 8px rgba(255,183,77,0.9); }
+.badge-local::before  { background: var(--ok); }
 .badge-idle  { color: var(--dimmer); }
-.badge-real  { color: var(--ok);    border-color: rgba(49,255,176,0.45);
-               box-shadow: 0 0 16px -4px rgba(49,255,176,0.5); }
-/* 仿真必须一眼可辨：数据与真机一样，只是假的 */
-.badge-sim   { color: var(--warn);  border-color: rgba(255,183,77,0.5);
-               background: rgba(255,183,77,0.10);
-               box-shadow: 0 0 16px -4px rgba(255,183,77,0.5); }
-.badge-local { color: var(--dim); }
-.badge-remote{ color: var(--warn);  border-color: rgba(255,183,77,0.5);
-               background: rgba(255,183,77,0.10);
-               box-shadow: 0 0 16px -4px rgba(255,183,77,0.5); }
+/* 仿真/远程用琥珀色文字提醒，但不再整块发光——图里的徽章是安静的 */
+.badge-real   { color: var(--ok); }
+.badge-sim    { color: var(--warn); }
+.badge-local  { color: var(--dim); }
+.badge-remote { color: var(--warn); }
 
 /* ============ 按钮 ============ */
 .btn {
@@ -248,16 +253,19 @@ body::after {
   cursor: not-allowed;
 }
 
+/* 主操作按钮：**不填色**——图里除急停外所有按钮都是深色扁平的。
+   只靠青色描边与字色区分主次（填色会把界面变"花"，失去那种克制的贵感）。 */
 .btn-primary {
-  background: linear-gradient(180deg, #2FC6F0, #1B8FBE);
-  border-color: rgba(120, 230, 255, 0.6);
-  color: #04121A;
-  font-weight: 700;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.35), 0 0 22px -6px rgba(56,225,255,0.9);
+  background: rgba(56, 225, 255, 0.07);
+  border-color: rgba(56, 225, 255, 0.45);
+  color: var(--cyan);
+  font-weight: 600;
+  box-shadow: inset 0 1px 0 rgba(160, 230, 255, 0.10);
 }
 .btn-primary:hover:not(:disabled) {
-  background: linear-gradient(180deg, #49D6FF, #229CCB);
-  border-color: rgba(160, 240, 255, 0.8);
+  background: rgba(56, 225, 255, 0.14);
+  border-color: rgba(56, 225, 255, 0.7);
+  box-shadow: inset 0 1px 0 rgba(180,240,255,0.18), 0 0 18px -6px rgba(56,225,255,0.5);
 }
 .btn-primary:disabled { background: rgba(255,255,255,0.02); color: var(--dimmer);
                         border-color: rgba(255,255,255,0.05); box-shadow: none; }
