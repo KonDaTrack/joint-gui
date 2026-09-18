@@ -103,10 +103,14 @@ MainWindow::MainWindow(QWidget* parent)
     connect(worker_, &ControlWorker::slaveModelsDetected, server_, &ControlServer::onSlaveModels);
     connect(worker_, &ControlWorker::faultDetected, server_, &ControlServer::onFault);
     connect(worker_, &ControlWorker::loadStateChanged, server_, &ControlServer::onLoadState);
-    // 负载状态**同时**要接给本地面板与状态栏，不能只接 server_：
-    // ControlServer::send() 在没有客户端时是静默丢弃的，只接它的话本地什么也看不到，
+    // 负载控件在监控面板（刷新率下面），状态回这里。**不能只接 server_**：
+    // ControlServer::send() 在没有客户端时静默丢弃，只接它的话本地什么也看不到，
     // 而本地操作者必须知道制动器正咬着。
-    connect(worker_, &ControlWorker::loadStateChanged, control_, &ControlPanel::setLoadState);
+    connect(worker_, &ControlWorker::loadStateChanged, monitor_, &MonitorPanel::setLoadState);
+    connect(monitor_, &MonitorPanel::loadPresetChanged,
+            worker_, &ControlWorker::setLoadPresetRequested);
+    connect(monitor_, &MonitorPanel::releaseLoadRequested,
+            worker_, &ControlWorker::releaseLoadRequested);
     connect(worker_, &ControlWorker::loadStateChanged, this,
             [this](const QString& state, double, double, double, const QString& note) {
                 // 只让"失败/清零"打断状态栏；applied/writing 由面板常驻显示，

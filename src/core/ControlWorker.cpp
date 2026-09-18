@@ -97,6 +97,20 @@ bool ControlWorker::tryOpen(const AppConfig& c)
         models << device_->modelInfo(s);
     }
     emit slaveModelsDetected(shorts, models);
+
+    // 推一次负载状态：否则界面那行会一直停在占位符。
+    // 此刻 appliedNm_ 是刚在 disconnectDevice() 里同步写 0 的**真实结果**：
+    // >= 0 表示已确认松开；-1 表示没能确认（比如 modbus_ao 不存在），
+    // 那就如实说"未知"，不假装是 0。
+    // 用 "unknown" 而不是 "failed"：拿不到 modbus_ao 在开发机上是常态，
+    // 一启动就报红会把红色训练成噪音。红色留给"真正尝试施加时失败"。
+    const double applied = load_ ? load_->appliedNm() : -1.0;
+    emit loadStateChanged(applied >= 0.0 ? QStringLiteral("cleared") : QStringLiteral("unknown"),
+                          loadPresetNm_, applied, LoadController::voltForNm(qMax(0.0, applied)),
+                          applied >= 0.0
+                              ? QStringLiteral("负载当前为 0（连接时已确认松开）")
+                              : QStringLiteral("未确认负载状态——modbus_ao 不可用？"
+                                               "（开发机上没这个工具是正常的）"));
     return true;
 }
 
@@ -678,10 +692,10 @@ void ControlWorker::setOperateModeRequested(Joint::OperateMode mode)
 void ControlWorker::setTargetRequested(const Joint::TargetCommand& cmd)
 {
     if (!mayCommand(false)) return;
-    // 本地下发一律**不带负载**（loadNm = 0）：站在设备旁边的操作者，不该被
-    // 网页上设的负载突然咬住。但若当前正有负载在咬着，"没有新负载"会先把它撤掉
-    // 再运动——见 doSetTargetWithLoad 里的 needWrite 判断。
-    doSetTargetWithLoad(cmd, 0.0);
+    // 用**共享的预设值**（网页与本地 Qt 面板设的是同一个）。
+    // 本地界面在监控面板上把这个值显示出来了，操作者按下发目标前能看见，
+    // 所以不存在"被网页上设的负载突然咬住"的意外。预设为 0 时整条链跳过。
+    doSetTargetWithLoad(cmd, loadPresetNm_);
 }
 void ControlWorker::stopMotionRequested()
 {

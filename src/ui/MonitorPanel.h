@@ -7,7 +7,11 @@
 #include <QTabWidget>
 #include "device/JointTypes.h"
 
+class QDoubleSpinBox;
+class QPushButton;
+
 // 实时监控面板：每从站一个标签页，显示位置/速度/力矩/温度/状态字/驱动状态/故障码/连接/刷新率。
+// 每页底部（刷新率下方）还有磁粉制动器的**负载预设**（见 .cpp 里的说明）。
 class MonitorPanel : public QWidget
 {
     Q_OBJECT
@@ -17,9 +21,15 @@ public:
 signals:
     // 用户点击标签页切换从站（程序化同步时不发，避免联动回环）
     void activeSlaveChanged(quint16 address);
+    // 负载预设值被本地修改。**只是预设**——真正施加发生在「下发目标」时
+    void loadPresetChanged(double torqueNm);
+    void releaseLoadRequested();          // 立刻松开（写 0），不动关节
 
 public slots:
     void onTelemetry(const QList<Joint::Telemetry>& list);
+    // 负载状态（来自 ControlWorker::loadStateChanged），同步到所有页的控件上
+    void setLoadState(const QString& state, double presetNm, double appliedNm,
+                      double volt, const QString& note);
     void setSlaves(const QList<quint16>& slaves);
     void setActiveSlave(quint16 address);                 // 程序化同步（静默）
     void setSlaveModels(const QStringList& shortNames, const QStringList& modelInfos);
@@ -31,6 +41,12 @@ private:
         QLabel *pos = nullptr, *vel = nullptr, *tor = nullptr, *temp = nullptr,
                *status = nullptr, *state = nullptr, *err = nullptr, *conn = nullptr, *freq = nullptr;
         QLabel *stateDot = nullptr, *connDot = nullptr;   // 状态指示灯（纯 QSS 圆点）
+        // 负载预设控件。注意负载是**全局**的（一路 RS485 驱动一个制动器，
+        // 不随从站切换），而控件在每页里各有一份 —— 所以编辑任一份要同步到全部，
+        // 否则多从站时会看到几个显示不同值的同一个东西。
+        QDoubleSpinBox* loadSpin = nullptr;
+        QPushButton* loadRelease = nullptr;
+        QLabel* loadNote = nullptr;
         int samples = 0;
         qint64 lastFreqMs = 0;
         double freqHz = 0.0;
@@ -52,4 +68,5 @@ private:
     QList<quint16> order_;   // 从站顺序，用于按 active 切换标签页
     QStringList shorts_;     // 各从站型号短名，构造标签页标题用
     bool syncing_ = false;   // 程序化切换标签页时置位，抑制 activeSlaveChanged
+    bool syncingLoad_ = false;   // 程序化同步负载数值时置位，抑制 loadPresetChanged
 };

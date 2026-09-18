@@ -1,6 +1,8 @@
 #include "ui/MonitorPanel.h"
 #include <QDateTime>
+#include <QDoubleSpinBox>
 #include <QHBoxLayout>
+#include <QPushButton>
 #include <QStyle>
 #include <QVBoxLayout>
 
@@ -169,7 +171,49 @@ MonitorPanel::Page MonitorPanel::makePage(quint16 slave)
     p.temp = value("valText");
     q = addRow(right, q, rightBox, tr("驱动器温度"), "lblRight", p.temp, true);
     p.freq = value("valText");
-    q = addRow(right, q, rightBox, tr("刷新率"), "lblRight", p.freq, false);
+    q = addRow(right, q, rightBox, tr("刷新率"), "lblRight", p.freq, true);
+
+    // ---- 刷新率下面那块空地：负载（磁粉制动器）预设 ----
+    // 负载走 RS485 → Modbus → 0-10V，与关节的 EtherCAT 是**两条独立链路**。
+    // 这里设的是**预设值**：点「下发目标」时才真正施加（先写负载、确认成功再发运动），
+    // 运动结束会自动清零。额定 50 N·m ↔ 10V。
+    //
+    // 注意负载是**全局**的（一路 RS485 驱动一个制动器，不随从站切换），
+    // 而控件在每页里各有一份 —— 所以 setLoadState() 会把数值同步到所有页，
+    // 编辑任一份也走同一个预设，多从站时不会出现"几个显示不同值的同一个东西"。
+    p.loadSpin = new QDoubleSpinBox(rightBox);
+    p.loadSpin->setRange(0.0, 200.0);   // 上限给宽：超额定由下位机硬拒绝并说明原因，不在这里夹
+    p.loadSpin->setDecimals(1);
+    p.loadSpin->setSingleStep(1.0);
+    p.loadSpin->setSuffix(tr(" N·m"));
+    p.loadSpin->setMinimumWidth(118);   // 再窄 "50.0 N·m" 会被挤到只剩省略号
+    p.loadSpin->setToolTip(tr("磁粉制动器力矩负载（RS485 → Modbus → 0-10V）。\n"
+                              "这里设的是预设值：点「下发目标」时先施加负载、确认成功后才发运动指令；\n"
+                              "运动结束会自动清零。额定 50 N·m ↔ 10V。"));
+    connect(p.loadSpin, qOverload<double>(&QDoubleSpinBox::valueChanged), this,
+            [this](double v) {
+                if (syncingLoad_) return;   // 程序化同步，不是用户改的
+                emit loadPresetChanged(v);
+            });
+
+    p.loadRelease = new QPushButton(tr("松开"), rightBox);
+    p.loadRelease->setToolTip(tr("立刻把负载清零，但**不让关节失能**。\n"
+                                 "堵转时负载会一直保持、没有超时，用它撤载；\n"
+                                 "失能/急停虽然也会撤载，但会把关节一起失能。"));
+    connect(p.loadRelease, &QPushButton::clicked, this,
+            [this] { emit releaseLoadRequested(); });
+
+    QWidget* loadRow = new QWidget(rightBox);
+    QHBoxLayout* loadLay = new QHBoxLayout(loadRow);
+    loadLay->setContentsMargins(0, 0, 0, 0);
+    loadLay->setSpacing(6);
+    loadLay->addWidget(p.loadSpin, 1);
+    loadLay->addWidget(p.loadRelease);
+    q = addRow(right, q, rightBox, tr("负载预设"), "lblRight", loadRow, false);
+
+    p.loadNote = value("valText");
+    right->addWidget(p.loadNote, q, 0, 1, 2);   // 跨两列：状态文字比标题宽
+    ++q;
     right->setRowStretch(q, 1);
 
     // 两列之间的细分割线，强化"双栏"结构
@@ -237,6 +281,53 @@ void MonitorPanel::setActiveSlave(quint16 address)
     syncing_ = true;                 // 抑制信号：这是程序化同步，不是用户切换
     tabs_->setCurrentIndex(idx);
     syncing_ = false;
+}
+
+void MonitorPanel::setLoadState(const QString& state, double presetNm, double appliedNm,
+                                double volt, const QString& note)
+{
+    if (pages_.isEmpty())
+        return;
+
+    // 数值同步到所有页。要把信号挡住，否则 setValue 会反过来发 loadPresetChanged。
+    syncingLoad_ = true;
+    for (auto it = pages_.begin(); it != pages_.end(); ++it) {
+        if (it->loadSpin && qAbs(it->loadSpin->value() - presetNm) > 0.05)
+            it->loadSpin->setValue(presetNm);
+    }
+    syncingLoad_ = false;
+
+    // 状态文字保持简短——这一列只有约 1/3 面板宽，长句子会把布局撑破。
+    // 完整原因（比如 modbus_ao 的 stderr）放 tooltip。
+    QString text;
+    QString color = QStringLiteral("#94A3B8");   // 默认中性
+    if (state == QLatin1String("applied")) {
+        text = tr("已生效 %1 N·m").arg(appliedNm, 0, 'f', 1);
+        color = QStringLiteral("#F59E0B");       // 琥珀：正在加载，要显眼
+    } else if (state == QLatin1String("writing")) {
+        text = tr("写入中…");
+        color = QStringLiteral("#F59E0B");
+    } else if (state == QLatin1String("failed")) {
+        text = tr("写入失败");
+        color = QStringLiteral("#F87171");
+    } else if (state == QLatin1String("preset")) {
+        text = tr("已预设，下发时施加");
+    } else if (state == QLatin1String("unknown") || appliedNm < 0.0) {
+        // 没能确认（-1）就说"未确认"，不假装 0、也不报红——
+        // 开发机上没有 modbus_ao 是常态，那种红色会变成噪音
+        text = tr("未确认");
+    } else {
+        text = tr("0 N·m");
+    }
+
+    for (auto it = pages_.begin(); it != pages_.end(); ++it) {
+        if (!it->loadNote) continue;
+        it->loadNote->setText(text);
+        it->loadNote->setStyleSheet(QStringLiteral("color: %1;").arg(color));
+        it->loadNote->setToolTip(note.isEmpty()
+                                 ? tr("%1（%2 V）").arg(appliedNm, 0, 'f', 1).arg(volt, 0, 'f', 2)
+                                 : note);
+    }
 }
 
 void MonitorPanel::onTelemetry(const QList<Joint::Telemetry>& list)

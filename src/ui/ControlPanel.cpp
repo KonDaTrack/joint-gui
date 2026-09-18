@@ -31,16 +31,6 @@ ControlPanel::ControlPanel(QWidget* parent)
         "取消勾选会立即收回控制权，并让所有轴失能。"));
     connect(remoteCheck_, &QCheckBox::toggled, this, &ControlPanel::remoteAllowedChanged);
 
-    // 负载状态（只读）。负载是网页端设定并随「下发目标」施加的，
-    // 本地界面如果不显示，站在设备旁按下发目标的人根本不知道关节正顶着制动器。
-    loadLabel_ = new QLabel(this);
-    loadLabel_->setText(QStringLiteral("负载：--"));
-    loadLabel_->setToolTip(QStringLiteral(
-        "磁粉制动器力矩负载（RS485 → Modbus → 0-10V），与关节的 EtherCAT 是两条独立链路。\n"
-        "在网页上预设数值，点「下发目标」时先施加负载、确认成功后才发运动指令；\n"
-        "运动结束会自动清零。"));
-    loadLabel_->setStyleSheet(QStringLiteral("color: #94A3B8;"));
-
     // 急停按钮：最显眼（全局 QSS #dangerButton 红色醒目样式）
     estopBtn_ = new QPushButton(QStringLiteral("急停 ESTOP"), this);
     estopBtn_->setObjectName(QStringLiteral("dangerButton"));
@@ -132,7 +122,6 @@ ControlPanel::ControlPanel(QWidget* parent)
     root->setSpacing(10);
     root->addWidget(targetLabel_);
     root->addWidget(ownerLabel_);
-    root->addWidget(loadLabel_);
     root->addWidget(remoteCheck_);
     root->addLayout(estopRow);
     root->addLayout(btnRow);
@@ -330,30 +319,4 @@ void ControlPanel::onStopMotion()
     // 不再复用 targetRequested：「下发目标」那条链会先写负载，
     // 点「停止运动」时绝不能顺手施加一次负载。
     emit stopMotionRequested();
-}
-
-void ControlPanel::setLoadState(const QString& state, double presetNm, double appliedNm,
-                                double volt, const QString& note)
-{
-    if (!loadLabel_)
-        return;
-
-    QString text;
-    QString color = QStringLiteral("#94A3B8");   // 默认：中性
-    if (state == QLatin1String("applied")) {
-        text = QStringLiteral("负载：%1 N·m（%2 V）").arg(appliedNm, 0, 'f', 1).arg(volt, 0, 'f', 2);
-        color = QStringLiteral("#F59E0B");       // 琥珀：正在加载，要显眼
-    } else if (state == QLatin1String("writing")) {
-        text = QStringLiteral("负载：写入中…（预设 %1 N·m）").arg(presetNm, 0, 'f', 1);
-        color = QStringLiteral("#F59E0B");
-    } else if (state == QLatin1String("failed")) {
-        text = QStringLiteral("负载：失败 —— %1").arg(note);
-        color = QStringLiteral("#EF4444");
-    } else if (state == QLatin1String("preset")) {
-        text = QStringLiteral("负载：已预设 %1 N·m（下发目标时施加）").arg(presetNm, 0, 'f', 1);
-    } else {
-        text = QStringLiteral("负载：0 N·m");
-    }
-    loadLabel_->setText(text);
-    loadLabel_->setStyleSheet(QStringLiteral("color: %1;").arg(color));
 }

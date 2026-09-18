@@ -24,11 +24,6 @@ public:
     // owner: "local"（本机控制）或 "remote"（上位机控制）。
     // 远程持有时本地操作按钮置灰——不是"点了没反应"，要让人一眼看出为什么点不动
     void setControlOwner(const QString& owner);
-    // 负载（磁粉制动器）状态，**只读显示**。
-    // 本地操作者必须知道制动器正咬着：负载是网页端发起的，本地界面若不显示，
-    // 本地按下发目标的人根本不知道关节正顶着阻力。
-    void setLoadState(const QString& state, double presetNm, double appliedNm,
-                      double volt, const QString& note);
 
 signals:
     // 控制目标变化，供状态栏提示。参数是完整描述如「从站2 · 70mm」
@@ -78,7 +73,7 @@ private:
     QPushButton* zeroBtn_ = nullptr;
     QLabel* targetLabel_ = nullptr;   // 醒目标注当前控制目标，避免命令发错轴
     QLabel* ownerLabel_ = nullptr;    // 当前控制权归属（本地/上位机）
-    QLabel* loadLabel_ = nullptr;     // 负载（磁粉制动器）状态，只读
+    // 负载（磁粉制动器）的设置与状态在**监控面板**（刷新率下面），不在这里重复一份
     QCheckBox* remoteCheck_ = nullptr;  // 本地开关：允许上位机接管
     QString owner_ = QStringLiteral("local");   // 当前控制权（"local"/"remote"）
     QComboBox* modeCombo_ = nullptr;
