@@ -130,6 +130,12 @@
     <div class="field" data-mode="tor">
       <label>目标力矩 (N·m)</label><input type="number" id="inpTor" value="0" step="0.1">
     </div>
+    <!-- 与 Qt 端 ControlPanel 的「力矩斜率 (N·m/s)」对齐（默认 10）。
+         它真的会被写进驱动器：EthercatDevice 按额定力矩归一化后调 eth_setTorqueSlope。
+         以前这里没有输入框、代码里写死 10 —— 下位机能调、网页不能调。 -->
+    <div class="field" data-mode="tor">
+      <label>力矩斜率 (N·m/s)</label><input type="number" id="inpTorSlope" value="10" step="1">
+    </div>
     <div class="field" data-mode="pos">
       <label>轮廓速度 (deg/s)</label><input type="number" id="inpProfVel" value="10" step="1">
     </div>

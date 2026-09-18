@@ -261,9 +261,9 @@ $('btnSend').onclick = () => {
     args.velocityDps = +$('inpVel').value;
     args.profileAcceleration = +$('inpProfAcc').value;
     args.profileDeceleration = +$('inpProfDec').value;
-  } else {            // PT：力矩
+  } else {            // PT：力矩 + 力矩斜率
     args.torqueNm = +$('inpTor').value;
-    args.torqueSlope = 10;
+    args.torqueSlope = +$('inpTorSlope').value;   // 与 Qt 端同名字段对齐，不再写死
   }
   // 负载值**随目标一起发**（同一条消息）：分两条会有竞态，而且下位机要保证
   // "先写负载、确认成功、再发运动指令"的顺序。0 时省略 = 本次不带负载。

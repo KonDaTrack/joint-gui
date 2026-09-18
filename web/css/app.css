@@ -552,6 +552,11 @@ body::after {
   border-bottom: 1px solid rgba(255, 255, 255, 0.045);
   transition: background .25s var(--ease);
 }
+/* 按操作模式隐藏不相关的目标字段（app.js 一直在 toggle 这个类来切换显示）。
+   这一条**一直缺失** —— 所以以前切 PP/PV/PT 时 7 个字段全都显示，
+   而下位机 Qt 只显示该模式对应的 2~4 个，两边"参数的个数"对不上。
+   各字段用 data-mode 标注自己属于哪些模式（如 "pos vel"）。 */
+.field.hidden { display: none; }
 .field label {
   flex: 0 0 148px;
   text-align: right;
