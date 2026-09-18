@@ -85,24 +85,24 @@ function renderSlaves() {
   if (state.slaves.length === 0) {
     const li = document.createElement('li');
     li.className = 'sub';
-    li.textContent = '无从站';
+    li.textContent = '无关节';
     ul.appendChild(li);
     return;
   }
   // 关节标识卡：当前控制的是哪个关节、型号、额定力矩（一眼可见，不用去翻别处）
   const cur = state.slaves.find((s) => s.slave === state.active);
   if (cur) {
-    $('moduleTitle').textContent = `SLAVE MODULE ${cur.slave} · ${cur.shortName || '未知型号'}`;
+    $('moduleTitle').textContent = `关节${cur.slave} · ${cur.shortName || '未知型号'}`;
     $('moduleModel').textContent = cur.model || '--';
   } else {
-    $('moduleTitle').textContent = '从站 --';
+    $('moduleTitle').textContent = '关节 --';
     $('moduleModel').textContent = '--';
   }
 
   state.slaves.forEach((s) => {
     const li = document.createElement('li');
     li.className = s.slave === state.active ? 'active' : '';
-    li.innerHTML = `<span>从站${s.slave} · ${s.shortName || '未知'}</span>
+    li.innerHTML = `<span>关节${s.slave} · ${s.shortName || '未知'}</span>
                     <span class="sub">${s.model || ''}</span>`;
     li.onclick = () => {
       if (state.active === s.slave) return;
@@ -283,6 +283,47 @@ $('btnLoadSet').onclick = () => {
 };
 
 renderLoad(0);
+
+// ============ 读数字号自适应 ============
+// 「位置/速度/力矩」是操作员盯得最多的三块，**任何窗口尺寸下都不该出现滚动条**。
+// 固定字号做不到：实测 1440×900 溢出 46px、1366×768 差 44px。
+// 而 CSS 里算不出可用高度（要减掉型号条、遥测表、内外边距，还随边框盒变），
+// 所以这里**实测反推**：二分几次，逼出"刚好不溢出"的最大字号。
+// 只在尺寸变化时跑，不跟渲染帧走。
+// 下限 14px：1366×768 这类矮窗口要压到 ~15px 才装得下，
+// 卡在 16 会差 5px → 又冒出滚动条。14px 仍清晰可读，再往下就不划算了。
+const READOUT_MIN = 14, READOUT_MAX = 44;
+
+function fitReadouts() {
+  const box = document.querySelector('.readouts');
+  if (!box || !box.clientHeight || !box.querySelector('.readout')) return;
+
+  // 返回当前字号下的溢出量。读 scrollHeight 会同步触发布局，不用额外等待。
+  const overflowAt = (size) => {
+    box.style.setProperty('--readout-size', size.toFixed(1) + 'px');
+    return box.scrollHeight - box.clientHeight;
+  };
+
+  if (overflowAt(READOUT_MAX) <= 0) return;      // 大屏：直接用上限，省掉二分
+  let lo = READOUT_MIN, hi = READOUT_MAX;
+  for (let i = 0; i < 7 && hi - lo > 0.5; i++) {
+    const mid = (lo + hi) / 2;
+    if (overflowAt(mid) <= 0) lo = mid; else hi = mid;
+  }
+  overflowAt(lo);
+}
+
+fitReadouts();
+// 首次布局时字体可能还没加载完，行高会变——字体就绪后再量一次
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitReadouts);
+let fitPending = false;
+window.addEventListener('resize', () => {
+  if (fitPending) return;
+  fitPending = true;
+  requestAnimationFrame(() => { fitPending = false; fitReadouts(); });
+});
+// 卡片高度由网格决定，改字号不会反过来改变它 → 不会形成观察者死循环
+new ResizeObserver(fitReadouts).observe(document.querySelector('.card-slaves'));
 
 renderTopbar(); renderCommandEnabled(); renderSlaves();
 Anim.entrance();

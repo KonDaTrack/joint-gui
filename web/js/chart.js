@@ -6,10 +6,12 @@
 //     拉伸到满屏，看着像剧烈震荡（这个坑在 Qt 端踩过）
 //  3) 量程平滑跟随，避免每帧重算导致波形整体跳动
 
+// 轨迹配色与 css/app.css 的变量同源（canvas 读不到 CSS 变量，只能重复一遍）。
+// 位置=冰青（与读数同色，视觉上"这两个是同一路数据"）、速度=绿、力矩=琥珀。
 const TRACES = [
-  { key: 'positionDeg', color: '#38E1FF', label: '位置', minSpan: 1.0 },
-  { key: 'velocityDps', color: '#31FFB0', label: '速度', minSpan: 10.0 },
-  { key: 'torqueNm',    color: '#FFB74D', label: '力矩', minSpan: 1.0 },
+  { key: 'positionDeg', color: '#78D6EE', label: '位置', minSpan: 1.0 },
+  { key: 'velocityDps', color: '#4ECB8E', label: '速度', minSpan: 10.0 },
+  { key: 'torqueNm',    color: '#D9A441', label: '力矩', minSpan: 1.0 },
 ];
 
 const MAX_POINTS = 3000;   // 10s @300Hz 上限，够装下一次完整运动
@@ -83,8 +85,9 @@ class Chart {
     const w = this.canvas.clientWidth, h = this.canvas.clientHeight;
     ctx.clearRect(0, 0, w, h);
 
-    // 网格：比原来密（6×8），像仪器刻度
-    ctx.strokeStyle = 'rgba(56,225,255,0.10)';
+    // 网格：比原来密（6×8），像仪器刻度。中性灰——青色只留给轨迹本身，
+    // 网格跟着泛青会让"哪条线是数据"变得含糊。
+    ctx.strokeStyle = 'rgba(255,255,255,0.055)';
     ctx.lineWidth = 1;
     for (let i = 1; i < 6; i++) {
       const y = (h * i) / 6;
@@ -97,7 +100,7 @@ class Chart {
 
     const hasData = this.traces.some((t) => t.buf.length > 1);
     if (!hasData) {
-      ctx.fillStyle = '#4E6577';
+      ctx.fillStyle = '#666C75';
       ctx.font = '15px sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText('点「下发目标」后开始记录波形', w / 2, h / 2);
@@ -144,13 +147,13 @@ class Chart {
     this.traces.forEach((tr) => {
       ctx.fillStyle = tr.color;
       ctx.fillText('■', x, 19);
-      ctx.fillStyle = '#7E93A6';
+      ctx.fillStyle = '#9BA1A9';
       const lo = tr.center - tr.span / 2, hi = tr.center + tr.span / 2;
       const txt = `${tr.label} ${fmt(lo)}~${fmt(hi)}`;
       ctx.fillText(txt, x + 14, 19);
       x += ctx.measureText(txt).width + 34;
     });
-    ctx.fillStyle = this.recording ? '#31FFB0' : '#7E93A6';
+    ctx.fillStyle = this.recording ? '#4ECB8E' : '#9BA1A9';
     ctx.fillText(`${this.recording ? '● 记录中' : '记录完成'} ${secs}s`, x, 19);
   }
 }
