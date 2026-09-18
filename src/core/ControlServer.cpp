@@ -14,6 +14,14 @@ static const int kTelemetryHz = 50;
 ControlServer::ControlServer(QObject* parent)
     : QObject(parent)
 {
+    // 负载状态的初值：hello 里必须始终有这个字段，客户端才不用区分
+    // "没收到"和"是 0"——两者对操作者的含义完全不同。
+    lastLoadState_[QStringLiteral("state")] = QStringLiteral("cleared");
+    lastLoadState_[QStringLiteral("presetNm")] = 0.0;
+    lastLoadState_[QStringLiteral("torqueNm")] = 0.0;
+    lastLoadState_[QStringLiteral("volt")] = 0.0;
+    lastLoadState_[QStringLiteral("implemented")] = true;
+    lastLoadState_[QStringLiteral("note")] = QString();
 }
 
 ControlServer::~ControlServer()
@@ -82,6 +90,8 @@ void ControlServer::onNewConnection()
         arr.append(s);
     }
     hello[QStringLiteral("slaves")] = arr;
+    // 带上负载状态：否则网页重连后滑块归 0，而制动器可能正咬着上一个值。
+    hello[QStringLiteral("load")] = lastLoadState_;
     send(hello);
 }
 
@@ -210,14 +220,22 @@ void ControlServer::onFault(const QString& message)
     send(o);
 }
 
-void ControlServer::onLoadCommand(double torqueNm, double volt)
+void ControlServer::onLoadState(const QString& state, double presetNm, double appliedNm,
+                                double volt, const QString& note)
 {
     QJsonObject o;
     o[QStringLiteral("type")] = QStringLiteral("loadState");
-    o[QStringLiteral("torqueNm")] = torqueNm;
+    o[QStringLiteral("state")] = state;
+    o[QStringLiteral("presetNm")] = presetNm;
+    // torqueNm 保留旧字段名：网页一直用它当"当前负载"，改名会静默变 undefined
+    // （老代码里有 .toFixed，缺字段直接白屏）。
+    // **恒为数字**：负值（-1 = 状态未知）也照发，让界面能区分"0"和"不知道"。
+    o[QStringLiteral("torqueNm")] = appliedNm;
     o[QStringLiteral("volt")] = volt;
-    // 如实告诉客户端后端未接线：否则界面会显示"已下发"，而制动器毫无反应
-    o[QStringLiteral("implemented")] = false;
-    o[QStringLiteral("note")] = QStringLiteral("RS485 后端未接线");
+    o[QStringLiteral("implemented")] = true;   // 后端已接线；字段保留兼容
+    o[QStringLiteral("note")] = note;
+
+    lastLoadState_ = o;
+    lastLoadState_.remove(QStringLiteral("type"));   // hello 里挂在 "load" 下，不需要 type
     send(o);
 }

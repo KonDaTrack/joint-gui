@@ -34,8 +34,11 @@ public slots:
     void onSlaveModels(const QStringList& shortNames, const QStringList& modelInfos);
     void onControlOwnerChanged(const QString& owner, const QString& reason);
     void onFault(const QString& message);
-    // 负载设定值已收到（硬件后端未接线，回给客户端由界面如实提示）
-    void onLoadCommand(double torqueNm, double volt);
+    // 负载状态变化，如实转发给客户端。
+    // state: preset(仅预设) / writing(写入中) / applied(已生效) / cleared(已清零) / failed(失败)
+    // appliedNm 为 -1 表示"外设实际状态未知"——失败时不能假装是 0。
+    void onLoadState(const QString& state, double presetNm, double appliedNm,
+                     double volt, const QString& note);
 
 signals:
     // 上行命令转发给 ControlWorker（队列连接，天然跨线程）
@@ -68,4 +71,7 @@ private:
     int slaveCount_ = 0;
     QString busName_;   // 总线类型（"EtherCAT"/"CANopen"/"仿真"）——界面须显著区分仿真与真机
     QString owner_ = QStringLiteral("local");
+    // 负载状态缓存：新客户端接入时要在 hello 里带上，否则网页重连后滑块归 0，
+    // 操作者会拿一个错的值去下发目标（而制动器可能正咬着）。
+    QJsonObject lastLoadState_;
 };

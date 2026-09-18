@@ -102,7 +102,18 @@ MainWindow::MainWindow(QWidget* parent)
     connect(worker_, &ControlWorker::slavesDetected, server_, &ControlServer::onSlavesDetected);
     connect(worker_, &ControlWorker::slaveModelsDetected, server_, &ControlServer::onSlaveModels);
     connect(worker_, &ControlWorker::faultDetected, server_, &ControlServer::onFault);
-    connect(worker_, &ControlWorker::loadCommandReceived, server_, &ControlServer::onLoadCommand);
+    connect(worker_, &ControlWorker::loadStateChanged, server_, &ControlServer::onLoadState);
+    // 负载状态**同时**要接给本地面板与状态栏，不能只接 server_：
+    // ControlServer::send() 在没有客户端时是静默丢弃的，只接它的话本地什么也看不到，
+    // 而本地操作者必须知道制动器正咬着。
+    connect(worker_, &ControlWorker::loadStateChanged, control_, &ControlPanel::setLoadState);
+    connect(worker_, &ControlWorker::loadStateChanged, this,
+            [this](const QString& state, double, double, double, const QString& note) {
+                // 只让"失败/清零"打断状态栏；applied/writing 由面板常驻显示，
+                // 每次都弹会把状态栏刷成噪音
+                if (state == QLatin1String("failed") || state == QLatin1String("cleared"))
+                    statusBar()->showMessage(QStringLiteral("负载：%1").arg(note), 6000);
+            });
     // 服务 → 设备（上行）：控制权与命令
     connect(server_, &ControlServer::requestControlReceived, worker_, &ControlWorker::requestRemoteControl);
     connect(server_, &ControlServer::releaseControlReceived, worker_, &ControlWorker::releaseRemoteControl);
@@ -132,6 +143,7 @@ MainWindow::MainWindow(QWidget* parent)
     connect(control_, &ControlPanel::faultResetRequested, worker_, &ControlWorker::faultResetRequested);
     connect(control_, &ControlPanel::operateModeChanged, worker_, &ControlWorker::setOperateModeRequested);
     connect(control_, &ControlPanel::targetRequested, worker_, &ControlWorker::setTargetRequested);
+    connect(control_, &ControlPanel::stopMotionRequested, worker_, &ControlWorker::stopMotionRequested);
     // 波形只在「下发目标」后记录，避免平时一直被噪声刷新。
     // 触发源放在 worker（而非 ControlPanel）：本地和远程两条命令路径都能覆盖到，
     // 否则从网页下发目标时 Qt 端曲线不会开始记录。

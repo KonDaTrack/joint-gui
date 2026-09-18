@@ -83,13 +83,23 @@
       <button id="btnZero" class="btn">回0</button>
     </div>
 
+    <!-- 单位不写进标题：.section-title 有 text-transform:uppercase，
+         "N·m" 会被渲染成 "N·M"——而 M 是"兆"，单位就错了。
+         额定值放在下面的 .load-rated 里（不受大写影响）。 -->
     <h3 class="section-title">负载（RS485 · 0-10V）</h3>
-        <div class="load-row">
-      <input type="range" id="loadSlider" min="0" max="100" value="0" step="1">
-      <input type="number" id="loadValue" class="load-num" value="0" min="0" max="100" step="1">
+    <div class="load-row">
+      <input type="range" id="loadSlider" min="0" max="50" value="0" step="1">
+      <input type="number" id="loadValue" class="load-num" value="0" min="0" step="1">
       <span class="unit">N·m</span>
       <span class="load-volt" id="loadVolt">0.00 V</span>
-      <button id="btnLoadSet" class="btn btn-primary">下发</button>
+    </div>
+    <div class="load-row load-row-btns">
+      <!-- 「预设」只记住数值，点「下发目标」时才真正施加（先写负载、确认成功再发运动） -->
+      <button id="btnLoadSet" class="btn btn-primary">预设</button>
+      <!-- 堵转时负载会一直保持（没有超时），没有这个入口就只能靠失能/急停撤载，
+           而那会把关节一起失能 -->
+      <button id="btnLoadRelease" class="btn">松开负载</button>
+      <span class="load-rated" id="loadRated">额定 50 N·m</span>
     </div>
     <div id="loadHint" class="hint"></div>
 

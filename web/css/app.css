@@ -690,6 +690,10 @@ body::after {
 }
 .load-row .unit { color: var(--dimmer); font-family: var(--mono); font-size: 12px; }
 .load-volt { min-width: 70px; text-align: right; color: var(--dim); font-family: var(--mono); font-size: 13px; }
+/* 按钮单独一行：和滑块挤在一行时，窄面板下 4 个元素会互相压 */
+.load-row-btns { margin-top: 8px; }
+.load-row-btns .btn { flex: 1; }
+.load-rated { color: var(--dimmer); font-family: var(--mono); font-size: 11px; white-space: nowrap; }
 
 /* ============ 波形 ============ */
 #chart {

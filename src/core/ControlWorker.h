@@ -7,6 +7,8 @@
 #include "device/JointDevice.h"
 #include "core/AppConfig.h"
 
+class LoadController;   // 前向声明够了：只用作指针成员，实现在 .cpp 里包含
+
 // 控制权归属。上位机（远程）与下位机（本地）都可能发命令，
 // 必须仲裁——否则两边同时往驱动器写目标，电机行为不可预测
 // （与"官方串口工具和 EtherCAT 抢控制权"是同一个坑）。
@@ -32,6 +34,14 @@ public slots:
     void setTargetRequested(const Joint::TargetCommand& cmd);
     void homingRequested();
     void moveToZeroRequested();
+    // 「停止运动」单独立一条路：它和「下发目标」原来共用 targetRequested，
+    // 而负载链挂在"下发目标"上——不拆开的话点停止会先写一次负载。
+    void stopMotionRequested();
+    // 网页的「预设」：只记住力矩值，等下次下发目标时才真正施加。不调 modbus_ao。
+    void setLoadPresetRequested(double torqueNm);
+    // 网页的「松开负载」：立刻写 0，不动关节。堵转时负载会一直保持（无超时），
+    // 没有这个入口操作者就只能靠失能/急停撤载，而那会把关节一起失能。
+    void releaseLoadRequested();
 
     // ---- 控制权 ----
     // 本地开关：是否允许远程（上位机）接管。关掉时若远程正持有，立即收回。
@@ -61,13 +71,16 @@ signals:
     // 否则从网页下发目标时 Qt 端曲线不会开始记录
     void targetCommanded();   // 已下发目标 → 开始记录本次响应
     void motionStopped();     // 停止/失能 → 停止记录
-    // 负载（磁粉制动器）设定值已收到。走 RS485 → Modbus → 0-10V，
-    // 与关节的 EtherCAT 是**两条独立链路**。硬件后端尚未接线，
-    // 所以只回报收到，界面据此如实提示，不让人以为已经生效。
-    void loadCommandReceived(double torqueNm, double volt);
+    // 负载（磁粉制动器）状态如实回报。走 RS485 → Modbus → 0-10V，
+    // 与关节的 EtherCAT 是**两条独立链路**。
+    // state: preset(仅预设) / writing(写入中) / applied(已生效) / cleared(已清零) / failed(失败)
+    // appliedNm 为 -1 表示"外设实际状态未知"——失败时不能假装是 0。
+    void loadStateChanged(QString state, double presetNm, double appliedNm,
+                          double volt, QString note);
 
 private slots:
     void onCycle();
+    void onLoadWriteFinished(double nm, bool ok, const QString& note);
 
 private:
     bool tryOpen(const AppConfig& c);          // 尝试打开候选设备，成功则接管并启动周期
@@ -86,6 +99,16 @@ private:
     void doSetTarget(const Joint::TargetCommand& cmd);
     void doHoming();
     void doMoveToZero();
+    void doStopMotion();                       // 与 doSetTarget 分开，不带负载链
+    void doSetLoadPreset(double torqueNm);     // 只记住预设值，不调 modbus_ao
+    // 负载链：下发目标时"先写负载→确认成功→再发运动指令"
+    void doSetTargetWithLoad(const Joint::TargetCommand& cmd, double loadNm);
+    void armTargetAfterLoad(const Joint::TargetCommand& cmd, double nm);
+    void beginLoadMotionWatch();
+    // 所有"该撤载"路径的唯一出口（急停/失能/限位/换轴/断连/控制权切换）。
+    // 它还会取消"写完负载再发目标"的待发状态——否则急停之后目标照样会发出去
+    // （权限在点击那一刻有效，而写负载要几十~几百毫秒）。
+    void clearLoad(const QString& reason);
     // 控制权切换一律先失能所有轴：否则接手方会继承一个"目标未知但仍在运动"的轴
     void disableAllAxes();
     void grantRemote(const QString& reason);
@@ -98,6 +121,18 @@ private:
     quint16 activeSlave_ = 1;
     qint64 lastTelemetryMs_ = 0;
     bool limitWarned_ = false;   // 超限告警去抖：仅上升沿提示一次
+    bool faultWarned_ = false;   // 驱动器故障上升沿去抖（用于撤载）
+
+    // ---- 负载（磁粉制动器）----
+    LoadController* load_ = nullptr;   // 在构造函数里 new（随 moveToThread 迁移）
+    double loadPresetNm_ = 0.0;        // 预设值：只记住，下发目标时才施加
+    bool loadTargetArmed_ = false;     // 有"等负载写完再发"的目标在等
+    Joint::TargetCommand loadPendingTarget_;   // 覆盖语义，不排队
+    bool loadMotionActive_ = false;    // 正在判定"本次运动是否结束"
+    bool loadMoved_ = false;           // 先决条件：本次真的动过
+    qint64 loadStillSinceMs_ = 0;      // 连续静止起点（用采样的 timestampMs）
+    bool shuttingDown_ = false;        // 关设备中：拒绝一切新的异步写
+    bool loadClearFailReported_ = false;   // "清负载失败"告警去抖
 
     // ---- 控制权 ----
     ControlOwner owner_ = ControlOwner::Local;   // 默认本地（下位机在设备旁，本地优先）

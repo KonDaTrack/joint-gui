@@ -38,6 +38,8 @@ add_executable(joint_gui
     src/core/UnitConverter.cpp   # EthercatDevice 依赖脉冲↔角度/力矩换算
     src/core/ControlWorker.cpp
     src/core/ControlWorker.h
+    src/core/LoadController.cpp
+    src/core/LoadController.h
     src/device/JointDevice.h
     src/device/DeviceFactory.cpp
     src/device/DeviceFactory.h
@@ -90,6 +92,8 @@ if(NOT CMAKE_CROSSCOMPILING)
         tests/TestJointModel.cpp
         tests/TestMitFrameCodec.cpp
         tests/TestDeviceParams.cpp
+        tests/TestLoadController.cpp
+        src/core/LoadController.cpp
         src/core/UnitConverter.cpp
         src/device/sim/JointModel.cpp
         src/device/JointTypes.cpp   # TestJointModel 依赖 Joint::mapDriveState

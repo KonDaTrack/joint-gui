@@ -6,7 +6,22 @@ const DRIVE_STATES = ['未就绪', '禁止合闸', '待合闸', '已合闸', '�
                       '快速停机', '故障反应', '故障', '未知'];
 const OP_ENABLED = 4;   // OperationEnabled
 
-const link = new JointLink(`ws://${location.hostname || 'localhost'}:9002`);
+// 下位机（Qt 端 ControlServer）的地址。优先级：
+//   1) ?host=192.168.x.x  —— 换网段/换板子时不用改代码
+//   2) 页面所在主机       —— 在板子上开个 http 服务、用板子的浏览器打开本页时，
+//                            location.hostname 就是板子自己，直接连通
+//   3) DEFAULT_HOST       —— 双开 index.html 的常规情况
+//
+// 第 3 条是**必须的**：file:// 打开时 location.hostname 是空串，原来会回退成
+// 'localhost'，那在下位机与网页同机时恰好成立；但下位机搬到 ARM 板之后，
+// 'localhost' 指的是 PC 自己，永远连不上——而且表现成"板子没起来"，极易误判。
+const DEFAULT_HOST = '192.168.1.10';   // ARM 板（LubanCat）的地址
+const WS_PORT = 9002;                  // 与 src/ui/MainWindow.cpp 的 kRemotePort 保持一致
+
+const wsHost = new URLSearchParams(location.search).get('host')
+            || location.hostname
+            || DEFAULT_HOST;
+const link = new JointLink(`ws://${wsHost}:${WS_PORT}`);
 const chart = new Chart(document.getElementById('chart'));
 
 const $ = (id) => document.getElementById(id);
@@ -71,7 +86,7 @@ function renderCommandEnabled() {
   ['inpPos', 'inpVel', 'inpTor', 'inpProfVel', 'inpProfAcc', 'inpProfDec']
     .forEach((id) => { $(id).disabled = !mine; });
   // 归零/回0 与负载同属"命令类"，无控制权时置灰
-  ['btnHome', 'btnZero', 'loadSlider', 'loadValue', 'btnLoadSet']
+  ['btnHome', 'btnZero', 'loadSlider', 'loadValue', 'btnLoadSet', 'btnLoadRelease']
     .forEach((id) => { $(id).disabled = !mine; });
   // 没有控制权时说明原因，避免"点了没反应"
   $('cmdHint').textContent = mine
@@ -159,6 +174,12 @@ link.on('open', () => { renderTopbar(); toast('已连接下位机'); })
       state.slaves = m.slaves || [];
       const act = state.slaves.find((s) => s.active);
       state.active = act ? act.slave : (state.slaves[0] ? state.slaves[0].slave : 0);
+      // 恢复负载状态：不复位的话重连后滑块归 0，而制动器可能正咬着上一个值，
+      // 操作者会拿一个错的值去下发目标。
+      if (m.load) {
+        if (Number.isFinite(m.load.presetNm)) renderLoad(m.load.presetNm);
+        loadHint(m.load.note || '', m.load.state !== 'failed');
+      }
       renderTopbar(); renderSlaves(); renderCommandEnabled();
     })
     .on('telemetry', (m) => {
@@ -187,12 +208,22 @@ link.on('open', () => { renderTopbar(); toast('已连接下位机'); })
     })
     .on('fault', (m) => toast('下位机异常：' + m.message))
     .on('loadState', (m) => {
-      // 下位机如实回报后端状态。未接线时必须说清楚，
-      // 否则界面显示"已下发"而制动器毫无反应，排查时会被误导。
-      loadHint(m.implemented
-        ? `已生效：${m.torqueNm} N·m（${m.volt.toFixed(2)} V）`
-        : `下位机已收到 ${m.torqueNm} N·m（${m.volt.toFixed(2)} V），但 ${m.note}`,
-        !!m.implemented);
+      // 下位机如实回报。**绝不乐观显示"已生效"**——写失败时制动器毫无反应，
+      // 而界面显示成功会把排查引到完全错误的方向（这个项目吃过同类亏）。
+      // torqueNm 为 -1 表示"外设实际状态未知"，与"0"含义不同。
+      const applied = Number.isFinite(m.torqueNm) ? m.torqueNm : 0;
+      const volt    = Number.isFinite(m.volt) ? m.volt : 0;
+      const preset  = Number.isFinite(m.presetNm) ? m.presetNm : 0;
+      if (m.state === 'preset' || m.state === 'cleared') renderLoad(preset);
+
+      const text = {
+        preset:  `已预设 ${preset} N·m（${(preset / NM_PER_VOLT).toFixed(2)} V），点「下发目标」时施加`,
+        writing: m.note || '正在写入负载…',
+        applied: `负载已生效：${applied} N·m（${volt.toFixed(2)} V）`,
+        cleared: '负载已清零',
+        failed:  `负载失败：${m.note || '未知原因'}`,
+      }[m.state] || (m.note || '');
+      loadHint(text, m.state !== 'failed');
     })
     .on('connection', (m) => {
       state.deviceConnected = !!m.connected;
@@ -214,7 +245,9 @@ $('btnFaultReset').onclick = () => link.command('faultReset');
 $('btnHome').onclick = () => link.command('homing');
 $('btnZero').onclick = () => link.command('moveToZero');
 $('btnEstop').onclick = () => link.command('estop');       // 不受控制权限制
-$('btnStop').onclick = () => link.command('setTarget', { velocityDps: 0 });
+// 「停止运动」用独立命令名，不走 setTarget：那条路会先写一次负载，
+// 而"停下来"绝不该顺手施加负载（停止时反而必须撤载）。
+$('btnStop').onclick = () => link.command('stopMotion');
 
 $('btnSend').onclick = () => {
   const mode = +$('selMode').value;
@@ -232,7 +265,12 @@ $('btnSend').onclick = () => {
     args.torqueNm = +$('inpTor').value;
     args.torqueSlope = 10;
   }
+  // 负载值**随目标一起发**（同一条消息）：分两条会有竞态，而且下位机要保证
+  // "先写负载、确认成功、再发运动指令"的顺序。0 时省略 = 本次不带负载。
+  if (loadPresetNm > 0) args.loadNm = loadPresetNm;
   link.command('setTarget', args);
+  // 不要乐观提示"已生效"——写负载可能要几百毫秒，失败还会拦住这次运动
+  loadHint(loadPresetNm > 0 ? '下发中…（先写负载，确认后再发运动指令）' : '', true);
   const t = state.telemetry.get(state.active);
   chart.start(t ? t.ratedTorqueNm : 0);   // 每次下发都重新记录本次响应
   Anim.chartStarted();
@@ -254,32 +292,49 @@ applyModeFields(false);
 // ============ 负载控制（磁粉制动器 / 张力控制器） ============
 // 走 RS485 → Modbus → 0-10V，与关节的 EtherCAT 是**两条独立链路**，
 // 所以它不受"控制从站"影响，只受控制权约束。
-// 负载上限取制动器额定：90mm 关节配 100 N·m，70mm 配 25 N·m。
-const LOAD_MAX_NM = 100;
+// 标定：制动器的 50 N·m ↔ 10V（AO 模块满量程）。模块单位 mV，所以 mV = N·m × 200。
+// 电压换算只用于**显示**——下位机一律用 torqueNm 自己算 mV，不信客户端传的值。
+const LOAD_RATED_NM = 50;    // 额定：只显示，不硬性限制输入
+const NM_PER_VOLT   = 5;     // 50 / 10
+let loadPresetNm = 0;        // 预设值：只记住，点「下发目标」时才施加
 
 const loadHint = (msg, ok) => {
   $('loadHint').textContent = msg || '';
   $('loadHint').style.color = ok ? 'var(--ok)' : 'var(--warn)';
 };
 
-/** 把 N·m 换算成 0-10V 并刷新界面（斜率由负载额定决定） */
+/** 按 N·m 刷新滑块/数字框/电压显示。超额定只标红提示，不夹取 */
 function renderLoad(nm) {
-  nm = Math.max(0, Math.min(LOAD_MAX_NM, nm || 0));
-  $('loadSlider').max = LOAD_MAX_NM;
-  $('loadSlider').value = nm;
-  $('loadSlider').style.setProperty('--fill', ((nm / LOAD_MAX_NM) * 100) + '%');
-  $('loadValue').value = nm;
-  $('loadVolt').textContent = ((nm / LOAD_MAX_NM) * 10).toFixed(2) + ' V';
+  // NaN 必须挡住：JSON.stringify(NaN) → null → Qt 的 toDouble() → 0，
+  // 负载会**静默变成 0**（制动器松开）——危险方向的静默失败。
+  if (!Number.isFinite(nm)) nm = 0;
+  nm = Math.max(0, nm);
+
+  const s = Math.min(nm, LOAD_RATED_NM);      // 滑块行程 = 额定（要超额定只能改数字框）
+  $('loadSlider').value = s;
+  $('loadSlider').style.setProperty('--fill', (s / LOAD_RATED_NM * 100) + '%');
+
+  if (document.activeElement !== $('loadValue')) $('loadValue').value = nm;
+
+  const over = nm > LOAD_RATED_NM;
+  $('loadVolt').textContent = (nm / NM_PER_VOLT).toFixed(2) + ' V' + (over ? '（超额定）' : '');
+  loadPresetNm = nm;
 }
 
 $('loadSlider').oninput = () => { renderLoad(+$('loadSlider').value); loadHint(''); };
 $('loadValue').oninput  = () => { renderLoad(+$('loadValue').value);  loadHint(''); };
 
 $('btnLoadSet').onclick = () => {
-  const nm = Math.max(0, Math.min(LOAD_MAX_NM, +$('loadValue').value || 0));
-  const volt = (nm / LOAD_MAX_NM) * 10;
-  link.command('setLoad', { torqueNm: nm, maxNm: LOAD_MAX_NM, volt });
-  loadHint(`已下发 ${nm} N·m（${volt.toFixed(2)} V）`);
+  renderLoad(+$('loadValue').value);
+  // 只记住：真正施加发生在点「下发目标」时（先写负载、确认成功再发运动指令）
+  link.command('setLoad', { torqueNm: loadPresetNm });
+  loadHint(`已预设 ${loadPresetNm} N·m（${(loadPresetNm / NM_PER_VOLT).toFixed(2)} V），`
+         + `点「下发目标」时施加`, true);
+};
+
+$('btnLoadRelease').onclick = () => {
+  link.command('releaseLoad', {});
+  loadHint('正在松开负载…', true);
 };
 
 renderLoad(0);
