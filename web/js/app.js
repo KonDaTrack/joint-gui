@@ -842,10 +842,6 @@ $('btnTakeControl').onclick = () => link.requestControl();
 $('btnReleaseControl').onclick = () => link.releaseControl();
 $('chkReady').onchange = renderCommandEnabled;
 
-// 安全条上的急停与失能。**不受控制权限制，也不受当前页面限制**——
-// 这是设计文档 4.4 的硬约束，任何时候都要能点。
-// 与监控页操作卡里的同名按钮是两个入口、同一个命令，不冲突。
-$('btnEstopBar').onclick = () => { motionClear(); link.command('estop'); };
 
 // 「运动中」徽章可点，点了跳回监控页（它是提醒，不做任何拦截）
 $('motionBadge').onclick = () => Router.go('monitor');
