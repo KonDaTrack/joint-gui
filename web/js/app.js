@@ -294,6 +294,19 @@ function splashStep(name, cls) {
   if (li) li.className = cls;
 }
 
+// ★ 行高必须和 shell.css 里 .splash-steps 的 --row 一致，改一处要改两处。
+const STEP_ROW = 38;
+
+/** 把第 idx 步滚到取景框正中（像歌词）。缓存上次的值，别每个 tick 都写样式。 */
+function splashScroll(idx) {
+  const list = $('splashSteps');
+  if (!list) return;
+  const y = -idx * STEP_ROW;
+  if (list._y === y) return;
+  list._y = y;
+  list.style.transform = `translateY(${y}px)`;
+}
+
 function renderSplash() {
   if (SPLASH.gone) return;
 
@@ -305,6 +318,9 @@ function renderSplash() {
   splashStep('link',   linked ? 'done' : 'doing');
   splashStep('hello',  helloed ? 'done' : (linked ? 'doing' : ''));
   splashStep('device', dev ? 'done' : (helloed ? 'doing' : ''));
+
+  // 当前进行到第几步，把它滚到正中。全做完时停在最后一步。
+  splashScroll(!linked ? 0 : !helloed ? 1 : 2);
 
   const dot = $('bootDot');
   // 带上地址**来源**：地址配错时，"它到底在连哪、这个值哪来的"必须一眼看出
@@ -371,14 +387,14 @@ function leaveSplash() {
   const el = $('splash');
   el.classList.add('leaving');   // 光圈放大穿越 + 文字上浮
 
-  // ★ 主界面**在开场画面还没飞完时就开始装配**（170ms 时光圈刚放大到一半）。
+  // ★ 主界面**在开场画面还没飞完时就开始装配**（260ms 时光圈刚放大到一半）。
   //   两段重叠才有衔接感；等它彻底消失再入场是两次独立动画，中间空一拍。
   //   这个时刻要早于开场画面淡过半 —— 卡片回到起始位的那一瞬间会被盖住。
-  setTimeout(() => document.body.classList.add('app-in'), 170);
+  setTimeout(() => document.body.classList.add('app-in'), 260);
 
   // 飞完了再摘掉。用固定时长而不是 transitionend：后者在多个过渡属性并存时
   // 只为最先结束的那个触发一次，时机不确定。
-  setTimeout(() => el.classList.add('gone'), 760);
+  setTimeout(() => el.classList.add('gone'), 1260);
 
   Router.go('config');           // 落到正式界面
 }

@@ -34,11 +34,15 @@
     <h1 class="splash-title">关节模组上位机</h1>
     <div class="splash-sub">HARMONIC JOINT CONTROL</div>
 
-    <ol class="splash-steps" id="splashSteps">
-      <li data-step="link"><i></i><span>连接下位机</span></li>
-      <li data-step="hello"><i></i><span>握手</span></li>
-      <li data-step="device"><i></i><span>扫描从站</span></li>
-    </ol>
+    <!-- 连接步骤：滚动式。当前那步停在正中，完成的往上滚走并淡出，
+         未开始的等在下面 —— 像歌词一样，视线不用动。 -->
+    <div class="splash-steps">
+      <ol class="ss-list" id="splashSteps">
+        <li data-step="link"><i></i><span>连接下位机</span></li>
+        <li data-step="hello"><i></i><span>握手</span></li>
+        <li data-step="device"><i></i><span>扫描从站</span></li>
+      </ol>
+    </div>
 
     <div class="splash-status">
       <span class="dot" id="bootDot"></span><span id="bootStatus">正在连接…</span>
