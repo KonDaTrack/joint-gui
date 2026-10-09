@@ -44,6 +44,10 @@
       <span class="dot" id="bootDot"></span><span id="bootStatus">正在连接…</span>
     </div>
 
+    <!-- 连上后出现，**点了才进正式界面** —— 给人一个"我准备好了"的确认动作，
+         而不是被自动推进去。连不上时它变成次要的"直接进入"，保证不会被卡住。 -->
+    <button id="btnEnter" class="splash-enter" hidden>进入</button>
+
     <!-- 连不上若干秒后才滑出，避免开场就被表单占满 -->
     <div class="splash-form" id="splashForm" hidden>
       <input type="text" id="inpHost" spellcheck="false" autocomplete="off"

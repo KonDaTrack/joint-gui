@@ -283,12 +283,11 @@ function renderTelemetry() {
 // 三个时间常量是有意为之：连得快时不能让动画一闪而过；
 // 连不上时又绝不能把人永久挡在开场画面外。
 const SPLASH_MIN_MS  = 1400;   // 最短显示时长，保证开场动画看得完
-const SPLASH_FORM_MS = 4000;   // 连不上这么久，才滑出地址表单
-const SPLASH_MAX_MS  = 7000;   // 兜底：再连不上也放行，让人进组态页看状态
+const SPLASH_FORM_MS = 4000;   // 连不上这么久，才滑出地址表单与"直接进入"
 
 // t0 必须在**脚本求值那一刻**就取好。设成 0 的话，首次 renderSplash() 算出的
 // "已过时间"是个巨大值，会立刻越过 SPLASH_FORM_MS 把地址表单弹出来（踩过）。
-const SPLASH = { t0: performance.now(), gone: false, formShown: false, manual: false, timer: null };
+const SPLASH = { t0: performance.now(), gone: false, formShown: false, timer: null };
 
 function splashStep(name, cls) {
   const li = document.querySelector(`#splashSteps li[data-step="${name}"]`);
@@ -327,27 +326,46 @@ function renderSplash() {
   const inp = $('inpHost');
   if (inp && document.activeElement !== inp) inp.value = wsHost;
 
-  // 连不上够久才滑出表单——开场就被表单占满很丑
-  if (!linked && !SPLASH.formShown && performance.now() - SPLASH.t0 > SPLASH_FORM_MS) {
-    SPLASH.formShown = true;
-    $('splashForm').hidden = false;
-    $('splashHint').hidden = false;
+  // 表单只在"没连上 **且** 等够久"时出现；连上就收回。
+  // 用纯状态驱动而不是"置位后不再清"——否则慢连的情况下表单会一直留着，
+  // 而连上之后还摆着地址框纯属噪音（踩过）。
+  const elapsed = performance.now() - SPLASH.t0;
+  const showForm = !linked && elapsed > SPLASH_FORM_MS;
+  if (showForm !== SPLASH.formShown) {
+    SPLASH.formShown = showForm;
+    $('splashForm').hidden = !showForm;
+    $('splashHint').hidden = !showForm;
   }
+
+  renderEnterButton(elapsed);
 }
 
-function maybeLeaveSplash() {
-  if (SPLASH.gone || SPLASH.manual) return;   // 手动叫回来的连接界面不自动关
-  const elapsed = performance.now() - SPLASH.t0;
-  if (elapsed < SPLASH_MIN_MS) return;
-  // 连上就走；连不上则等兜底时长
-  if (!link.connected && elapsed < SPLASH_MAX_MS) return;
-  leaveSplash();
+/**
+ * 「进入」按钮的状态。**只负责何时露出，不自动进场** ——
+ * 按用户要求：连上后由人点击才进正式界面，给一个"我准备好了"的确认动作。
+ *
+ * 但**必须保证按钮最终一定会出现**：连不上就永远进不去的话，
+ * 那比自动进场还糟。所以连不上到 SPLASH_FORM_MS 时，把它降级成次要的
+ * "不连接，直接进入"——进得去，只是不显眼。
+ */
+function renderEnterButton(elapsed) {
+  const btn = $('btnEnter');
+  if (!btn) return;
+
+  const connected = link.connected;
+  const ready = elapsed >= SPLASH_MIN_MS && (connected || elapsed >= SPLASH_FORM_MS);
+  if (!ready) { btn.hidden = true; return; }
+
+  const secondary = !connected;
+  btn.hidden = false;
+  btn.classList.toggle('is-secondary', secondary);
+  const txt = secondary ? '不连接，直接进入' : '进入';
+  if (btn.textContent !== txt) btn.textContent = txt;
 }
 
 function leaveSplash() {
   if (SPLASH.gone) return;
   SPLASH.gone = true;
-  SPLASH.manual = false;
   stopSplashTimer();
 
   const el = $('splash');
@@ -368,7 +386,6 @@ function leaveSplash() {
 /** 手动叫回连接界面（换 IP / 换板子时用）。不会自动关闭。 */
 function reopenSplash() {
   SPLASH.gone = false;
-  SPLASH.manual = true;
   SPLASH.formShown = true;
   const el = $('splash');
   el.classList.remove('gone', 'leaving');
@@ -383,8 +400,7 @@ function startSplashTimer() {
   if (SPLASH.timer) return;
   SPLASH.timer = setInterval(() => {
     if (SPLASH.gone) return stopSplashTimer();
-    renderSplash();
-    maybeLeaveSplash();
+    renderSplash();   // 内部会更新「进入」按钮的状态
   }, 120);
 }
 function stopSplashTimer() {
@@ -751,6 +767,10 @@ $('btnConnect').onclick = () => {
   url.searchParams.delete('host');
   location.href = url.toString();
 };
+// 「进入」：**点了才进正式界面**。这是有意的确认动作 ——
+// 操作员看过连接状态、确认无误后再进入，比被自动推进去更符合试验台的使用习惯。
+$('btnEnter').onclick = () => leaveSplash();
+
 // 换 IP / 换板子时的入口。没有它，开场画面消失后就再也回不去了。
 $('safetyIdent').onclick = () => reopenSplash();
 $('safetyIdent').title = '点击可更换下位机地址';

@@ -433,6 +433,59 @@ body.app-in .pages  { animation: pages-in .62s var(--ease) both .06s; }
   animation-delay: .08s;
 }
 
+/* ---- 「进入」按钮 ----
+   写在 .splash-inner > * 之后：同权重下后来者胜，
+   否则会被那条通配规则改回 splash-in 动画。 */
+.splash-enter {
+  margin-top: 28px;
+  appearance: none;
+  cursor: pointer;
+  font-family: var(--sans);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  color: var(--cyan-hi);
+  padding: 11px 44px;
+  border-radius: 12px;
+  border: 1px solid rgba(120, 214, 238, 0.50);
+  background: linear-gradient(180deg, rgba(120, 214, 238, 0.17), rgba(120, 214, 238, 0.05));
+  box-shadow:
+    inset 0 1px 0 rgba(198, 242, 255, 0.16),
+    0 10px 28px -14px rgba(120, 214, 238, 0.85);
+  transition: transform .25s var(--ease), background .25s var(--ease),
+              border-color .25s var(--ease), box-shadow .25s var(--ease), color .25s var(--ease);
+  animation: splash-reveal .5s var(--ease) both;
+}
+.splash-enter:hover {
+  background: linear-gradient(180deg, rgba(120, 214, 238, 0.26), rgba(120, 214, 238, 0.09));
+  border-color: rgba(120, 214, 238, 0.80);
+  color: #EAFBFF;
+  box-shadow:
+    inset 0 1px 0 rgba(198, 242, 255, 0.24),
+    0 14px 34px -14px rgba(120, 214, 238, 1);
+}
+.splash-enter:active { transform: scale(0.985); }
+.splash-enter:focus-visible { outline: 2px solid rgba(120, 214, 238, 0.85); outline-offset: 3px; }
+
+/* 没连上时的"直接进入"：次要动作，不能跟正常进入抢注意力，
+   但**必须存在** —— 否则连不上就彻底进不去了 */
+.splash-enter.is-secondary {
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  color: var(--dim);
+  padding: 9px 28px;
+  border-color: rgba(255, 255, 255, 0.16);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015));
+  box-shadow: none;
+}
+.splash-enter.is-secondary:hover {
+  color: var(--fg);
+  border-color: rgba(255, 255, 255, 0.30);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.03));
+  box-shadow: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .splash-inner > * { animation: none; }
   .sr-spin-flex, .sr-spin-wave { animation: none; }
