@@ -481,51 +481,24 @@ function stopSplashTimer() {
 }
 
 // ============ 组态页 ============
-const fmtHex = (v) => '0x' + v.toString(16).padStart(4, '0');
+// 关节参数不再单列一张卡：鼠标移到拓扑里的关节上时，在其上方弹出浮层。
+// 浮层内容由 Topology 自己渲染（它才知道节点的位置和当前悬停的是哪个轴）。
 
-function renderParams() {
-  const s = state.slaves.find((x) => x.slave === state.active);
-  const t = state.telemetry.get(state.active);
-  const fault = !!(t && (t.errorCode || t.driveState === 7));
-
-  // [标签, 值, 值样式类]
-  const rows = [
-    ['从站号',   s ? `#${s.slave}` : '--', ''],
-    ['型号',     s ? (s.model || '--') : '--', ''],
-    ['简称',     s ? (s.shortName || '--') : '--', ''],
-    ['总线',     state.bus ? state.bus + (state.simulated ? '（仿真）' : '') : '--',
-                 state.simulated ? 'wn' : ''],
-    ['额定力矩', t && t.ratedTorqueNm ? t.ratedTorqueNm.toFixed(0) + ' N·m' : '--', ''],
-    ['驱动状态', t ? (DRIVE_STATES[t.driveState] ?? '--') : '--', fault ? 'dg' : ''],
-    ['状态字',   t ? fmtHex(t.statusWord) : '--', ''],
-    ['故障码',   t ? (t.errorCode ? fmtHex(t.errorCode) : '无') : '--', fault ? 'dg' : ''],
-    ['温度',     t && t.temperatureC > 0 ? t.temperatureC.toFixed(1) + ' ℃' : 'N/A', ''],
-    ['限位状态', t ? (t.limitExceeded ? '越限' : '正常') : '--', t && t.limitExceeded ? 'dg' : ''],
-  ];
-
-  $('paramList').innerHTML = rows.map(([k, v, cls]) =>
-    `<div class="p-row"><div class="k">${k}</div><div class="v ${cls}">${v}</div></div>`).join('');
-
-  $('paramNote').textContent =
-    '参数只读：全部由下位机上报。安全逻辑（行程限位、看门狗、控制权）在 ARM 侧强制执行，'
-    + '本页只显示，不做任何判断。';
-}
-
-/** 拓扑图与参数只在组态页可见时刷新 —— 50Hz 下没必要给隐藏页面做 DOM 写入 */
+/** 拓扑只在组态页可见时刷新 —— 50Hz 下没必要给隐藏页面做 DOM 写入 */
 function renderConfigLive() {
   if (state.page !== 'config') return;
-  renderParams();
   Topology.refresh(state, {
     connected: link.connected,
     deviceConnected: state.deviceConnected,
     simulated: state.simulated,
     owner: state.owner,
+    slaveCount: state.slaves.length,   // 拓扑里 ARM 节点下方要显示
   });
   const n = $('topoNote');
   if (n) {
     n.textContent = !link.connected ? '未连接下位机'
                   : state.simulated ? '⚠️ 仿真链路（非真机）'
-                  : '链路实时状态';
+                  : '链路实时状态 · 悬停关节看参数';
   }
 
   // 从站列表过期告警：下位机自报的数量与手上的列表对不上。

@@ -123,32 +123,22 @@
 <!-- ============================================================ 页面容器 -->
 <div class="pages" id="pages">
 
-  <!-- ============ 组态页：系统拓扑 + 参数 ============ -->
+  <!-- ============ 组态页：系统拓扑（参数改为悬停关节时弹出） ============ -->
   <section class="page" id="page-config" role="tabpanel" aria-label="组态">
     <div class="cfg">
-
       <section class="card cfg-topo">
         <div class="card-core">
           <h2 class="card-title">
             [ 系统拓扑与信号走向 ]
             <span class="chart-note" id="topoNote">等待连接</span>
           </h2>
-          <!-- 拓扑由 js/topology.js 生成（SVG），按 docs/host-embedded-architecture.md 画 -->
+          <!-- 从站列表过期的告警（对接老版本下位机时的兜底） -->
+          <div class="scan-warn" id="bootWarn" hidden></div>
+          <!-- 拓扑由 js/topology.js 生成（SVG）。关节参数不再单列一张卡，
+               改为鼠标移到关节上时在其上方弹出。 -->
           <div class="topo-wrap" id="topo"></div>
         </div>
       </section>
-
-      <section class="card cfg-params">
-        <div class="card-core">
-          <h2 class="card-title">[ 关节参数 ]</h2>
-          <!-- 从站列表过期的告警。原来在初始页，但开场画面连上就消失，
-               告警放在那儿等于看不见 —— 挪到这里。 -->
-          <div class="scan-warn" id="bootWarn" hidden></div>
-          <div class="p-list" id="paramList"></div>
-          <div class="p-note" id="paramNote"></div>
-        </div>
-      </section>
-
     </div>
   </section>
 
