@@ -62,6 +62,28 @@ const Joint3D = (() => {
   controls.maxDistance = 9;
   controls.minPolarAngle = 0.25;
   controls.maxPolarAngle = Math.PI - 0.25;
+  // 滚轮缩放放慢一档：默认速度在大屏幕上"一跳一跳"的
+  controls.zoomSpeed = 0.62;
+  controls.rotateSpeed = 0.85;
+
+  // ---- 平滑缩放 ----
+  // 不用 controls 自带的离散缩放，而是**逐帧把相机距离插值逼近目标值**，
+  // 所以按一下按钮 / 点一下滚轮，镜头是"滑"过去的，不是跳过去的。
+  let zoomTarget = null;           // 目标距离，null = 没有正在进行的缩放
+  const ZOOM_STEP = 0.78;          // 每按一次乘这个系数（<1 = 拉近）
+  const ZOOM_LERP = 0.16;          // 每帧逼近目标的比例
+
+  function curDist() { return camera.position.distanceTo(controls.target); }
+  function zoomBy(f) {
+    const base = zoomTarget != null ? zoomTarget : curDist();
+    zoomTarget = Math.min(controls.maxDistance, Math.max(controls.minDistance, base * f));
+  }
+  function resetView() {
+    // 复位也走插值：把距离和朝向都设成目标，由下面每帧逼近
+    camera.position.set(2.35, 1.75, 4.30);
+    controls.target.set(0, 0, -0.05);
+    zoomTarget = null;
+  }
 
   // 环境贴图给金属底子，三盏方向光给轮廓
   scene.add(new THREE.HemisphereLight(0xcfe0ff, 0x1A1D22, 0.85));
@@ -175,9 +197,20 @@ const Joint3D = (() => {
 
   function frame() {
     raf = requestAnimationFrame(frame);
+
+    // 平滑缩放：先把相机沿"指向目标"的射线插值到目标距离，再交给 controls。
+    // 顺序不能反 —— controls.update() 会按当前相机位置重算球坐标，
+    // 先动相机它才认得。
+    if (zoomTarget != null) {
+      const dir = camera.position.clone().sub(controls.target);
+      const cur = dir.length();
+      const next = cur + (zoomTarget - cur) * ZOOM_LERP;
+      if (Math.abs(next - zoomTarget) < 0.006) { zoomTarget = null; }
+      camera.position.copy(controls.target).add(dir.setLength(next));
+    }
+
     outGroup.rotation.z = pos * d2r;
     // 只在该轴**真的使能**时才转 —— 不使能却在转是假的。
-    // 没使能时把波发生器停在当前角，不做无效动画。
     if (enabled) waveGroup.rotation.z = pos * RATIO * d2r;
     controls.update();
     renderer.render(scene, camera);
@@ -210,7 +243,8 @@ const Joint3D = (() => {
   // 先跑起来（监控页是唯一页面，默认可见）
   setActive(true);
 
-  return { resize, setActive, update, get enabled() { return enabled; } };
+  return { resize, setActive, update, zoomBy, resetView,
+           get enabled() { return enabled; } };
 })();
 
 // 暴露给 app.js（它是 classic script，先于本模块执行，所以只能"事后"取用）

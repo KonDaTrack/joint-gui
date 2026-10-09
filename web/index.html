@@ -154,6 +154,12 @@
                 <path d="M2 6V2h4M14 10v4h-4M14 6V2h-4M2 10v4h4"/>
               </svg>
             </button>
+            <!-- 缩放控制：走逐帧插值，镜头是"滑"过去的（见 joint3d.js） -->
+            <div class="joint-zoom">
+              <button id="btnZoomIn" title="放大" aria-label="放大">+</button>
+              <button id="btnZoomOut" title="缩小" aria-label="缩小">−</button>
+              <button id="btnZoomReset" title="重置视角" aria-label="重置视角">↺</button>
+            </div>
             <div class="joint-legend">
               <span><i style="background:#78D6EE"></i>柔轮 · 输出</span>
               <span><i style="background:#D9A441"></i>波发生器 · 输入</span>

@@ -78,49 +78,50 @@
 .gauge { flex: 1 1 0; min-width: 0; }
 .g-dial { width: 100%; height: auto; display: block; overflow: visible; }
 
+/* ---- 表盘：凹槽 + 嵌在槽里的填充 ----
+   光源统一从正上方来。槽底"上暗下亮"是凹的关键（反过来立刻变凸）；
+   内外各一道倒角边线；填充弧比槽窄，嵌在中间。 */
+.g-edge-out  { fill: none; stroke: rgba(0, 0, 0, 0.80); stroke-width: 2.5; stroke-linecap: round; }
+.g-groove    { fill: none; stroke-width: 12; stroke-linecap: butt; }   /* 底色由 defs 的渐变给 */
+.g-edge-in   { fill: none; stroke: rgba(255, 255, 255, 0.11); stroke-width: 1.6; stroke-linecap: round; }
+.g-glass     { fill: none; stroke: rgba(255, 255, 255, 0.05); stroke-width: 1.8; stroke-linecap: round; }
+
 /* 刻度 */
-.g-track {
-  fill: none;
-  stroke: rgba(255, 255, 255, 0.09);
-  stroke-width: 8;
-  stroke-linecap: round;
-}
-.g-tick       { stroke: rgba(255, 255, 255, 0.16); stroke-width: 1; }
-.g-tick-major { stroke: rgba(255, 255, 255, 0.34); stroke-width: 1.5; }
+.g-tick       { stroke: rgba(255, 255, 255, 0.17); stroke-width: 1; }
+.g-tick-major { stroke: rgba(255, 255, 255, 0.36); stroke-width: 1.5; }
 .g-tick-label {
   fill: #666C75;
   font-family: var(--mono);
   font-size: 10px;
   font-variant-numeric: tabular-nums;
 }
-.g-zero { stroke: rgba(255, 255, 255, 0.30); stroke-width: 1.5; }
+.g-zero { stroke: rgba(255, 255, 255, 0.32); stroke-width: 1.5; }
 
-/* 填充弧：从 0 扫到当前值 —— "占了多少量程"一眼可见 */
+/* 填充弧：嵌在槽里，比槽窄；自带同色发光 */
 .g-fill {
   fill: none;
-  stroke: var(--cyan);
-  stroke-width: 8;
+  stroke-width: 7;
   stroke-linecap: round;
+  filter: drop-shadow(0 0 6px rgba(var(--gc), 0.5));
 }
-.g-dot {
-  fill: #C6F2FF;
-  stroke: rgba(120, 214, 238, 0.95);
-  stroke-width: 1.4;
-}
+/* 游标球：defs 里的径向渐变已经给了球面高光，这里只补一点落地阴影 */
+.g-dot { filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.9)); }
+
 .g-num {
-  fill: var(--cyan);
   font-family: var(--mono);
   font-size: 26px;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
+  filter: drop-shadow(0 0 8px rgba(var(--gc), 0.42));
 }
 .g-unit { fill: var(--dimmer); font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.12em; }
 
-/* 力矩用琥珀（与波形图上力矩那条线同色）；速度用绿 */
-#gaugeTor .g-fill { stroke: var(--warn); }
-#gaugeTor .g-num  { fill: var(--warn); }
-#gaugeTor .g-dot  { fill: #FFE0A8; stroke: rgba(217, 164, 65, 0.95); }
+/* 每个表盘自己的主色（发光用它） */
+#gaugePos { --gc: 120, 214, 238; }
+#gaugePos .g-num { fill: #C6F2FF; }
+#gaugeTor { --gc: 217, 164, 65; }
+#gaugeTor .g-num { fill: #F5D089; }
 
 /* ============================================================
    速度条（中心零点双向）
@@ -278,3 +279,42 @@
 .joint-box:fullscreen .joint-hint,
 .joint-box:fullscreen .joint-legend { font-size: 12px; }
 .joint-box:fullscreen .joint-full svg { stroke: var(--fg); }
+
+/* ---- 缩放控制（左下角，与右下的图例错开） ---- */
+.joint-zoom {
+  position: absolute;
+  left: 10px; bottom: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.joint-zoom button {
+  width: 24px; height: 24px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  appearance: none;
+  cursor: pointer;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--dim);
+  font-family: var(--mono);
+  font-size: 14px;
+  line-height: 1;
+  transition: background .2s var(--ease), border-color .2s var(--ease), color .2s var(--ease);
+}
+.joint-zoom button:hover { background: rgba(255, 255, 255, 0.12); border-color: rgba(255, 255, 255, 0.30); color: var(--fg); }
+.joint-zoom button:active { transform: scale(0.94); }
+.joint-zoom button:focus-visible { outline: 2px solid rgba(120, 214, 238, 0.8); outline-offset: 2px; }
+
+/* ---- 全屏切换的遮罩 ----
+   浏览器切全屏是**瞬时**的，画布尺寸会瞬间跳变（还伴随一次重排）。
+   加一次短促的淡入把这一跳盖住 —— 看起来是"切过去"而不是"闪一下"。 */
+.joint-smooth { animation: joint-smooth .44s var(--ease) both; }
+@keyframes joint-smooth {
+  from { opacity: .3; transform: scale(1.012); }
+  to   { opacity: 1;  transform: none; }
+}
+@media (prefers-reduced-motion: reduce) { .joint-smooth { animation: none; } }

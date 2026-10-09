@@ -838,7 +838,19 @@ $('btnJointFull').onclick = () => {
   if (document.fullscreenElement) document.exitFullscreen();
   else if (box.requestFullscreen) box.requestFullscreen();
 };
+$('btnZoomIn').onclick    = () => window.Joint3D && Joint3D.zoomBy(0.78);
+$('btnZoomOut').onclick   = () => window.Joint3D && Joint3D.zoomBy(1 / 0.78);
+$('btnZoomReset').onclick = () => window.Joint3D && Joint3D.resetView();
+
 document.addEventListener('fullscreenchange', () => {
+  // 全屏是**瞬时**切换的，画布尺寸会瞬间跳变并伴随一次重排。
+  // 给容器重放一次短促的淡入把这一跳盖住 —— 否则看起来是"闪一下"。
+  const box = $('jointBox');
+  if (box) {
+    box.classList.remove('joint-smooth');
+    void box.offsetWidth;               // 强制重排，否则同一个 class 不会重放动画
+    box.classList.add('joint-smooth');
+  }
   setTimeout(() => { if (window.Joint3D) window.Joint3D.resize(); }, 80);
 });
 

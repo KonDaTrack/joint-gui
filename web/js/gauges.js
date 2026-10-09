@@ -4,9 +4,17 @@
 // 力矩 3.2 N·m 在 9.6 额定的关节上已经用掉三分之一，在 50 额定的关节上几乎为零
 // —— 光看数字分不出来，看填充弧一眼就知道。
 //
-// 两个表盘共用同一套弧表绘制（只是量程和单位不同），保证视觉一致。
-// 位置/速度/力矩的**量程都来自下位机**（行程 ±170 是机械限位，额定力矩是遥测字段），
-// 所以换关节不用改这里。
+// ---- 立体感是怎么做的 ----
+// 不是靠阴影堆，是靠**凹槽**：表盘是一条**刻进面板的环形槽**，填充弧**嵌在槽里**。
+// 光源统一从正上方来，所以：
+//   · 槽底：竖直渐变「上暗下亮」—— 上半是槽壁挡出的阴影，下半受光。
+//     这是"凹"的关键，反过来（上亮下暗）立刻变成"凸"。
+//   · 槽沿：内外各一道细线（外沿暗、内沿亮），给出两条倒角边。
+//   · 填充弧：比槽窄（7 vs 12），嵌在槽中间；自身也带上亮下暗的渐变 + 外发光。
+//   · 游标：径向渐变画成球（高光偏左上）。
+//   · 玻璃反光：顶部一段很淡的白色弧，像表镜上的反光。
+//
+// 量程都来自下位机（行程 ±170 是机械限位，额定力矩是遥测字段），换关节不用改。
 
 const Gauges = (() => {
   const NS = 'http://www.w3.org/2000/svg';
@@ -19,7 +27,6 @@ const Gauges = (() => {
     if (text != null) e.textContent = text;
     return e;
   };
-  /** 极坐标：deg=0 在正上方，顺时针为正 */
   const px = (r, deg) => CX + r * Math.sin(deg * Math.PI / 180);
   const py = (r, deg) => CY - r * Math.cos(deg * Math.PI / 180);
   const arc = (r, a0, a1) => {
@@ -28,45 +35,95 @@ const Gauges = (() => {
     return `M${px(r, a0)} ${py(r, a0)} A${r} ${r} 0 ${large} ${sweep} ${px(r, a1)} ${py(r, a1)}`;
   };
 
+  let uidSeq = 0;
+  const darken = (hex, k) => {
+    const n = parseInt(hex.slice(1), 16);
+    const f = (v) => Math.round(Math.min(255, v * k));
+    return `rgb(${f(n >> 16 & 255)},${f(n >> 8 & 255)},${f(n & 255)})`;
+  };
+  const lighten = (hex, k) => {
+    const n = parseInt(hex.slice(1), 16);
+    const f = (v) => Math.round(Math.min(255, v + (255 - v) * k));
+    return `rgb(${f(n >> 16 & 255)},${f(n >> 8 & 255)},${f(n & 255)})`;
+  };
+
   /**
    * 建一个弧表。
-   * @param {object} o { min, max, unit, ticks:[值…], labels:[值…] }
-   *   ticks 画短刻度、labels 另加文字与长刻度。量程由调用方给（来自下位机）。
+   * @param {object} o { min, max, unit, ticks:[值…], labels:[值…], color }
    */
   function dial(o) {
+    const uid = 'gd' + (++uidSeq);
+    const base = o.color || '#78D6EE';
     const svg = el('svg', { viewBox: '0 0 200 158', class: 'g-dial' });
 
-    // 底弧（整段量程）
-    svg.appendChild(el('path', { d: arc(R, A0, A1), class: 'g-track' }));
-    // 填充弧（从 0 到当前值），由 update 改 d
-    const fill = el('path', { d: '', class: 'g-fill' });
+    /* ---- defs：整张表的"光源"都定义在这里，改一处全局一致 ---- */
+    const defs = el('defs', {});
+    // 槽底：上暗下亮 = 凹
+    defs.innerHTML = `
+      <linearGradient id="${uid}-groove" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0"   stop-color="#040506"/>
+        <stop offset="0.55" stop-color="#0E1114"/>
+        <stop offset="1"   stop-color="#2A2F36"/>
+      </linearGradient>
+      <linearGradient id="${uid}-fill" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0"   stop-color="${lighten(base, 0.45)}"/>
+        <stop offset="0.5" stop-color="${base}"/>
+        <stop offset="1"   stop-color="${darken(base, 0.62)}"/>
+      </linearGradient>
+      <radialGradient id="${uid}-dot" cx="0.34" cy="0.28" r="0.85">
+        <stop offset="0"   stop-color="#FFFFFF"/>
+        <stop offset="0.4" stop-color="${lighten(base, 0.35)}"/>
+        <stop offset="1"   stop-color="${darken(base, 0.55)}"/>
+      </radialGradient>
+      <radialGradient id="${uid}-well" cx="0.5" cy="0.42" r="0.72">
+        <stop offset="0"   stop-color="rgba(255,255,255,0.035)"/>
+        <stop offset="0.7" stop-color="rgba(0,0,0,0)"/>
+        <stop offset="1"   stop-color="rgba(0,0,0,0.35)"/>
+      </radialGradient>`;
+    svg.appendChild(defs);
+
+    // 表盘底：中心微亮、边缘压暗 → 一块微凹的表盘面
+    svg.appendChild(el('circle', { cx: CX, cy: CY, r: R + 16, fill: `url(#${uid}-well)` }));
+
+    // 槽外沿（暗）→ 槽底（渐变）→ 槽内沿（亮）：三条同心弧叠出倒角
+    svg.appendChild(el('path', { d: arc(R + 6, A0, A1), class: 'g-edge-out' }));
+    svg.appendChild(el('path', { d: arc(R, A0, A1), class: 'g-groove',
+                                stroke: `url(#${uid}-groove)` }));
+    svg.appendChild(el('path', { d: arc(R - 6, A0, A1), class: 'g-edge-in' }));
+
+    // 填充弧（嵌在槽里，比槽窄）+ 自身发光
+    const fill = el('path', { d: '', class: 'g-fill', stroke: `url(#${uid}-fill)` });
     svg.appendChild(fill);
 
-    // 中轴刻度线（0 位）
+    // 0 位刻线
     svg.appendChild(el('line', {
-      x1: px(R - 9, 0), y1: py(R - 9, 0), x2: px(R + 5, 0), y2: py(R + 5, 0), class: 'g-zero',
+      x1: px(R - 10, 0), y1: py(R - 10, 0), x2: px(R + 8, 0), y2: py(R + 8, 0), class: 'g-zero',
     }));
 
     // 刻度
     (o.ticks || []).forEach((v) => {
       const a = o.angle(v);
       const major = (o.labels || []).includes(v);
-      const r2 = R + (major ? 7 : 4);
+      const r2 = R + (major ? 9 : 5);
       svg.appendChild(el('line', {
-        x1: px(R, a), y1: py(R, a), x2: px(r2, a), y2: py(r2, a),
+        x1: px(R + (major ? 8 : 7), a), y1: py(R + (major ? 8 : 7), a),
+        x2: px(r2, a), y2: py(r2, a),
         class: major ? 'g-tick-major' : 'g-tick',
       }));
       if (major) {
         svg.appendChild(el('text', {
-          x: px(R + 17, a), y: py(R + 17, a) + 3.5,
+          x: px(R + 19, a), y: py(R + 19, a) + 3.5,
           class: 'g-tick-label', 'text-anchor': 'middle',
         }, String(v)));
       }
     });
 
-    // 当前值游标（发光点），由 update 改位置
-    const dot = el('circle', { cx: CX, cy: CY, r: 4.6, class: 'g-dot' });
+    // 游标球
+    const dot = el('circle', { cx: -99, cy: -99, r: 6, fill: `url(#${uid}-dot)`, class: 'g-dot' });
     svg.appendChild(dot);
+
+    // 玻璃反光：顶部一段很淡的弧
+    svg.appendChild(el('path', { d: arc(R + 13, -58, 58), class: 'g-glass' }));
 
     // 中间的大数字
     const num = el('text', { x: CX, y: CY - 6, class: 'g-num', 'text-anchor': 'middle' }, '--');
@@ -74,31 +131,40 @@ const Gauges = (() => {
     svg.appendChild(num);
     svg.appendChild(unit);
 
-    const api = {
+    return {
       svg,
-      /** @param {number} v 当前值 */
       set(v) {
-        if (!Number.isFinite(v)) { num.textContent = '--'; fill.setAttribute('d', ''); dot.setAttribute('cx', -99); return; }
+        if (!Number.isFinite(v)) {
+          num.textContent = '--'; fill.setAttribute('d', '');
+          dot.setAttribute('cx', -99); dot.setAttribute('cy', -99);
+          return;
+        }
         const a = o.angle(v);
         fill.setAttribute('d', v === 0 ? '' : arc(R, 0, a));
         dot.setAttribute('cx', px(R, a));
         dot.setAttribute('cy', py(R, a));
         num.textContent = o.fmt(v);
       },
-      /** 量程变了（换了关节，额定不同）就重建刻度 */
-      setRange(min, max) { o.min = min; o.max = max; },
     };
-    return api;
   }
 
-  /** 生成线性映射的 angle/fmt —— 两个表盘只是量程不同 */
+  /** 线性映射 —— 两个表盘只是量程和颜色不同 */
   function range(min, max, unit, decimals) {
     const angle = (v) => A0 + (Math.min(Math.max(v, min), max) - min) / (max - min) * (A1 - A0);
     const fmt = (v) => (v >= 0 ? '+' : '') + v.toFixed(decimals);
     return { min, max, unit, angle, fmt };
   }
 
-  let posG, torG, velG, state = { rated: 0, limit: 170 };
+  let posG, torG;
+  const stateRated = { v: 0 };
+  let lastTorque = NaN;   // 重建力矩表盘后要把当前值补回去，否则会空一帧
+
+
+  const span = (a, b, step) => {
+    const out = [];
+    for (let v = a; v <= b + 1e-9; v += step) out.push(Math.round(v * 100) / 100);
+    return out;
+  };
 
   function mount() {
     const posBox = document.getElementById('gaugePos');
@@ -106,16 +172,10 @@ const Gauges = (() => {
     const velBox = document.getElementById('gaugeVel');
     if (!posBox || !torBox || !velBox) return;
 
-    const mk = (r, ticks, labels) => {
-      const o = Object.assign({}, r, { ticks, labels });
-      return dial(o);
-    };
-    const span = (a, b, step) => { const out = []; for (let v = a; v <= b + 1e-9; v += step) out.push(Math.round(v * 100) / 100); return out; };
-
-    posG = mk(range(-170, 170, 'deg', 2),
-      span(-170, 170, 20), [-170, -90, 0, 90, 170]);
-    torG = mk(range(-1, 1, 'N·m', 2),
-      span(-1, 1, 0.25), [-1, 0, 1]);
+    posG = dial(Object.assign(range(-170, 170, 'deg', 2),
+      { ticks: span(-170, 170, 20), labels: [-170, -90, 0, 90, 170], color: '#78D6EE' }));
+    torG = dial(Object.assign(range(-1, 1, 'N·m', 2),
+      { ticks: span(-1, 1, 0.25), labels: [-1, 0, 1], color: '#D9A441' }));
 
     posBox.appendChild(posG.svg);
     torBox.appendChild(torG.svg);
@@ -123,7 +183,7 @@ const Gauges = (() => {
   }
 
   /* ---- 速度：中心零点的横向条 ---- */
-  let velFill, velNum, velLim;
+  let velFill, velNum;
   function buildVelBar() {
     const wrap = document.createElement('div');
     wrap.className = 'g-bar';
@@ -132,51 +192,41 @@ const Gauges = (() => {
       <div class="g-bar-track">
         <div class="g-bar-fill" id="gVelFill"></div>
         <div class="g-bar-zero"></div>
-        <div class="g-bar-lim" id="gVelLim"></div>
       </div>`;
     velFill = wrap.querySelector('#gVelFill');
     velNum  = wrap.querySelector('#gVelVal');
-    velLim  = wrap.querySelector('#gVelLim');
     return wrap;
   }
-
-  let velMax = 60;
 
   return {
     mount,
 
-    /** 换关节/首次拿到遥测时更新量程（额定力矩来自下位机） */
+    /** 额定力矩来自下位机 —— 换关节时表盘量程跟着变，前端不用改 */
     setRated(nm) {
-      if (!Number.isFinite(nm) || nm <= 0 || nm === state.rated) return;
-      state.rated = nm;
-      if (torG) {
-        const r = range(-nm, nm, 'N·m', 2);
-        Object.assign(torG, {});                    // 量程存在闭包里的 o 上，重建刻度更省事
-      }
-      // 刻度随量程变，直接重建这个表盘
+      if (!Number.isFinite(nm) || nm <= 0 || nm === stateRated.v) return;
+      stateRated.v = nm;
       const box = document.getElementById('gaugeTor');
-      if (box && torG) {
-        const span = (a, b, s) => { const o = []; for (let v = a; v <= b + 1e-9; v += s) o.push(Math.round(v * 100) / 100); return o; };
-        const r = range(-nm, nm, 'N·m', 2);
-        const g = dial(Object.assign({}, r, { ticks: span(-nm, nm, nm / 4), labels: [-nm, 0, nm] }));
-        box.replaceChildren(g.svg);
-        torG = g;
-      }
+      if (!box || !torG) return;
+      const g = dial(Object.assign(range(-nm, nm, 'N·m', 2),
+        { ticks: span(-nm, nm, nm / 4), labels: [-nm, 0, nm], color: '#D9A441' }));
+      box.replaceChildren(g.svg);
+      torG = g;
+      // 重建后要把当前值补回去，否则会空一帧
+      if (Number.isFinite(lastTorque)) torG.set(lastTorque);
     },
 
     /** @param {object} t 该轴遥测 */
     update(t) {
       if (!t) return;
       this.setRated(t.ratedTorqueNm);
+      lastTorque = t.torqueNm;
       if (posG) posG.set(t.positionDeg);
       if (torG) torG.set(t.torqueNm);
       if (velFill) {
         const v = Number.isFinite(t.velocityDps) ? t.velocityDps : 0;
-        velMax = Math.max(60, Math.abs(v) * 1.2);
-        const w = Math.min(50, Math.abs(v) / velMax * 50);
-        velFill.style.width = w + '%';
+        const velMax = Math.max(60, Math.abs(v) * 1.2);
+        velFill.style.width = Math.min(50, Math.abs(v) / velMax * 50) + '%';
         velFill.classList.toggle('neg', v < 0);
-        velNum.textContent = (v >= 0 ? '+' : '') + v.toFixed(1) + ' ';
         velNum.innerHTML = (v >= 0 ? '+' : '') + v.toFixed(1) + ' <span class="u">deg/s</span>';
       }
     },
