@@ -166,12 +166,31 @@
             </div>
           </div>
 
-          <!-- 径向仪表：数字只给"是多少"，表盘还给"占了多少量程" -->
-          <div class="gauge-row">
-            <div class="gauge" id="gaugePos"></div>
-            <div class="gauge" id="gaugeTor"></div>
+          <!-- 三个大数字。字号由 app.js 的 fitReadouts() 实测反推 ——
+               这一栏还塞着三维视图和遥测表，窗口矮的时候必须能把字号压下来。 -->
+          <div class="readouts">
+            <div class="readout">
+              <label>位置</label>
+              <div><span id="valPos" class="value">--</span><span class="unit">deg</span></div>
+            </div>
+            <div class="readout">
+              <label>速度</label>
+              <div><span id="valVel" class="value">--</span><span class="unit">deg/s</span></div>
+            </div>
+            <div class="readout">
+              <label>力矩</label>
+              <div><span id="valTor" class="value">--</span><span class="unit">N·m</span></div>
+            </div>
           </div>
-          <div id="gaugeVel"></div>
+
+          <!-- 遥测表：从目标卡挪过来的，填掉三维视图下方的空间 -->
+          <dl class="telemetry">
+            <dt>驱动状态</dt><dd id="valState"><span id="dotState" class="dot"></span><span>--</span></dd>
+            <dt>状态字</dt><dd id="valStatusWord" class="mono">--</dd>
+            <dt>故障码</dt><dd id="valError" class="mono">--</dd>
+            <dt>温度</dt><dd id="valTemp" class="mono">--</dd>
+            <dt>刷新率</dt><dd id="valRate" class="mono">--</dd>
+          </dl>
 
         </div>
       </section>
@@ -179,8 +198,6 @@
       <!-- 中：操作 -->
       <section class="card card-operate">
         <div class="card-core">
-          <h2 class="card-title">[ 操作 ]</h2>
-
           <button id="btnEstop" class="btn btn-estop">急停 ESTOP</button>
 
           <label class="toggle" for="chkReady">
@@ -215,28 +232,12 @@
           </div>
           <div id="loadHint" class="hint"></div>
 
-          <!-- 剩余行程：离 ±170° 限位还有多远。安全相关，不是装饰 ——
-               原来的读数只有"当前在哪"，没有"还剩多少"。
-               标题并进图例行（不单独占一行 section-title）—— 三张卡等高，
-               这张的内容本来就最多，加一行标题会把底部挤出可视区（实测超 27px）。 -->
-          <div class="travel">
-            <div class="travel-legend">
-              <span>行程 · 左剩 <b id="travelNeg">--</b></span>
-              <span>右剩 <b id="travelPos">--</b></span>
-            </div>
-            <div class="travel-bar">
-              <div class="travel-fill" id="travelFill"></div>
-              <div class="travel-zero"></div>
-            </div>
-          </div>
         </div>
       </section>
 
       <!-- 右：目标下发 -->
       <section class="card card-target">
         <div class="card-core">
-          <h2 class="card-title">[ 目标 ]</h2>
-
           <div class="field">
             <label>操作模式</label>
             <select id="selMode">
@@ -273,17 +274,6 @@
           </div>
 
           <div id="cmdHint" class="hint"></div>
-
-          <!-- 遥测表：原来挤在左栏三个大读数下面，现在挪过来填掉这张卡下方的空白。
-               数据来源没变，只是换了位置。 -->
-          <h3 class="section-title">遥测</h3>
-          <dl class="telemetry">
-            <dt>驱动状态</dt><dd id="valState"><span id="dotState" class="dot"></span><span>--</span></dd>
-            <dt>状态字</dt><dd id="valStatusWord" class="mono">--</dd>
-            <dt>故障码</dt><dd id="valError" class="mono">--</dd>
-            <dt>温度</dt><dd id="valTemp" class="mono">--</dd>
-            <dt>刷新率</dt><dd id="valRate" class="mono">--</dd>
-          </dl>
         </div>
       </section>
 
@@ -314,7 +304,6 @@
 <script src="js/anim.js"></script>
 <script src="js/router.js"></script>
 <script src="js/gfx.js"></script>
-<script src="js/gauges.js"></script>
 <script src="js/app.js"></script>
 <!-- 三维关节：ES 模块（three 是 ESM 包）。deferred，跑在 app.js 之后，
      自己初始化，只对外暴露 window.Joint3D 供 app.js"事后"取用。 -->

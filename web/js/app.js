@@ -160,10 +160,9 @@ function renderCommandEnabled() {
   // 归零/回0 与负载同属"命令类"，无控制权时置灰
   ['btnHome', 'btnZero', 'loadSlider', 'loadValue', 'btnLoadSet', 'btnLoadRelease']
     .forEach((id) => { $(id).disabled = !mine; });
-  // 没有控制权时说明原因，避免"点了没反应"
-  $('cmdHint').textContent = mine
-    ? (ready ? '' : '请先勾选「已确认现场安全」')
-    : '当前控制权在下位机（本机）—— 请先点右上角「请求控制权」';
+  // 只保留"为什么点不动"里**安全条上看不到**的那一条。
+  // 「当前控制权在下位机…」已删：安全条上的控制权徽章就写在那儿，是重复。
+  $('cmdHint').textContent = (mine && !ready) ? '请先勾选「已确认现场安全」' : '';
 }
 
 /**
@@ -264,8 +263,10 @@ function renderTelemetry() {
   const t = state.telemetry.get(state.active);
   if (!t) return;
 
-  // 位置/速度/力矩走径向仪表（读数框已换成表盘 —— 表盘还告诉你"占了多少量程"）
-  Gauges.update(t);
+  $('valPos').textContent = t.positionDeg.toFixed(2);
+  $('valVel').textContent = t.velocityDps.toFixed(2);
+  $('valTor').textContent = t.torqueNm.toFixed(3);
+
   // 三维关节：只喂数据，渲染由它自己的 rAF 驱动。
   // 它是 ES 模块、deferred 执行，所以这里必须判空 —— app.js 跑在它前面。
   if (window.Joint3D) window.Joint3D.update(t);
@@ -760,10 +761,40 @@ $('btnLoadRelease').onclick = () => {
 
 renderLoad(0);
 
-// ============ 径向仪表 ============
-// 位置/速度/力矩的数字框已换成表盘，原来那套"二分逼出最大字号"的自适应
-// （fitReadouts）随之删除 —— 表盘是 SVG 按容器比例缩放，不存在溢出问题。
-Gauges.mount();
+// ============ 读数字号自适应 ============
+// 三个大数字在**任何窗口尺寸下都不该出现滚动条**。固定字号做不到 ——
+// 而 CSS 里算不出可用高度（要扣掉三维视图、遥测表、内外边距，还随边框盒变），
+// 所以这里**实测反推**：二分几次，逼出"刚好不溢出"的最大字号。
+// 下限 14px：再往下就不清晰了，宁可让容器滚动。
+const READOUT_MIN = 13, READOUT_MAX = 34;
+
+function fitReadouts() {
+  const box = document.querySelector('.readouts');
+  if (!box || !box.clientHeight || !box.querySelector('.readout')) return;
+  const overflowAt = (size) => {
+    box.style.setProperty('--readout-size', size.toFixed(1) + 'px');
+    return box.scrollHeight - box.clientHeight;   // 同步触发布局，不用额外等待
+  };
+  if (overflowAt(READOUT_MAX) <= 0) return;       // 大屏：直接用上限，省掉二分
+  let lo = READOUT_MIN, hi = READOUT_MAX;
+  for (let i = 0; i < 7 && hi - lo > 0.5; i++) {
+    const mid = (lo + hi) / 2;
+    if (overflowAt(mid) <= 0) lo = mid; else hi = mid;
+  }
+  overflowAt(lo);
+}
+
+fitReadouts();
+// 首次布局时字体可能还没加载完，行高会变 —— 字体就绪后再量一次
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitReadouts);
+let fitPending = false;
+window.addEventListener('resize', () => {
+  if (fitPending) return;
+  fitPending = true;
+  requestAnimationFrame(() => { fitPending = false; fitReadouts(); });
+});
+// 三维视图的尺寸变化会挤到读数区，也要跟着重算
+new ResizeObserver(fitReadouts).observe(document.querySelector('.card-slaves'));
 
 // ============ 页面路由 ============
 // hidden 状态下页面内所有元素尺寸为 0，箱内做尺寸自适应的东西会算错。
@@ -851,9 +882,9 @@ document.addEventListener('fullscreenchange', () => {
     void box.offsetWidth;               // 强制重排，否则同一个 class 不会重放动画
     box.classList.add('joint-smooth');
   }
-  // 镜头先回拉再归位：把"模型突然变大/变小"变成一个有意做的镜头动作。
-  // 光靠淡入盖不住尺寸变化 —— 人能感知到"东西变了大小"。
-  if (window.Joint3D) window.Joint3D.settle();
+  // 尺寸补偿在 joint3d.js 的 resize() 里做（同一帧把相机也拉远同样的倍数，
+  // 模型看起来大小不变，再滑回原距离）—— 这里只补一次尺寸重测 + 一层轻淡入，
+  // 把浏览器伴随的那次重排也盖住。settle() 不再调用：会和 resize 里的补偿叠加。
   setTimeout(() => { if (window.Joint3D) window.Joint3D.resize(); }, 80);
 });
 

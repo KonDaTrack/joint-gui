@@ -190,11 +190,39 @@ const Joint3D = (() => {
   })();
 
   // ---- 尺寸 ----
+  let prevH = 0;   // 上一次的画布高度，用来识别"这帧是不是全屏切换"
   function resize() {
     const r = canvas.getBoundingClientRect();
     // ★ 尺寸为 0 时直接返回：页面隐藏时 ResizeObserver 会带着 0 触发，
     //   照写会把画布清零；而重新显示时它不一定再触发（同 chart.js 的坑）。
     if (!r.width || !r.height) return;
+    const h = r.height;
+
+    // ★ 全屏补偿 —— 这是"突然全屏了"的根因所在。
+    //
+    //   浏览器切全屏是**瞬时**的：画布高度一下变成 3 倍多。
+    //   固定 fov 时，模型在屏幕上的像素高度 ∝ 画布高 / 相机距离，
+    //   所以画布高翻 3 倍 = 模型瞬间放大 3 倍 —— 淡入盖不住（变的是尺寸不是亮度）。
+    //
+    //   做法：**在同一帧把相机距离也乘上同样的倍数**，模型看起来和切换前一样大；
+    //   再让它滑回原距离。观感就是"从小窗一路推进到全屏"。
+    //
+    //   按"高度突变"识别而不是靠按钮回调 —— 这样 Esc 退出全屏也走同一条路。
+    if (prevH > 0) {
+      const k = h / prevH;
+      if (k > 1.15 || k < 0.87) {
+        const d = curDist();
+        // 临时放宽上限，否则目标距离会被 clamp 夹回去，补偿就白做了
+        const keep = controls.maxDistance;
+        controls.maxDistance = Math.max(keep, d * k * 1.1);
+        camera.position.copy(controls.target)
+              .add(camera.position.clone().sub(controls.target).setLength(d * k));
+        zoomTarget = d;                                        // 再滑回原距离
+        setTimeout(() => { controls.maxDistance = keep; }, 1200);
+      }
+    }
+    prevH = h;
+
     renderer.setSize(r.width, r.height, false);
     camera.aspect = r.width / r.height;
     camera.updateProjectionMatrix();

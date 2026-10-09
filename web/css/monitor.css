@@ -66,182 +66,6 @@
   color: var(--warn);
 }
 
-/* ============================================================
-   径向仪表
-   ============================================================ */
-.gauge-row {
-  flex: 0 0 auto;
-  display: flex;
-  gap: 6px;
-  margin-top: 10px;
-}
-.gauge { flex: 1 1 0; min-width: 0; }
-.g-dial { width: 100%; height: auto; display: block; overflow: visible; }
-
-/* ---- 表盘：凹槽 + 嵌在槽里的填充 ----
-   光源统一从正上方来。槽底"上暗下亮"是凹的关键（反过来立刻变凸）；
-   内外各一道倒角边线；填充弧比槽窄，嵌在中间。 */
-.g-edge-out  { fill: none; stroke: rgba(0, 0, 0, 0.80); stroke-width: 2.5; stroke-linecap: round; }
-.g-groove    { fill: none; stroke-width: 12; stroke-linecap: butt; }   /* 底色由 defs 的渐变给 */
-.g-edge-in   { fill: none; stroke: rgba(255, 255, 255, 0.11); stroke-width: 1.6; stroke-linecap: round; }
-.g-glass     { fill: none; stroke: rgba(255, 255, 255, 0.05); stroke-width: 1.8; stroke-linecap: round; }
-
-/* 刻度 */
-.g-tick       { stroke: rgba(255, 255, 255, 0.17); stroke-width: 1; }
-.g-tick-major { stroke: rgba(255, 255, 255, 0.36); stroke-width: 1.5; }
-.g-tick-label {
-  fill: #666C75;
-  font-family: var(--mono);
-  font-size: 10px;
-  font-variant-numeric: tabular-nums;
-}
-.g-zero { stroke: rgba(255, 255, 255, 0.32); stroke-width: 1.5; }
-
-/* 填充弧：嵌在槽里，比槽窄；自带同色发光 */
-.g-fill {
-  fill: none;
-  stroke-width: 7;
-  stroke-linecap: round;
-  filter: drop-shadow(0 0 6px rgba(var(--gc), 0.5));
-}
-/* 游标球：defs 里的径向渐变已经给了球面高光，这里只补一点落地阴影 */
-.g-dot { filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.9)); }
-
-.g-num {
-  font-family: var(--mono);
-  font-size: 26px;
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
-  filter: drop-shadow(0 0 8px rgba(var(--gc), 0.42));
-}
-.g-unit { fill: var(--dimmer); font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.12em; }
-
-/* 每个表盘自己的主色（发光用它） */
-#gaugePos { --gc: 120, 214, 238; }
-#gaugePos .g-num { fill: #C6F2FF; }
-#gaugeTor { --gc: 217, 164, 65; }
-#gaugeTor .g-num { fill: #F5D089; }
-
-/* ============================================================
-   速度条（中心零点双向）
-   ============================================================ */
-.g-bar { flex: 0 0 auto; margin-top: 8px; }
-.g-bar-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  font-size: 11px;
-  color: var(--dim);
-  letter-spacing: 0.14em;
-  margin-bottom: 4px;
-}
-.g-bar-head .v {
-  font-family: var(--mono);
-  font-size: 14px;
-  letter-spacing: 0;
-  color: var(--ok);
-  font-variant-numeric: tabular-nums;
-}
-.g-bar-head .v .u { color: var(--dimmer); font-size: 11px; }
-.g-bar-track {
-  position: relative;
-  height: 13px;
-  border-radius: 7px;
-  background: var(--sunken);
-  border: 1px solid rgba(255, 255, 255, 0.10);
-  box-shadow: inset 0 2px 7px rgba(0, 0, 0, 0.95);
-  overflow: hidden;
-}
-.g-bar-fill {
-  position: absolute;
-  top: 1px; bottom: 1px;
-  left: 50%;                       /* 从中心向正方向长 */
-  width: 0;
-  border-radius: 6px;
-  background: var(--ok);
-  box-shadow: 0 0 8px rgba(78, 203, 142, 0.6);
-  transition: width .12s linear;
-}
-/* 负速度：从中心向负方向长 */
-.g-bar-fill.neg { left: auto; right: 50%; }
-.g-bar-zero {
-  position: absolute;
-  left: 50%; top: 0; bottom: 0;
-  width: 1px;
-  background: rgba(255, 255, 255, 0.28);
-}
-.g-bar-lim {
-  position: absolute;
-  top: 0; bottom: 0;
-  width: 2px;
-  display: none;                   /* 量程上限要到才知道在哪，先不画 */
-}
-
-/* ============================================================
-   剩余行程（操作卡内）
-   原来的读数只有"当前在哪"，没有"还剩多少"。离 ±170° 限位还有多远
-   是安全相关的信息 —— 填掉这张卡下方的空白，同时补上一个真的缺的东西。
-   ============================================================ */
-.travel { flex: 0 0 auto; }
-.travel-bar {
-  position: relative;
-  height: 13px;
-  border-radius: 7px;
-  background: var(--sunken);
-  border: 1px solid rgba(255, 255, 255, 0.10);
-  box-shadow: inset 0 2px 7px rgba(0, 0, 0, 0.95);
-  overflow: hidden;
-}
-/* 填充 = 从 0 到当前位置（与位置表盘的扫掠弧同一个意思） */
-.travel-fill {
-  position: absolute;
-  top: 1px; bottom: 1px;
-  left: 50%;
-  width: 0;
-  border-radius: 6px;
-  background: var(--cyan);
-  box-shadow: 0 0 8px rgba(120, 214, 238, 0.55);
-  transition: width .12s linear;
-}
-.travel-fill.neg { left: auto; right: 50%; }
-.travel-zero {
-  position: absolute;
-  left: 50%; top: 0; bottom: 0;
-  width: 1px;
-  background: rgba(255, 255, 255, 0.28);
-}
-.travel-legend {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 5px;
-  font-size: 11px;
-  color: var(--dim);
-  letter-spacing: 0.06em;
-}
-.travel-legend b {
-  font-family: var(--mono);
-  font-weight: 500;
-  color: var(--fg);
-  font-variant-numeric: tabular-nums;
-}
-
-/* 三张卡等高，而操作卡的内容本来就最多。收紧这里的行距，
-   保证底部不会被挤到可视区外（实测不收紧会超 27px，行程块被裁）。 */
-.card-operate .btn-row { margin: 8px 0; }
-.card-operate .section-title { margin-top: 9px; }
-.travel { margin-top: 10px; }
-.travel-legend { margin: 0 0 5px; }   /* 图例移到进度条上方 */
-
-/* 去掉「在线关节」那一整行后重排行高：波形拿回那一行的高度。
-   三栏（三维/操作/目标）在上，波形在下。 */
-.layout {
-  grid-template-rows: minmax(0, 1fr) minmax(0, 0.92fr);
-  position: relative;              /* .rack-warn 以它为定位参照 */
-}
-.card-slaves, .card-operate, .card-target { grid-row: 1; }
-.card-chart { grid-row: 2; grid-column: 1 / -1; }
-
 /* ---- 三维视图全屏 ----
    全屏的是 .joint-box（不是 canvas）：这样提示文字、图例、全屏按钮都跟着进去。
    全屏后画布尺寸变大，joint3d 的 ResizeObserver 会自己重算；app.js 里再补一次。 */
@@ -312,10 +136,54 @@
 /* ---- 全屏切换的遮罩 ----
    浏览器切全屏是**瞬时**的，画布尺寸会瞬间跳变（还伴随一次重排）。
    加一次短促的淡入把这一跳盖住 —— 看起来是"切过去"而不是"闪一下"。 */
-.joint-smooth { animation: joint-smooth .52s var(--ease) both; }
+.joint-smooth { animation: joint-smooth .4s var(--ease) both; }
 @keyframes joint-smooth {
-  /* 起点压得很低：切全屏那一帧画布尺寸已经跳完了，只有几乎全透明才盖得住 */
-  from { opacity: .18; transform: scale(1.02); }
-  to   { opacity: 1;   transform: none; }
+  /* 只盖"重排那一帧"，不需要压很低 —— 尺寸的突变由 joint3d 的相机补偿消化掉了 */
+  from { opacity: .55; }
+  to   { opacity: 1; }
 }
 @media (prefers-reduced-motion: reduce) { .joint-smooth { animation: none; } }
+
+/* ============================================================
+   左栏：三维视图 + 三个大数字 + 遥测表
+   三者挤在一栏里，所以数字框要能被 fitReadouts 压到很小 —— app.css 里的
+   `--readout-size` 默认 clamp(22px, 4vh, 38px)，这里放开上限到 46px 由 JS 定。
+   ============================================================ */
+.card-slaves .card-core {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+/* ★ 三维视图必须有**保底高度**：它是 flex:1，读数区是 flex:0 0 auto，
+   不给下限的话读数区的字号自适应会把它挤成一条缝（实测只剩 50px）。
+   给了下限之后，读数区只能在剩下的空间里自适应 —— 这正是想要的优先级。 */
+.card-slaves .joint-box { flex: 1 1 auto; min-height: 190px; }
+.card-slaves .readouts {
+  flex: 0 0 auto;
+  margin: 0;
+  gap: 5px;
+  overflow: visible;              /* 字号由 JS 压到刚好不溢出，不需要滚动 */
+}
+.card-slaves .readout label { margin-bottom: 2px; }
+.card-slaves .readout > div { gap: 6px; }
+.card-slaves .readout .value { padding: 1px 12px 2px; }
+.card-slaves .telemetry { flex: 0 0 auto; }
+
+/* 操作/目标两张卡删掉了标题，顶部要给急停等元素留出呼吸 */
+.card-operate .card-core,
+.card-target .card-core { padding-top: 14px; }
+
+/* ============================================================
+   两行网格：上排三栏（三维 / 操作 / 目标），下排波形通栏。
+   ★ 必须在这里覆盖 app.css 的 `.layout`：那是**三行**布局（auto 顶栏行 +
+   3fr + 2fr），而顶栏那一行早已删掉 —— 不覆盖的话第一行是空的 auto，
+   波形只能拿到 2/5。这处被误删过一次，整屏比例就偏了。
+   ============================================================ */
+.layout {
+  /* 上排收一点：删掉标题/行程/遥测后，操作与目标两张卡的内容只剩约 330px，
+     给它们和左卡一样高会空出 150px。收窄上排既少留空，又把空间让给波形。 */
+  grid-template-rows: minmax(0, 1fr) minmax(0, 0.92fr);
+  position: relative;              /* .rack-warn 以它为定位参照 */
+}
+.card-slaves, .card-operate, .card-target { grid-row: 1; }
+.card-chart { grid-row: 2; grid-column: 1 / -1; }
