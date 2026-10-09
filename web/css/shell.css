@@ -263,40 +263,55 @@ body.app-in .pages  { animation: pages-in .62s var(--ease) both .06s; }
   padding: 4px 12px;
 }
 
-/* ============ 页面切换动画：方向感知的交叉推进 ============
+/* ============ 页面切换：整页翻动（page turn） ============
  *
- * ★ 只用 translate + opacity，**绝不用 scale**。
+ * 两页像一条带子上的两格一起平移：出页整页退出，入页整页跟进。
+ * **必须是整页位移** —— 早先只挪 3.2% 时肉眼根本感知不到移动，
+ * 看起来"就是切换"，不像翻页。翻页感来自位移的"量"，不是缓动的好坏。
+ *
+ * ★ 绝不用 scale / rotateY。
  *   chart.js 用 getBoundingClientRect() 算画布分辨率，而它受祖先 transform 影响：
- *   平移不改变宽高（安全），缩放会 —— 动画期间量到的是缩放后的尺寸，
- *   且动画结束后布局尺寸没变、ResizeObserver 不会再触发，画布就一直是错的。
+ *   平移不改变宽高（安全），缩放和 3D 旋转会 —— 动画期间量到的是变形后的尺寸，
+ *   且动画结束后布局尺寸没变、ResizeObserver 不会再触发，画布会一直是错的。
  *
- * "苹果感"来自三处，不是来自时长：
- *   1) 新旧两页**同时在场**交叉推进（而不是先淡出再淡入，那样是两次独立动画）
- *   2) 两页**位移量不同**（入 3.2% / 出 2.2%）、时长不同（入 460ms / 出 300ms）
- *      → 产生视差纵深，是"有厚度"的来源
- *   3) 缓动曲线 --ease = cubic-bezier(.32,.72,0,1)，本身就是苹果常用的那类
+ * 用整页（100%）而不是"出页只挪一小段"：出页留在原地被盖住是"抽屉"，
+ * 两页一起走才是"翻页"。
  */
 .page.enter-fwd, .page.enter-back { z-index: 2; }
 .page.leave-fwd, .page.leave-back { z-index: 1; pointer-events: none; }
 
-.page.enter-fwd  { animation: page-in-fwd  .46s var(--ease) both; }
-.page.enter-back { animation: page-in-back .46s var(--ease) both; }
-.page.leave-fwd  { animation: page-out-fwd .30s var(--ease) both; }
-.page.leave-back { animation: page-out-back .30s var(--ease) both; }
+.page.enter-fwd  { animation: page-in-fwd  .48s var(--ease) both; }
+.page.enter-back { animation: page-in-back .48s var(--ease) both; }
+.page.leave-fwd  { animation: page-out-fwd .48s var(--ease) both; }
+.page.leave-back { animation: page-out-back .48s var(--ease) both; }
 
-/* fwd = 组态 → 监控（向"后"翻），back = 反之 */
-@keyframes page-in-fwd  { from { opacity: 0; transform: translateX( 3.2%); }
-                          to   { opacity: 1; transform: none; } }
-@keyframes page-in-back { from { opacity: 0; transform: translateX(-3.2%); }
-                          to   { opacity: 1; transform: none; } }
-@keyframes page-out-fwd { from { opacity: 1; transform: none; }
-                          to   { opacity: 0; transform: translateX(-2.2%); } }
-@keyframes page-out-back{ from { opacity: 1; transform: none; }
-                          to   { opacity: 0; transform: translateX( 2.2%); } }
+/* fwd = 组态 → 监控（往后翻），back = 反之 */
+@keyframes page-in-fwd  { from { transform: translateX(100%); } to { transform: none; } }
+@keyframes page-in-back { from { transform: translateX(-100%); } to { transform: none; } }
+@keyframes page-out-fwd { from { transform: none; } to { transform: translateX(-100%); } }
+@keyframes page-out-back{ from { transform: none; } to { transform: translateX(100%); } }
+
+/* 入页前缘的一道投影：让新页像"压在"旧页上抬起来，纵深的关键一笔。
+   它随页面一起平移，所以必须在动画结束时淡到 0 ——
+   否则动画跑完会留一条暗边贴在视口左边。 */
+.page.enter-fwd::before,
+.page.enter-back::before {
+  content: '';
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 72px;
+  pointer-events: none;
+  z-index: 3;
+  animation: page-shadow-fade .48s var(--ease) both;
+}
+.page.enter-fwd::before  { left: 0;  background: linear-gradient(90deg, rgba(0,0,0,.62), transparent); }
+.page.enter-back::before { right: 0; background: linear-gradient(270deg, rgba(0,0,0,.62), transparent); }
+@keyframes page-shadow-fade { from { opacity: 1; } to { opacity: 0; } }
 
 @media (prefers-reduced-motion: reduce) {
   .page.enter-fwd, .page.enter-back,
   .page.leave-fwd, .page.leave-back { animation: none; }
+  .page.enter-fwd::before, .page.enter-back::before { animation: none; opacity: 0; }
 }
 
 /* ============================================================
