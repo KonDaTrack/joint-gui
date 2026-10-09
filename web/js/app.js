@@ -369,18 +369,18 @@ function leaveSplash() {
   stopSplashTimer();
 
   const el = $('splash');
-  el.classList.add('leaving');
-  let fin = false;
-  const done = () => {
-    if (fin) return;
-    fin = true;
-    el.classList.add('gone');                 // 过渡结束才真摘掉：直接 hidden 会跳过动画
-    document.body.classList.add('app-in');    // 主界面入场
-  };
-  el.addEventListener('transitionend', done, { once: true });
-  setTimeout(done, 900);                      // 兜底：过渡事件没来也要摘掉
+  el.classList.add('leaving');   // 光圈放大穿越 + 文字上浮
 
-  Router.go('config');                        // 落到正式界面
+  // ★ 主界面**在开场画面还没飞完时就开始装配**（170ms 时光圈刚放大到一半）。
+  //   两段重叠才有衔接感；等它彻底消失再入场是两次独立动画，中间空一拍。
+  //   这个时刻要早于开场画面淡过半 —— 卡片回到起始位的那一瞬间会被盖住。
+  setTimeout(() => document.body.classList.add('app-in'), 170);
+
+  // 飞完了再摘掉。用固定时长而不是 transitionend：后者在多个过渡属性并存时
+  // 只为最先结束的那个触发一次，时机不确定。
+  setTimeout(() => el.classList.add('gone'), 760);
+
+  Router.go('config');           // 落到正式界面
 }
 
 /** 手动叫回连接界面（换 IP / 换板子时用）。不会自动关闭。 */
@@ -738,7 +738,19 @@ Router.onChange((name, prev) => {
   if (prev === 'monitor' && name !== 'monitor' && MOTION.active) {
     toast('关节运动执行中 —— 点顶部「运动中」可回到监控页');
   }
-  if (name === 'monitor') requestAnimationFrame(() => fitReadouts());
+  // 切到监控页要重测两样东西的尺寸：
+  //   · 读数区（二分字号）
+  //   · 波形画布 —— **必须显式重测**，不能只靠 ResizeObserver：
+  //     页面显示时它不一定触发（实测 2/3 概率不触发），波形会一直空白
+  if (name === 'monitor') {
+    requestAnimationFrame(() => {
+      fitReadouts();
+      if (chart && chart.resize) chart.resize();
+    });
+    // 再补一次：fitReadouts 自身挂着 ResizeObserver，可能在上面那次之后
+    // 又改一次布局（读数区字号 → 网格行高 → 波形高度），把画布尺寸带偏几像素。
+    setTimeout(() => { if (chart && chart.resize) chart.resize(); }, 700);
+  }
 
   // 拓扑动画只在组态页可见时跑：rAF 循环不该给隐藏页面白烧 CPU
   Topology.setActive(name === 'config');
@@ -778,6 +790,8 @@ $('safetyIdent').title = '点击可更换下位机地址';
 renderSafetyBar(); renderCommandEnabled(); renderSlaves();
 renderSplash();
 startSplashTimer();
-Anim.entrance();
+// 不再调 Anim.entrance()：它在页面加载时就跑，而那时整块主界面被开场画面盖着，
+// 动画根本看不见；更糟的是 GSAP 会留下内联 transform，与 body.app-in 那套
+// CSS 装配动画打架。入场动画现在统一由 .app-in 负责（见 shell.css）。
 Anim.bindButtonFeedback();
 link.connect();

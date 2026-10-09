@@ -14,7 +14,13 @@ const Anim = {
            !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   },
 
-  /** 首次进入：三块卡片依次淡入上浮 */
+  /**
+   * 首次进入：三块卡片依次淡入上浮。
+   *
+   * ⚠️ **已停用**。页面加载时整块主界面被开场画面盖着，这个动画根本看不见；
+   * 而且 GSAP 会留下内联 transform，与 `body.app-in` 那套 CSS 装配动画冲突。
+   * 入场动画现在统一由 shell.css 的 `.app-in` 负责。留在这里仅供参考。
+   */
   entrance() {
     if (!this.ok) return;
     gsap.from('.layout > .card', {

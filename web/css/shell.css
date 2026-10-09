@@ -200,7 +200,12 @@
   top: var(--bar-h);
   left: 0; right: 0; bottom: 0;
   overflow: hidden;   /* 过渡时页面会横向平移，别把外层撑出滚动条 */
+  /* 入场前不可见：否则开场画面还没淡完，卡片就"跳"回动画起始位置 ——
+     会出现一次明显的跳变。用 visibility（二值）而不是 opacity：
+     它在开场画面还基本盖着的时候切换，看不出来。 */
+  visibility: hidden;
 }
+body.app-in .pages { visibility: visible; }
 /* 页面**叠放定位**：交叉过渡要求新旧两页同时在场。
    用绝对定位它们才能重叠；只有 display 的切换做不到交叉。 */
 .page { position: absolute; inset: 0; min-height: 0; }
@@ -212,20 +217,32 @@
 .page > .layout { height: 100%; }
 
 /* ============ 主界面入场 ============
-   由 app.js 在开场画面退场后给 <body> 挂 .app-in 触发。
-   只动 opacity/transform —— GPU 安全，且不与开场画面的退场动画抢帧。 */
-body.app-in .safety { animation: bar-in .55s var(--ease) both; }
-body.app-in .pages  { animation: pages-in .62s var(--ease) both .06s; }
-@keyframes bar-in {
+   由 app.js 在开场画面**还没飞完时**就给 <body> 挂 .app-in ——
+   两段重叠才有衔接感。等它彻底消失再入场是两次独立动画，中间空一拍。
+
+   ★ 全部只动 opacity / translate，**绝不用 scale**：
+     波形 canvas 就在 .card 里，scale 会让 chart.js 量错画布分辨率（理由同页面切换）。
+*/
+body.app-in .safety { animation: bar-drop .62s var(--ease) both; }
+@keyframes bar-drop {
   from { opacity: 0; transform: translateY(-100%); }
   to   { opacity: 1; transform: none; }
 }
-@keyframes pages-in {
-  from { opacity: 0; transform: scale(.986); }
+
+/* 卡片依次上浮归位。延迟按顺序递增，形成"装配"的节奏 */
+body.app-in .page:not([hidden]) .card { animation: card-rise .66s var(--ease) both; }
+body.app-in .page:not([hidden]) .card:nth-child(1) { animation-delay: .14s; }
+body.app-in .page:not([hidden]) .card:nth-child(2) { animation-delay: .20s; }
+body.app-in .page:not([hidden]) .card:nth-child(3) { animation-delay: .26s; }
+body.app-in .page:not([hidden]) .card:nth-child(4) { animation-delay: .32s; }
+body.app-in .page:not([hidden]) .card:nth-child(5) { animation-delay: .38s; }
+@keyframes card-rise {
+  from { opacity: 0; transform: translateY(22px); }
   to   { opacity: 1; transform: none; }
 }
+
 @media (prefers-reduced-motion: reduce) {
-  body.app-in .safety, body.app-in .pages { animation: none; }
+  body.app-in .safety, body.app-in .page:not([hidden]) .card { animation: none; }
 }
 
 /* ============ 占位壳（组态页 / 初始页，后续子系统填充） ============ */
@@ -325,6 +342,7 @@ body.app-in .pages  { animation: pages-in .62s var(--ease) both .06s; }
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;             /* 退场时光圈会放大到飞出视口，别撑出滚动条 */
   background:
     radial-gradient(58% 48% at 50% 36%, rgba(120, 214, 238, 0.055), transparent 72%),
     radial-gradient(80% 58% at 50% 112%, rgba(217, 164, 65, 0.035), transparent 72%),
@@ -332,9 +350,25 @@ body.app-in .pages  { animation: pages-in .62s var(--ease) both .06s; }
   /* 退场用 opacity/transform/filter —— 全部 GPU 安全 */
   transition: opacity .6s var(--ease), transform .6s var(--ease), filter .6s var(--ease);
 }
-/* 退场：淡出 + 轻微推近，像镜头"穿过去"进主界面 */
-.splash.leaving { opacity: 0; transform: scale(1.055); filter: blur(7px); pointer-events: none; }
+/* 退场：整层淡出 + 推近，同时**光圈放大穿越**——像镜头从环里穿过去 */
+.splash.leaving { opacity: 0; transform: scale(1.06); filter: blur(8px); pointer-events: none; }
 .splash.gone    { display: none; }
+
+/* 光圈放大穿越：这一下是整个过渡的"记忆点" */
+.splash.leaving .splash-ring { animation: splash-portal .66s var(--ease) both; }
+@keyframes splash-portal {
+  from { transform: scale(1);    opacity: 1; }
+  60%  { opacity: .75; }
+  to   { transform: scale(9.5);  opacity: 0; }
+}
+/* 文字/步骤往上浮着退，与光圈的"放大"形成一进一退 */
+.splash.leaving .splash-inner > *:not(.splash-ring) {
+  animation: splash-up .36s var(--ease) both;
+}
+@keyframes splash-up {
+  from { opacity: 1; transform: none; }
+  to   { opacity: 0; transform: translateY(-16px); }
+}
 
 .splash-inner {
   display: flex;

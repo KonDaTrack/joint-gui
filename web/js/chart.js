@@ -31,11 +31,19 @@ class Chart {
     const dpr = window.devicePixelRatio || 1;
     const resize = () => {
       const r = canvas.getBoundingClientRect();
+      // ★ 尺寸为 0 时直接返回，**不要**写 canvas.width/height。
+      //   页面被 display:none 隐藏时 ResizeObserver 会带着 0 触发一次，
+      //   照写就把画布清零了；而页面重新显示时观察器**不一定**会再触发
+      //   （实测三次里两次不触发），波形就一直是空白的，且从界面上看不出原因。
+      //   宁可保留上一次的尺寸：它至少是"曾经正确"的，总好过归零。
+      if (!r.width || !r.height) return;
       canvas.width = r.width * dpr;
       canvas.height = r.height * dpr;
       this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       this.draw();
     };
+    // 供外部在页面切换后**强制重测**。光靠 ResizeObserver 不够 —— 见上面的竞态。
+    this.resize = resize;
     new ResizeObserver(resize).observe(canvas);
     resize();
   }
