@@ -6,21 +6,39 @@ const DRIVE_STATES = ['未就绪', '禁止合闸', '待合闸', '已合闸', '�
                       '快速停机', '故障反应', '故障', '未知'];
 const OP_ENABLED = 4;   // OperationEnabled
 
-// 下位机（Qt 端 ControlServer）的地址。优先级：
-//   1) ?host=192.168.x.x  —— 换网段/换板子时不用改代码
-//   2) 页面所在主机       —— 在板子上开个 http 服务、用板子的浏览器打开本页时，
-//                            location.hostname 就是板子自己，直接连通
-//   3) DEFAULT_HOST       —— 双开 index.html 的常规情况
+// 下位机（Qt 端 ControlServer）的地址解析。**顺序很重要**：
 //
-// 第 3 条是**必须的**：file:// 打开时 location.hostname 是空串，原来会回退成
-// 'localhost'，那在下位机与网页同机时恰好成立；但下位机搬到 ARM 板之后，
-// 'localhost' 指的是 PC 自己，永远连不上——而且表现成"板子没起来"，极易误判。
-const DEFAULT_HOST = '192.168.1.10';   // ARM 板（LubanCat）的地址
+//   1) ?host=192.168.x.x   —— 显式指定，最高优先（发链接给别人时用）
+//   2) 上次用过的地址       —— 存在 localStorage，填一次就记住
+//   3) location.hostname   —— **仅在它不是回环地址时**才采用
+//   4) DEFAULT_HOST        —— 兜底
+//
+// 第 3 条的"仅非回环"限定是**必须的**，这是实际踩过的坑：
+// 上位机在工控机上跑，用 http://localhost:8080 打开页面时 location.hostname 就是
+// 'localhost'，于是它去连本机的 9002 —— 而下位机在 ARM 板上，永远连不上。
+// 更糟的是界面看不出"它到底在连哪"，表现成"板子没起来"，排查方向完全错。
+//
+// 第 2 条是这次新增的：换网段/换板子时填一次即可，不用每次都在地址栏挂参数。
+const DEFAULT_HOST = '192.168.1.10';   // ARM 板（LubanCat）的出厂网段，可在初始页改
 const WS_PORT = 9002;                  // 与 src/ui/MainWindow.cpp 的 kRemotePort 保持一致
+const HOST_KEY = 'joint.wsHost';       // localStorage 键
 
-const wsHost = new URLSearchParams(location.search).get('host')
-            || location.hostname
-            || DEFAULT_HOST;
+const isLoopback = (h) =>
+  !h || h === 'localhost' || h === '127.0.0.1' || h === '::1' || h === '0.0.0.0';
+
+function resolveHost() {
+  const q = new URLSearchParams(location.search).get('host');
+  if (q) return { host: q, from: '地址栏参数' };
+  let saved = null;
+  try { saved = localStorage.getItem(HOST_KEY); } catch (e) { /* 无痕模式等，忽略 */ }
+  if (saved) return { host: saved, from: '上次使用' };
+  if (!isLoopback(location.hostname)) return { host: location.hostname, from: '当前主机' };
+  return { host: DEFAULT_HOST, from: '默认值' };
+}
+
+const _hostInfo = resolveHost();
+const wsHost = _hostInfo.host;
+const wsHostFrom = _hostInfo.from;
 const link = new JointLink(`ws://${wsHost}:${WS_PORT}`);
 const chart = new Chart(document.getElementById('chart'));
 
@@ -266,15 +284,15 @@ function renderBoot() {
   if (inp && document.activeElement !== inp) inp.value = wsHost;
 
   const dot = $('bootDot');
-  const target = `ws://${wsHost}:${WS_PORT}`;
+  // 带上地址**来源**：地址配错时，"它到底在连哪、这个值是哪来的"必须一眼看出。
+  const target = `ws://${wsHost}:${WS_PORT}（${wsHostFrom}）`;
   let cls = 'dot', text = '';
   if (!link.connected) {
-    // ★ 关键：不能只说"未连接"——页面加载时就在自动连了，
-    //   只显示"未连接"会让人以为在等手动点「连接」。必须显示"正在连接"和目标地址，
-    //   否则地址配错时根本看不出它到底在连哪。
+    // ★ 不能只说"未连接"——页面加载时就在自动连了，
+    //   只显示"未连接"会让人以为在等手动点「连接」。
     cls = 'dot warn bounce'; text = `正在连接 ${target} …`;
   } else if (!state.deviceConnected) {
-    cls = 'dot warn'; text = `已连下位机，但设备未连接（${target}）`;
+    cls = 'dot warn'; text = `已连下位机，但设备未连接 · ${target}`;
   } else if (state.simulated) {
     cls = 'dot warn'; text = `⚠️ 仿真数据（非真机）· ${target}`;
   } else {
@@ -639,8 +657,13 @@ $('btnGoMonitor').onclick = () => Router.go('monitor');
 $('btnConnect').onclick = () => {
   const h = $('inpHost').value.trim();
   if (!h) return;
+  // 记住它：下次打开默认就用这个地址，不用再填。
+  // 无痕模式下 setItem 会抛异常，忽略即可——本次跳转仍然生效。
+  try { localStorage.setItem(HOST_KEY, h); } catch (e) { /* 忽略 */ }
+  // 必须清掉 ?host=：它的优先级最高，留着会把刚记住的地址盖掉，
+  // 表现为"改了地址却没用"——正是这个坑让人以为连接坏了。
   const url = new URL(location.href);
-  url.searchParams.set('host', h);
+  url.searchParams.delete('host');
   location.href = url.toString();
 };
 
