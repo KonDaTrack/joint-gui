@@ -491,6 +491,35 @@ body.app-in .page:not([hidden]) .card:nth-child(5) { animation-delay: .70s; }
   color: var(--dim);
 }
 
+/* ---- 扫到的从站（扫完才出现） ---- */
+.splash-slaves { margin-top: 22px; animation: splash-reveal .5s var(--ease) both; }
+.splash-slaves .hd {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  color: var(--dimmer);
+  margin-bottom: 9px;
+}
+.splash-slaves ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+.splash-slaves li {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--fg);
+  border: 1px solid rgba(120, 214, 238, 0.32);
+  background: rgba(120, 214, 238, 0.08);
+  border-radius: 9px;
+  padding: 5px 12px;
+  white-space: nowrap;
+}
+
 /* ---- 连不上时才滑出的地址表单 ---- */
 .splash-form {
   margin-top: 22px;

@@ -283,11 +283,37 @@ function renderTelemetry() {
 // 三个时间常量是有意为之：连得快时不能让动画一闪而过；
 // 连不上时又绝不能把人永久挡在开场画面外。
 const SPLASH_MIN_MS  = 1400;   // 最短显示时长，保证开场动画看得完
-const SPLASH_FORM_MS = 4000;   // 连不上这么久，才滑出地址表单与"直接进入"
+const SPLASH_FORM_MS = 4500;   // 连不上这么久，才滑出地址表单与"直接进入"
+
+// 每一步**至少停留这么久**才往下滚。连接往往在几百毫秒内就全部完成，
+// 不强制停留的话三步一闪而过、滚动根本来不及看（用户反馈："效果没体现出来"）。
+// 这是**显示节奏**，不是伪造状态：真实状态照样即时生效，只是不让它瞬间跳到最后。
+const STEP_DWELL_MS = 800;
+const STEP_NAMES = ['link', 'hello', 'device'];
 
 // t0 必须在**脚本求值那一刻**就取好。设成 0 的话，首次 renderSplash() 算出的
 // "已过时间"是个巨大值，会立刻越过 SPLASH_FORM_MS 把地址表单弹出来（踩过）。
-const SPLASH = { t0: performance.now(), gone: false, formShown: false, timer: null };
+const SPLASH = {
+  t0: performance.now(), gone: false, formShown: false, timer: null,
+  stepIdx: 0, stepAt: performance.now(),
+};
+
+/** 真实状态对应第几步（0/1/2），不经过放慢 */
+function realStep() {
+  if (!link.connected) return 0;
+  if (!state.bus) return 1;
+  return 2;
+}
+
+/** 显示用的步骤号：只做"延迟推进"，绝不跳过 —— 真实状态领先时逐格追上去 */
+function displayStep() {
+  const now = performance.now();
+  if (realStep() > SPLASH.stepIdx && now - SPLASH.stepAt >= STEP_DWELL_MS) {
+    SPLASH.stepIdx++;
+    SPLASH.stepAt = now;
+  }
+  return SPLASH.stepIdx;
+}
 
 function splashStep(name, cls) {
   const li = document.querySelector(`#splashSteps li[data-step="${name}"]`);
@@ -314,13 +340,17 @@ function renderSplash() {
   const helloed = !!state.bus;
   const dev     = !!state.deviceConnected;
 
-  // 三步进度：完成打勾 / 进行中呼吸 / 未开始暗着
-  splashStep('link',   linked ? 'done' : 'doing');
-  splashStep('hello',  helloed ? 'done' : (linked ? 'doing' : ''));
-  splashStep('device', dev ? 'done' : (helloed ? 'doing' : ''));
-
-  // 当前进行到第几步，把它滚到正中。全做完时停在最后一步。
-  splashScroll(!linked ? 0 : !helloed ? 1 : 2);
+  // 三步进度：完成打勾 / 进行中呼吸 / 未开始暗着。
+  // 用**放慢后**的 idx 驱动显示 —— 否则连接一快，三步瞬间全变 done，滚动看不见。
+  const idx = displayStep();
+  const allDone = linked && helloed && dev;
+  STEP_NAMES.forEach((nm, i) => {
+    const cls = i < idx ? 'done'
+              : i > idx ? ''
+              : (i === STEP_NAMES.length - 1 && allDone ? 'done' : 'doing');
+    splashStep(nm, cls);
+  });
+  splashScroll(idx);
 
   const dot = $('bootDot');
   // 带上地址**来源**：地址配错时，"它到底在连哪、这个值哪来的"必须一眼看出
@@ -353,7 +383,27 @@ function renderSplash() {
     $('splashHint').hidden = !showForm;
   }
 
-  renderEnterButton(elapsed);
+  renderSplashSlaves(idx);
+  renderEnterButton(elapsed, idx);
+}
+
+/** 扫到的从站。**扫完（显示到第 3 步）才出现** —— 开场画面就该让人确认
+ *  "到底认出来几个关节"。之前把这块挪到了组态页，结果开场时什么都看不到。 */
+function renderSplashSlaves(idx) {
+  const box = $('splashSlaves');
+  const list = $('splashSlaveList');
+  if (!box || !list) return;
+
+  const show = idx >= STEP_NAMES.length - 1 && state.slaves.length > 0;
+  box.hidden = !show;
+  if (!show) return;
+
+  const html = state.slaves.map((s) => {
+    const short = s.shortName || s.model || '未知';
+    // 型号串在有些关节上很长（板上会带"· 额定 X N·m"），放进 title 而不是正文
+    return `<li title="${(s.model || '').replace(/"/g, '')}">#${s.slave} · ${short}</li>`;
+  }).join('');
+  if (list._html !== html) { list._html = html; list.innerHTML = html; }
 }
 
 /**
@@ -364,12 +414,16 @@ function renderSplash() {
  * 那比自动进场还糟。所以连不上到 SPLASH_FORM_MS 时，把它降级成次要的
  * "不连接，直接进入"——进得去，只是不显眼。
  */
-function renderEnterButton(elapsed) {
+function renderEnterButton(elapsed, idx) {
   const btn = $('btnEnter');
   if (!btn) return;
 
   const connected = link.connected;
-  const ready = elapsed >= SPLASH_MIN_MS && (connected || elapsed >= SPLASH_FORM_MS);
+  // 连上之后还要等步骤**滚完**才出主按钮 —— 否则点早了会把开场序列截断，
+  // 用户还没看清就进主界面了。
+  const stepsSettled = idx >= STEP_NAMES.length - 1;
+  const ready = elapsed >= SPLASH_MIN_MS
+             && ((connected && stepsSettled) || elapsed >= SPLASH_FORM_MS);
   if (!ready) { btn.hidden = true; return; }
 
   const secondary = !connected;
@@ -403,6 +457,9 @@ function leaveSplash() {
 function reopenSplash() {
   SPLASH.gone = false;
   SPLASH.formShown = true;
+  // 已经连上了再叫回来，步骤应当**直接显示为已完成**，
+  // 而不是从头重放一遍扫描动画（那会是在骗人）。
+  SPLASH.stepIdx = STEP_NAMES.length - 1;
   const el = $('splash');
   el.classList.remove('gone', 'leaving');
   document.body.classList.remove('app-in');

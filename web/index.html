@@ -48,6 +48,12 @@
       <span class="dot" id="bootDot"></span><span id="bootStatus">正在连接…</span>
     </div>
 
+    <!-- 扫到的从站。扫完才出现 —— 开场画面就该让人确认"到底认出来几个关节" -->
+    <div class="splash-slaves" id="splashSlaves" hidden>
+      <div class="hd">扫描到的从站</div>
+      <ul id="splashSlaveList"></ul>
+    </div>
+
     <!-- 连上后出现，**点了才进正式界面** —— 给人一个"我准备好了"的确认动作，
          而不是被自动推进去。连不上时它变成次要的"直接进入"，保证不会被卡住。 -->
     <button id="btnEnter" class="splash-enter" hidden>进入</button>
