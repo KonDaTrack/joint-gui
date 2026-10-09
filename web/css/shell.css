@@ -199,8 +199,11 @@
   position: fixed;
   top: var(--bar-h);
   left: 0; right: 0; bottom: 0;
+  overflow: hidden;   /* 过渡时页面会横向平移，别把外层撑出滚动条 */
 }
-.page { height: 100%; min-height: 0; }
+/* 页面**叠放定位**：交叉过渡要求新旧两页同时在场。
+   用绝对定位它们才能重叠；只有 display 的切换做不到交叉。 */
+.page { position: absolute; inset: 0; min-height: 0; }
 .page[hidden] { display: none; }
 
 /* 监控页承载原来的 .layout。app.css 里 .layout 是 height:100vh，
@@ -260,16 +263,40 @@ body.app-in .pages  { animation: pages-in .62s var(--ease) both .06s; }
   padding: 4px 12px;
 }
 
-/* ============ 页面切换动画 ============
-   只动 opacity/transform（GPU 安全）。切页本身不做淡入淡出——
-   那会让高频切页显得拖沓；只有首次进入某页时轻微上浮。 */
-@keyframes page-in {
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: none; }
-}
-.page.page-enter { animation: page-in .3s var(--ease) both; }
+/* ============ 页面切换动画：方向感知的交叉推进 ============
+ *
+ * ★ 只用 translate + opacity，**绝不用 scale**。
+ *   chart.js 用 getBoundingClientRect() 算画布分辨率，而它受祖先 transform 影响：
+ *   平移不改变宽高（安全），缩放会 —— 动画期间量到的是缩放后的尺寸，
+ *   且动画结束后布局尺寸没变、ResizeObserver 不会再触发，画布就一直是错的。
+ *
+ * "苹果感"来自三处，不是来自时长：
+ *   1) 新旧两页**同时在场**交叉推进（而不是先淡出再淡入，那样是两次独立动画）
+ *   2) 两页**位移量不同**（入 3.2% / 出 2.2%）、时长不同（入 460ms / 出 300ms）
+ *      → 产生视差纵深，是"有厚度"的来源
+ *   3) 缓动曲线 --ease = cubic-bezier(.32,.72,0,1)，本身就是苹果常用的那类
+ */
+.page.enter-fwd, .page.enter-back { z-index: 2; }
+.page.leave-fwd, .page.leave-back { z-index: 1; pointer-events: none; }
+
+.page.enter-fwd  { animation: page-in-fwd  .46s var(--ease) both; }
+.page.enter-back { animation: page-in-back .46s var(--ease) both; }
+.page.leave-fwd  { animation: page-out-fwd .30s var(--ease) both; }
+.page.leave-back { animation: page-out-back .30s var(--ease) both; }
+
+/* fwd = 组态 → 监控（向"后"翻），back = 反之 */
+@keyframes page-in-fwd  { from { opacity: 0; transform: translateX( 3.2%); }
+                          to   { opacity: 1; transform: none; } }
+@keyframes page-in-back { from { opacity: 0; transform: translateX(-3.2%); }
+                          to   { opacity: 1; transform: none; } }
+@keyframes page-out-fwd { from { opacity: 1; transform: none; }
+                          to   { opacity: 0; transform: translateX(-2.2%); } }
+@keyframes page-out-back{ from { opacity: 1; transform: none; }
+                          to   { opacity: 0; transform: translateX( 2.2%); } }
+
 @media (prefers-reduced-motion: reduce) {
-  .page.page-enter { animation: none; }
+  .page.enter-fwd, .page.enter-back,
+  .page.leave-fwd, .page.leave-back { animation: none; }
 }
 
 /* ============================================================

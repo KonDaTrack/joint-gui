@@ -16,6 +16,11 @@ const Router = {
   PAGES: ['config', 'monitor'],
   current: null,
 
+  // 交叉过渡最长 460ms（见 shell.css 的 page-in-*）。收尾定时器留点余量，
+  // 别在动画还没跑完时就把类名清了——那会把过渡截断成一次生硬的跳变。
+  _TRANS_MS: 560,
+  _out: null, _inc: null, _timer: null,
+
   /** 页面变化回调。app.js 用它重测尺寸 / 重绘。 */
   _onChange: [],
   onChange(fn) { this._onChange.push(fn); },
@@ -54,15 +59,18 @@ const Router = {
     if (location.hash !== '#' + name) location.hash = name;
   },
 
+  /** 过渡收尾：旧页隐藏、两页的动画类都清干净。
+   *  单独抽出来是因为**连续快速切页**时必须有地方把上一次没收完的尾收掉，
+   *  否则会留下一个永远不隐藏的页面盖在上面。 */
+  _settle() {
+    if (this._timer) { clearTimeout(this._timer); this._timer = null; }
+    if (this._out) { this._out.hidden = true; this._out.className = 'page'; this._out = null; }
+    if (this._inc) { this._inc.className = 'page'; this._inc = null; }
+  },
+
   show(name) {
     if (!this.PAGES.includes(name)) name = this.defaultPage;
     const prev = this.current;
-    this.current = name;
-
-    this.PAGES.forEach((p) => {
-      const el = document.getElementById('page-' + p);
-      if (el) el.hidden = (p !== name);
-    });
 
     document.querySelectorAll('#nav button').forEach((b) => {
       const on = b.dataset.page === name;
@@ -70,12 +78,36 @@ const Router = {
       b.setAttribute('aria-selected', String(on));
     });
 
-    // 只有真正换页才播入场，且**不重建节点**（只加减 class）
-    const el = document.getElementById('page-' + name);
-    if (el && prev !== name) {
-      el.classList.remove('page-enter');
-      void el.offsetWidth;          // 强制重排，否则同一个 class 不会重放动画
-      el.classList.add('page-enter');
+    if (name !== prev) {
+      this.current = name;
+      this._settle();   // 先收上一次的尾
+
+      const inc = document.getElementById('page-' + name);
+      const out = prev ? document.getElementById('page-' + prev) : null;
+      const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      if (out && inc && !reduce) {
+        // 交叉过渡：两页同时在场，方向由页面在 PAGES 里的先后决定
+        const dir = this.PAGES.indexOf(name) > this.PAGES.indexOf(prev) ? 'fwd' : 'back';
+        out.hidden = false;
+        inc.hidden = false;
+        out.className = 'page leave-' + dir;
+        inc.className = 'page';        // 先摘干净…
+        void inc.offsetWidth;          // …强制重排，否则同一个 class 不会重放动画
+
+        inc.className = 'page enter-' + dir;
+        this._out = out;
+        this._inc = inc;
+        this._timer = setTimeout(() => this._settle(), this._TRANS_MS);
+      } else {
+        // 首次落位 / 减少动效：直接切
+        this.PAGES.forEach((p) => {
+          const el = document.getElementById('page-' + p);
+          if (!el) return;
+          el.className = 'page';
+          el.hidden = (p !== name);
+        });
+      }
     }
 
     // 通知外部重测尺寸。同步调用：调用方内部若要读布局，必须在本次切换后读，
