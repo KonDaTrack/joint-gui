@@ -537,9 +537,10 @@ function renderSlaveWarn() {
 
 const HIST = {
   sel: new Set(),                        // 选中对比的运行名
-  traces: ['positionDeg', 'velocityDps', 'torqueNm'],
+  traces: ['positionDeg', 'velocityDps', 'torqueNm'],   // 固定三条全显（筛选按钮已删）
   cache: [],                             // 最近一次读到的全部记录
   view: [],                              // 当前筛选下的记录
+  pending: false,                        // 跑完一次但还没选保存/丢弃
   filter: { slave: 0, mode: 0 },         // 0 = 全部
 };
 
@@ -577,8 +578,40 @@ function buildRun() {
   };
 }
 
+/** 跑完一次 → 标记"待处置"。**不自动存**：调参时会产生一堆垃圾记录。
+ *  也不静默丢：可能把有用的数据弄丢。让操作员明确选一个。 */
+function markRunPending() {
+  // 采到的点太少就别问了（比如刚下发就被停），没什么可看的
+  if (!chart.traces[0] || chart.traces[0].buf.length < 3) return;
+  HIST.pending = true;
+  renderRunPending();
+}
+
+function renderRunPending() {
+  const on = HIST.pending;
+  const save = $('btnRunSave'), disc = $('btnRunDiscard');
+  if (save) save.hidden = !on;
+  if (disc) disc.hidden = !on;
+  const tip = $('runPending');
+  if (tip) tip.hidden = !on;
+  // 待处置时把"历史数据"让出来 —— 三个按钮挤一行会看不出主次
+  const hist = $('btnGoHistory');
+  if (hist) hist.hidden = on;
+  const row = $('runNameRow');
+  if (row) row.classList.toggle('pending', on);
+}
+
+/** 丢弃本次：只清状态，缓冲区会在下次下发时被覆盖 */
+function discardRun() {
+  HIST.pending = false;
+  renderRunPending();
+  resetRunName();
+}
+
 async function saveRun() {
   const rec = buildRun();
+  HIST.pending = false;
+  renderRunPending();
   if (!rec) return;
   await History.save(rec);
   resetRunName();                        // 存完换一个新的默认名，避免连着两次同名
@@ -680,6 +713,8 @@ function syncHistSel() {
 }
 
 // ---- 历史页的控件 ----
+$('btnRunSave').onclick = () => saveRun();
+$('btnRunDiscard').onclick = () => discardRun();
 $('btnGoHistory').onclick = () => Router.go('history');
 $('histSlave').onchange = () => renderHistory();
 $('histMode').onchange  = () => renderHistory();
@@ -689,16 +724,6 @@ $('btnHistClear').onclick = async () => {
   HIST.sel.clear();
   renderHistory();
 };
-document.querySelectorAll('#histTraces button').forEach((b) => {
-  b.onclick = () => {
-    const k = b.dataset.trace;
-    const i = HIST.traces.indexOf(k);
-    if (i >= 0) { if (HIST.traces.length > 1) HIST.traces.splice(i, 1); }
-    else HIST.traces.push(k);
-    b.classList.toggle('on', HIST.traces.includes(k));
-    Compare.setTraces(HIST.traces);
-  };
-});
 
 // ============ 事件 ============
 link.on('open', () => { renderSafetyBar(); renderSplash(); toast('已连接下位机'); })
@@ -766,7 +791,7 @@ link.on('open', () => { renderSafetyBar(); renderSplash(); toast('已连接下�
       // 运动结束（图表自动收尾）→ 把这次运行存进历史。
       // 存的是**结束时刻**的完整缓冲；下发时缓冲还是空的，不能那时存。
       const recNow = chart.recording;
-      if (state.wasRecording && !recNow) saveRun();
+      if (state.wasRecording && !recNow) markRunPending();
       state.wasRecording = recNow;
 
       renderSlaveWarn();
@@ -867,6 +892,7 @@ $('btnSend').onclick = () => {
   if (mode === 1) targets.positionDeg = args.positionDeg;
   else if (mode === 3) targets.velocityDps = args.velocityDps;
   else targets.torqueNm = args.torqueNm;
+  if (HIST.pending) discardRun();      // 上一次没选保存/丢弃就被覆盖了，明说一声
   state.lastTarget = targets;                      // 存历史时带上（对比要看目标差异）
   chart.start(t ? t.ratedTorqueNm : 0, targets);   // 每次下发都重新记录本次响应
   Anim.chartStarted();
@@ -1013,6 +1039,7 @@ Router.onChange((name, prev) => {
 
 // 导航里只剩正式界面。开场画面不是"一页"，连上后被摘掉，不参与路由。
 resetRunName();
+renderRunPending();
 Router.init('monitor');
 
 // ============ 开场画面的动作 ============

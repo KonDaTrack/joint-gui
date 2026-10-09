@@ -278,13 +278,17 @@
 
           <div id="cmdHint" class="hint"></div>
 
-          <!-- 本次运行的名称。**下发目标时**用它当主键存进历史，重名覆盖。
-               默认是保存时间，学生可以改成"第一次·负载20"这种有意义的名字。 -->
-          <div class="run-name">
+          <!-- 每次跑完一次目标，必须**明确选择**保存还是丢弃：
+               不自动存（调参时会产生一堆垃圾记录），也不静默丢（可能把有用的弄丢）。
+               名称是主键，重名覆盖；默认是保存时间，也可以改成"空载·基准"这种。 -->
+          <div class="run-name" id="runNameRow">
             <label for="inpRunName">本次名称</label>
             <input type="text" id="inpRunName" spellcheck="false" autocomplete="off">
+            <button id="btnRunSave" class="btn btn-primary" hidden>保存</button>
+            <button id="btnRunDiscard" class="btn" hidden>丢弃</button>
             <button id="btnGoHistory" class="btn">历史数据</button>
           </div>
+          <div class="run-pending" id="runPending" hidden>本次运行已完成 —— 保存还是丢弃？</div>
         </div>
       </section>
 
@@ -330,13 +334,6 @@
               <option value="3">速度 PV</option>
               <option value="4">力矩 PT</option>
             </select>
-          </div>
-
-          <!-- 轨迹筛选：只留一条轨迹时就是 N 条纯色线，最干净 -->
-          <div class="hist-traces" id="histTraces">
-            <button data-trace="positionDeg" class="on">位置</button>
-            <button data-trace="velocityDps" class="on">速度</button>
-            <button data-trace="torqueNm" class="on">力矩</button>
           </div>
 
           <ul class="hist-runs" id="histRuns"></ul>
