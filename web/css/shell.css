@@ -115,6 +115,85 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* 下拉箭头：让"这个名字可以点开"看得出来 */
+.safety .ident .caret {
+  position: absolute;
+  right: 7px; top: 50%;
+  transform: translateY(-50%);
+  font-size: 9px;
+  color: var(--dimmer);
+  transition: transform .25s var(--ease), color .25s var(--ease);
+}
+.safety .ident { position: relative; padding-right: 22px; }
+.safety .ident[aria-expanded="true"] { background: rgba(255, 255, 255, 0.075); border-color: rgba(120, 214, 238, 0.45); }
+.safety .ident[aria-expanded="true"] .caret { transform: translateY(-50%) rotate(180deg); color: var(--cyan); }
+
+/* ============ 关节切换菜单 ============
+   从"在线关节"那一整行收进来的 —— 那一行只做切换，却占掉一整行高度。 */
+.ident-menu {
+  position: fixed;
+  z-index: 300;                    /* 高于安全条，否则被它盖住 */
+  min-width: 250px;
+  padding: 6px;
+  border-radius: 11px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: linear-gradient(180deg, rgba(32, 34, 39, 0.99), rgba(23, 24, 28, 0.99));
+  box-shadow: 0 22px 48px -24px #000, inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  animation: ident-menu-in .18s var(--ease) both;
+}
+@keyframes ident-menu-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: none; }
+}
+.ident-menu .h {
+  padding: 6px 10px 7px;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.2em;
+  color: var(--dimmer);
+}
+.ident-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  appearance: none;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--dim);
+  font-family: var(--sans);
+  font-size: 12.5px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background .2s var(--ease), color .2s var(--ease), border-color .2s var(--ease);
+}
+.ident-menu button .sm {
+  display: block;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--dimmer);
+  margin-top: 2px;
+}
+.ident-menu button:hover { background: rgba(255, 255, 255, 0.06); color: var(--fg); }
+/* 当前关节：凸起 + 青线，和导航的选中态同一套语汇 */
+.ident-menu button.on {
+  background: linear-gradient(180deg, rgba(120, 214, 238, 0.13), rgba(120, 214, 238, 0.04));
+  border-color: rgba(120, 214, 238, 0.42);
+  color: var(--fg);
+}
+.ident-menu .sep { height: 1px; background: var(--hair); margin: 5px 4px; }
+
+/* 从站列表过期告警：浮在布局上方，不占网格单元
+   （它很罕见，不值得为它改变布局；而布局里已经没有一整行可以放它了） */
+.rack-warn {
+  position: absolute;
+  top: 10px; left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  max-width: 640px;
+  box-shadow: 0 14px 32px -18px #000;
+}
+
 .safety .ident .m {
   font-family: var(--mono);
   font-size: 9.5px;

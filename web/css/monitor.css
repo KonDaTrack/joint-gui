@@ -231,3 +231,50 @@
 .card-operate .section-title { margin-top: 9px; }
 .travel { margin-top: 10px; }
 .travel-legend { margin: 0 0 5px; }   /* 图例移到进度条上方 */
+
+/* 去掉「在线关节」那一整行后重排行高：波形拿回那一行的高度。
+   三栏（三维/操作/目标）在上，波形在下。 */
+.layout {
+  grid-template-rows: minmax(0, 1fr) minmax(0, 0.92fr);
+  position: relative;              /* .rack-warn 以它为定位参照 */
+}
+.card-slaves, .card-operate, .card-target { grid-row: 1; }
+.card-chart { grid-row: 2; grid-column: 1 / -1; }
+
+/* ---- 三维视图全屏 ----
+   全屏的是 .joint-box（不是 canvas）：这样提示文字、图例、全屏按钮都跟着进去。
+   全屏后画布尺寸变大，joint3d 的 ResizeObserver 会自己重算；app.js 里再补一次。 */
+.joint-full {
+  position: absolute;
+  right: 9px; top: 8px;
+  width: 26px; height: 26px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  appearance: none;
+  cursor: pointer;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.05);
+  transition: background .2s var(--ease), border-color .2s var(--ease);
+}
+.joint-full svg {
+  width: 14px; height: 14px;
+  fill: none;
+  stroke: var(--dim);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+.joint-full:hover { background: rgba(255, 255, 255, 0.11); border-color: rgba(255, 255, 255, 0.28); }
+.joint-full:hover svg { stroke: var(--fg); }
+.joint-full:focus-visible { outline: 2px solid rgba(120, 214, 238, 0.8); outline-offset: 2px; }
+
+.joint-box:fullscreen {
+  border-radius: 0;
+  border: none;
+  background: radial-gradient(80% 70% at 50% 40%, #16181C, #08090B 80%);
+}
+.joint-box:fullscreen .joint-hint,
+.joint-box:fullscreen .joint-legend { font-size: 12px; }
+.joint-box:fullscreen .joint-full svg { stroke: var(--fg); }

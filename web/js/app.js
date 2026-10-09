@@ -191,45 +191,73 @@ function applySlaves(list, activeSlave) {
   renderSlaveWarn();
 }
 
-function renderSlaves() {
-  const ul = $('slaveList');
-  ul.innerHTML = '';
-  if (state.slaves.length === 0) {
-    const li = document.createElement('li');
-    li.className = 'sub';
-    li.textContent = '无关节';
-    ul.appendChild(li);
-    return;
-  }
-  // 关节标识卡：当前控制的是哪个关节、型号、额定力矩（一眼可见，不用去翻别处）
-  const cur = state.slaves.find((s) => s.slave === state.active);
-  if (cur) {
-    $('moduleTitle').textContent = `关节${cur.slave} · ${cur.shortName || '未知型号'}`;
-    $('moduleModel').textContent = cur.model || '--';
-  } else {
-    $('moduleTitle').textContent = '关节 --';
-    $('moduleModel').textContent = '--';
-  }
+/** 切换当前控制的关节。菜单项和（将来的）其它入口都走这里。 */
+function selectSlave(id) {
+  if (state.active === id) { closeIdentMenu(); return; }
+  state.active = id;
+  chart.stop();
+  motionClear();   // 换了观察对象，"当前轴在动"的指示不再成立
+  // 换轴后重新识别"变化"基线，避免把另一轴的旧状态误判成新变化
+  state.prevDriveState = null;
+  state.prevHadError = false;
+  renderSlaves();
+  renderCommandEnabled();
+  renderTelemetry();
+  Anim.slaveSwitch();
+  link.command('selectSlave', { slave: id });
+  closeIdentMenu();
+}
 
-  state.slaves.forEach((s) => {
-    const li = document.createElement('li');
-    li.className = s.slave === state.active ? 'active' : '';
-    li.innerHTML = `<span>关节${s.slave} · ${s.shortName || '未知'}</span>
-                    <span class="sub">${s.model || ''}</span>`;
-    li.onclick = () => {
-      if (state.active === s.slave) return;
-      state.active = s.slave;
-      chart.stop();
-      motionClear();   // 换了观察对象，"当前轴在动"的指示不再成立
-      // 换轴后重新识别"变化"基线，避免把另一轴的旧状态误判成新变化
-      state.prevDriveState = null;
-      state.prevHadError = false;
-      renderSlaves();
-      Anim.slaveSwitch();
-      link.command('selectSlave', { slave: s.slave });
-    };
-    ul.appendChild(li);
+/** 安全条左侧的名字 + 点开后的切换菜单（原「在线关节」那一整行收进来的） */
+function renderSlaves() {
+  const cur = state.slaves.find((s) => s.slave === state.active);
+  $('moduleTitle').textContent = cur
+    ? `关节${cur.slave} · ${cur.shortName || '未知型号'}` : '关节 --';
+  $('moduleModel').textContent = cur ? (cur.model || '--') : '--';
+
+  const menu = $('identMenu');
+  if (!menu) return;
+  const items = state.slaves.length
+    ? state.slaves.map((s) => `
+        <button role="menuitem" data-slave="${s.slave}" class="${s.slave === state.active ? 'on' : ''}">
+          <span>关节${s.slave} · ${s.shortName || '未知'}</span>
+          <span class="sm">${s.model || ''}</span>
+        </button>`).join('')
+    : '<div class="h" style="padding:8px 10px">尚未扫到关节</div>';
+
+  menu.innerHTML =
+    `<div class="h">切换关节</div>${items}`
+    + `<div class="sep"></div>`
+    + `<button role="menuitem" data-act="host">更换下位机地址…</button>`;
+
+  menu.querySelectorAll('button[data-slave]').forEach((b) => {
+    b.onclick = () => selectSlave(+b.dataset.slave);
   });
+  const host = menu.querySelector('button[data-act="host"]');
+  if (host) host.onclick = () => { closeIdentMenu(); reopenSplash(); };
+}
+
+/* ---- 菜单开合 ---- */
+function openIdentMenu() {
+  const menu = $('identMenu'), id = $('safetyIdent');
+  if (!menu || !id) return;
+  menu.hidden = false;
+  id.setAttribute('aria-expanded', 'true');
+  const r = id.getBoundingClientRect();
+  menu.style.left = Math.round(r.left) + 'px';
+  menu.style.top = Math.round(r.bottom + 6) + 'px';
+  // 越界就往回收，别顶出窗口
+  const mw = menu.offsetWidth;
+  menu.style.left = Math.round(Math.min(r.left, window.innerWidth - mw - 8)) + 'px';
+}
+function closeIdentMenu() {
+  const menu = $('identMenu'), id = $('safetyIdent');
+  if (menu) menu.hidden = true;
+  if (id) id.setAttribute('aria-expanded', 'false');
+}
+function toggleIdentMenu() {
+  const menu = $('identMenu');
+  if (menu && menu.hidden) openIdentMenu(); else closeIdentMenu();
 }
 
 function renderTelemetry() {
@@ -786,9 +814,33 @@ $('btnConnect').onclick = () => {
 // 操作员看过连接状态、确认无误后再进入，比被自动推进去更符合试验台的使用习惯。
 $('btnEnter').onclick = () => leaveSplash();
 
-// 换 IP / 换板子时的入口。没有它，开场画面消失后就再也回不去了。
-$('safetyIdent').onclick = () => reopenSplash();
-$('safetyIdent').title = '点击可更换下位机地址';
+// 点关节名 → 下拉菜单：切关节 + 换下位机地址。
+// 「更换下位机地址」也是开场画面消失后**唯一**能回去的入口（没有它换网段就无路可走）。
+$('safetyIdent').onclick = (e) => { e.stopPropagation(); toggleIdentMenu(); };
+$('safetyIdent').onkeydown = (e) => {
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleIdentMenu(); }
+};
+document.addEventListener('click', (e) => {
+  const id = $('safetyIdent'), menu = $('identMenu');
+  if (!id || !menu || menu.hidden) return;
+  if (!id.contains(e.target) && !menu.contains(e.target)) closeIdentMenu();
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeIdentMenu(); });
+window.addEventListener('resize', closeIdentMenu);
+
+// ---- 三维视图全屏 ----
+// 全屏的是 .joint-box（不是 canvas），提示文字、图例、按钮都跟着进去。
+// 全屏后画布尺寸变了，**必须显式重测** —— joint3d 的 ResizeObserver 会触发，
+// 但和 chart 一样存在"显示时不一定触发"的风险，补一次保险。
+$('btnJointFull').onclick = () => {
+  const box = $('jointBox');
+  if (!box) return;
+  if (document.fullscreenElement) document.exitFullscreen();
+  else if (box.requestFullscreen) box.requestFullscreen();
+};
+document.addEventListener('fullscreenchange', () => {
+  setTimeout(() => { if (window.Joint3D) window.Joint3D.resize(); }, 80);
+});
 
 renderSafetyBar(); renderCommandEnabled(); renderSlaves();
 renderSplash();

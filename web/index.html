@@ -92,12 +92,15 @@
 
   <div class="sep"></div>
 
-  <!-- 身份：当前控制的关节。可点击 —— 这是开场画面消失后**唯一**能换下位机地址的入口，
-       没有它用户就被困住了（换网段/换板子时无路可走）。 -->
-  <div class="ident" id="safetyIdent" role="button" tabindex="0">
+  <!-- 身份：当前控制的关节。点开是一个菜单 —— 切关节 + 换下位机地址都在这里。
+       「在线关节」那一整行因此删掉了（它只做切换，却占掉一整行高度）。 -->
+  <div class="ident" id="safetyIdent" role="button" tabindex="0"
+       aria-haspopup="menu" aria-expanded="false" title="点击切换关节 / 更换下位机地址">
     <div class="n" id="moduleTitle">关节 --</div>
     <div class="m" id="moduleModel">--</div>
+    <span class="caret" aria-hidden="true">▾</span>
   </div>
+  <div class="ident-menu" id="identMenu" role="menu" hidden></div>
 
   <div class="sep"></div>
 
@@ -132,17 +135,9 @@
   <section class="page" id="page-monitor" role="tabpanel" aria-label="监控">
     <main class="layout">
 
-      <!-- 顶栏：在线关节列表（点击切换控制对象） -->
-      <section class="card card-rack">
-        <div class="card-core">
-          <h2 class="card-title card-title-inline">[ 在线关节 ]</h2>
-          <ul id="slaveList" class="slave-list"></ul>
-          <!-- 从站列表过期的告警（对接老版本下位机时的兜底）。
-               原在组态页，组态页删除后挪到这里 —— 它本来就是关于这张列表的。 -->
-          <div class="scan-warn" id="bootWarn" hidden></div>
-          <div class="spacer"></div>
-        </div>
-      </section>
+      <!-- 从站列表过期的告警（对接老版本下位机时的兜底）。原来挂在顶栏那一行，
+           那一行删掉后挪到这里 —— 它本来就是关于从站列表的。 -->
+      <div class="scan-warn rack-warn" id="bootWarn" hidden></div>
 
       <!-- 左：三维关节 + 径向仪表 -->
       <section class="card card-slaves">
@@ -150,9 +145,15 @@
 
           <!-- 三维关节。程序化搭建，不加载模型文件（离线环境）。
                WebGL 不可用时 joint3d.js 会在这里放一行提示，不白屏。 -->
-          <div class="joint-box">
+          <div class="joint-box" id="jointBox">
             <canvas id="joint3d"></canvas>
             <div class="joint-hint">拖拽旋转 · 滚轮缩放</div>
+            <button id="btnJointFull" class="joint-full" title="全屏查看（Esc 退出）"
+                    aria-label="全屏查看">
+              <svg viewBox="0 0 16 16" aria-hidden="true">
+                <path d="M2 6V2h4M14 10v4h-4M14 6V2h-4M2 10v4h4"/>
+              </svg>
+            </button>
             <div class="joint-legend">
               <span><i style="background:#78D6EE"></i>柔轮 · 输出</span>
               <span><i style="background:#D9A441"></i>波发生器 · 输入</span>
