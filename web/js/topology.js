@@ -35,6 +35,11 @@ const Topology = {
   ROW:   { joint: 130, load: 330, ctrl: 462, bus: 596 },
   COL:   { x0: 770, gap: 258 },    // 关节/负载/控制器**共用**的列坐标
 
+  // 最终产品固定两轴级联。所以**画面上永远是两列**，扫到的轴在线、
+  // 没扫到的那个也占着位置并标"离线" —— 少一个轴要能一眼看出来少了，
+  // 而不是图上凭空少一列（那样看起来像"本来就只有一个"）。
+  SLOTS: 2,
+
   colX(i) { return this.COL.x0 + i * this.COL.gap; },
 
   NS: 'http://www.w3.org/2000/svg',
@@ -98,6 +103,7 @@ const Topology = {
     }
     pc.appendChild(this._el('polyline', { points: wave.join(' '), class: 'tp-screen-wave' }));
     this.gNodes.appendChild(pc);
+    this.pcG = pc;
     this._label(P.cx, P.cy + 60, 'PC 上位机', 'tp-name');
     this.pcSub = this._label(P.cx, P.cy + 78, '', 'tp-sub');
 
@@ -121,6 +127,7 @@ const Topology = {
       );
     }
     this.gNodes.appendChild(arm);
+    this.armG = arm;
     this._label(A.cx, A.cy + 80, 'ARM 板 · 下位机', 'tp-name');
     this.armSub = this._label(A.cx, A.cy + 98, '', 'tp-sub');
 
@@ -130,16 +137,19 @@ const Topology = {
       this._el('rect', { x: M.cx - 70, y: M.cy - 38, width: 140, height: 76, rx: 7, class: 'tp-module' }),
       this._el('rect', { x: M.cx - 62, y: M.cy - 28, width: 50, height: 22, rx: 3, class: 'tp-module-label' }),
     );
-    for (let i = 0; i < 3; i++) {
-      const y = M.cy - 18 + i * 18;
+    // 两路输出（与两轴级联配套）
+    for (let i = 0; i < this.SLOTS; i++) {
+      const y = M.cy - 11 + i * 22;
       ao.append(
-        this._el('circle', { cx: M.cx - 4, cy: y, r: 3, class: 'tp-module-led' }),
-        this._el('rect', { x: M.cx + 20, y: y - 6, width: 20, height: 12, rx: 2, class: 'tp-terminal' }),
-        this._el('text', { x: M.cx + 30, y: y + 3.5, class: 'tp-terminal-n', 'text-anchor': 'middle' }, String(i + 1)),
+        this._el('circle', { cx: M.cx - 4, cy: y, r: 3.2, class: 'tp-module-led' }),
+        this._el('rect', { x: M.cx + 20, y: y - 7, width: 22, height: 14, rx: 2, class: 'tp-terminal' }),
+        this._el('text', { x: M.cx + 31, y: y + 4, class: 'tp-terminal-n', 'text-anchor': 'middle' }, String(i + 1)),
       );
     }
+    this.aoModule = ao;
+    this.aoG = ao;
     this.gNodes.appendChild(ao);
-    this._label(M.cx, M.cy + 58, '三路模拟输出', 'tp-name');
+    this._label(M.cx, M.cy + 58, '两路模拟输出', 'tp-name');
     this.aoSub = this._label(M.cx, M.cy + 76, 'RS485 · Modbus', 'tp-sub');
 
     // ---- 静态线缆 ----
@@ -160,28 +170,34 @@ const Topology = {
   /* ================= 关节链（动态）：每关节一列，含它的负载与控制器 ================= */
 
   _buildChain(slaves) {
-    this._joints.forEach((j) => j.g.remove());
+    // ★ 这一批建出来的**所有**元素都要清掉再重建。
+    //   不能只 remove 关节组：负载/控制器/标签都直接挂在 gNodes 顶层
+    //   （刻意如此——离线压暗时要避开文字），它们不在任何组的子树里，
+    //   漏清就会一遍遍叠加（踩过：负载和控制器各变成 4 个）。
+    (this._chainEls || []).forEach((el) => el.remove());
+    this._chainEls = [];
     this._joints = [];
+    const keep = (el) => { this._chainEls.push(el); return el; };
     // ★ 按**前缀**清，不能只清 'mech' —— 机械耦合是按列编号的（mech1/mech2/…），
     //   重建时只清 'mech' 会让旧的那批留在图上叠加（踩过：mech1 出现两次）。
     this._clearLink('ecat');
     ['mech', 'cas', 'ch', 'ctrl'].forEach((p) => this._clearLinksByPrefix(p));
 
     const R = this.ROW;
-    const list = slaves.length ? slaves : [null];
+    // 固定槽位：至少 SLOTS 列。扫到的轴按扫描顺序占前面的槽，缺的留空槽。
+    const n = Math.max(this.SLOTS, slaves.length);
+    const span = n > 1 ? Math.min(this.COL.gap, ((this.VB.x + this.VB.w - 120) - this.COL.x0) / (n - 1))
+                       : this.COL.gap;
+    const colX = (i) => this.COL.x0 + i * span;
 
-    // 关节多时压缩列距，保证整条链还在画布内
-    const maxSpan = (this.VB.x + this.VB.w - 120) - this.COL.x0;
-    const gap = list.length > 1 ? Math.min(this.COL.gap, maxSpan / (list.length - 1)) : this.COL.gap;
-    const colX = (i) => this.COL.x0 + i * gap;
-
-    // 主干：ARM → 关节1
+    // 主干：ARM → 第 1 列
     this._cable('ecat', `M${this.ARM.cx + 90} ${R.joint} L${colX(0) - 62} ${R.joint}`,
       { label: 'EtherCAT', sub: '主站 ↔ 从站 · 可级联' });
 
-    list.forEach((s, i) => {
+    for (let i = 0; i < n; i++) {
+      const s = slaves[i] || null;      // 没扫到这个槽 → null，画成"离线"占位
       const cx = colX(i);
-      const g = this._el('g', { class: 'tp-node tp-joint' });
+      const g = keep(this._el('g', { class: 'tp-node tp-joint' }));
 
       /* ---- 关节：谐波减速器意象环 ---- */
       const ring = this._el('circle', { cx, cy: R.joint, r: 50, class: 'tp-j-ring' });
@@ -195,11 +211,12 @@ const Topology = {
         spinF, spinW,
         this._el('circle', { cx, cy: R.joint, r: 4.5, class: 'tp-j-hub' }),
       );
-      g.append(this._label(cx, R.joint + 74, s ? `关节 ${s.slave}` : '无关节', 'tp-name'));
-      const sub = this._label(cx, R.joint + 92, s ? (s.shortName || '--') : '--', 'tp-sub');
+      // 标签**不放进图形组** —— 否则离线时会被一起压暗，就读不出"离线"两个字了
+      keep(this._label(cx, R.joint + 74, `关节 ${i + 1}`, 'tp-name'));
+      const sub = keep(this._label(cx, R.joint + 92, '', 'tp-sub'));
 
       /* ---- 负载（磁粉制动器）：与关节同列 ---- */
-      const lc = this._el('g', { class: 'tp-node tp-load' });
+      const lc = keep(this._el('g', { class: 'tp-node tp-load' }));
       lc.append(
         this._el('circle', { cx: cx - 20, cy: R.load, r: 32, class: 'tp-disc' }),
         this._el('circle', { cx: cx - 20, cy: R.load, r: 20, class: 'tp-disc-inner' }),
@@ -209,19 +226,21 @@ const Topology = {
       for (let k = -2; k <= 2; k++) {
         lc.append(this._el('rect', { x: cx + 4, y: R.load + k * 9 - 1.5, width: 30, height: 3, rx: 1.5, class: 'tp-caliper-vent' }));
       }
-      g.appendChild(lc);
-      g.append(this._label(cx, R.load + 54, `负载 ${i + 1}`, 'tp-name'));
+      this.gNodes.appendChild(lc);
+      keep(this._label(cx, R.load + 54, `负载 ${i + 1}`, 'tp-name'));
+      const loadSub = keep(this._label(cx, R.load + 72, '', 'tp-sub'));
 
       /* ---- 负载控制器：与关节同列 ---- */
-      const ct = this._el('g', { class: 'tp-node tp-ctrl' });
+      const ct = keep(this._el('g', { class: 'tp-node tp-ctrl' }));
       ct.append(
         this._el('rect', { x: cx - 46, y: R.ctrl - 32, width: 92, height: 64, rx: 6, class: 'tp-module' }),
         this._el('rect', { x: cx - 36, y: R.ctrl - 20, width: 42, height: 18, rx: 3, class: 'tp-module-label' }),
         this._el('circle', { cx: cx + 22, cy: R.ctrl - 2, r: 11, class: 'tp-knob' }),
         this._el('circle', { cx: cx + 22, cy: R.ctrl - 2, r: 3,  class: 'tp-knob-mark' }),
       );
-      g.appendChild(ct);
-      g.append(this._label(cx, R.ctrl + 52, `负载控制器 ${i + 1}`, 'tp-name'));
+      this.gNodes.appendChild(ct);
+      keep(this._label(cx, R.ctrl + 52, `负载控制器 ${i + 1}`, 'tp-name'));
+      const ctrlSub = keep(this._label(cx, R.ctrl + 70, '', 'tp-sub'));
 
       /* ---- 悬停命中区（覆盖关节及其文字） ---- */
       const hit = this._el('rect', { x: cx - 62, y: R.joint - 62, width: 124, height: 168, class: 'tp-hit', rx: 10 });
@@ -230,10 +249,10 @@ const Topology = {
         g.addEventListener('mouseenter', () => this._showDetail(s.slave, cx, R.joint));
         g.addEventListener('mouseleave', () => this._hideDetail());
       }
-
       this.gNodes.appendChild(g);
+
       this._joints.push({ g, slave: s ? s.slave : null, cx, ring, sub,
-                          loadSub: g.querySelector('.tp-sub:last-of-type') });
+                          loadG: lc, ctrlG: ct, loadSub, ctrlSub });
 
       /* ---- 线缆 ---- */
       if (i > 0) {
@@ -243,12 +262,12 @@ const Topology = {
       this._cable('ch' + i, `M${this.AO.cx + 72} ${R.bus} L${cx} ${R.bus} L${cx} ${R.ctrl + 34}`,
         { label: '', sub: '' });
       // 控制器 → 负载
-      this._cable('ctrl' + i, `M${cx} ${R.ctrl - 34} L${cx} ${R.load + 34}`, { label: '', sub: '' });
+      this._cable('ctrl' + i, `M${cx} ${R.ctrl - 34} L${cx} ${R.load + 36}`, { label: '', sub: '' });
       // 负载 → 关节（机械耦合）
       this._cable('mech' + (i + 1), `M${cx} ${R.load - 34} L${cx} ${R.joint + 52}`,
         { label: i === 0 ? '机械耦合' : '', sub: i === 0 ? '咬住被测轴' : '',
           dashed: true, flow: false, side: 'left', labelDx: -66 });
-    });
+    }
   },
 
   setSlaves(slaves) {
@@ -318,6 +337,12 @@ const Topology = {
       .forEach((id) => this._clearLink(id));
   },
   _getLink(id) { return this._links.find((l) => l.id === id); },
+
+  /** 在线/离线 = 换个 class。样式在 CSS 里（压暗 + 描边改虚线），
+   *  不只靠文字 —— 部件多的时候文字没人细看，得一眼扫得出来。 */
+  _setOnline(el, on) {
+    if (el) el.classList.toggle('is-offline', !on);
+  },
 
   /* ================= 悬停参数浮层 ================= */
   _showDetail(slave, cx, cy) {
@@ -399,42 +424,64 @@ const Topology = {
     const loadFailed = !!(st.load && st.load.state === 'failed');
     const loadCls = (info.deviceConnected && !loadFailed) ? 'is-ok' : 'is-off';
     setCls('rs485', loadCls);
-    this._joints.forEach((j, i) => {
-      setCls('cas' + (i + 1), ecatCls);
-      setCls('ch' + i, loadCls);
-      setCls('ctrl' + i, loadCls);
-      setCls('mech' + (i + 1), 'is-mech');
-    });
 
-    // 关节节点：外环颜色 = 该从站自己的驱动状态
+    // ---- 各部件的在线判据 ----
+    // 协议能给什么就用什么，不给的**不猜**：负载链只有一路信号，
+    // 两列共用同一个判据（RS485 链通 = 模块在线），不假装能分路判断。
+    const armOn = !!info.connected;
+    const aoOn  = !!info.deviceConnected && !loadFailed;
+
+    this._setOnline(this.pcG, true);      // 就是本页，恒在线
+    this._setOnline(this.armG, armOn);
+    this._setOnline(this.aoG, aoOn);
+
+    // 关节：外环颜色 = 该从站自己的驱动状态；整个节点压暗 = 离线
     this._joints.forEach((j) => {
       const t = j.slave != null ? st.telemetry.get(j.slave) : null;
+      const jOn = !!(t && t.connected);
+
       let ring = 'tp-j-ring', sub = '', subCls = 'tp-sub';
-      if (j.slave == null) { ring += ' is-off'; sub = '--'; }
-      else if (!t || !t.connected) { ring += ' is-off'; sub = '离线'; }
+      if (!j.slave)   { ring += ' is-off'; sub = '未接入'; subCls += ' tp-off'; }
+      else if (!jOn)  { ring += ' is-off'; sub = '离线';   subCls += ' tp-off'; }
       else {
-        const opEnabled = t.driveState === 4;
         const fault = !!t.errorCode || t.driveState === 7;
-        ring += fault ? ' is-fault' : opEnabled ? ' is-on' : ' is-idle';
+        ring += fault ? ' is-fault' : t.driveState === 4 ? ' is-on' : ' is-idle';
         sub = (DRIVE_STATES[t.driveState] ?? '--') + (t.limitExceeded ? ' · 越限!' : '');
         if (fault) subCls += ' tp-err';
       }
       j.ring.setAttribute('class', ring);
       j.sub.textContent = sub;
       j.sub.setAttribute('class', subCls);
+
+      this._setOnline(j.g, jOn);
+      this._setOnline(j.loadG, aoOn);
+      this._setOnline(j.ctrlG, aoOn);
+      const lsub = aoOn ? '在线' : '离线';
+      const lcls = 'tp-sub' + (aoOn ? '' : ' tp-off');
+      j.loadSub.textContent = lsub;  j.loadSub.setAttribute('class', lcls);
+      j.ctrlSub.textContent = lsub;  j.ctrlSub.setAttribute('class', lcls);
+
+      // 级联段：EtherCAT 是**物理**级联，目标从站不在那段线就不存在。
+      // 跟着本列的在线状态走，不能一律画绿（那是在声称一条并不存在的连接）。
+      const i = this._joints.indexOf(j);
+      if (i > 0) setCls('cas' + i, (ecatCls === 'is-ok' && jOn) ? 'is-ok' : 'is-off');
+      setCls('ch' + i, aoOn ? loadCls : 'is-off');
+      setCls('ctrl' + i, aoOn ? loadCls : 'is-off');
+      setCls('mech' + (i + 1), 'is-mech');
     });
 
-    if (this.pcSub)  this.pcSub.textContent  = `${wsHost}:${WS_PORT}`;
+    if (this.pcSub) this.pcSub.textContent = `${wsHost}:${WS_PORT}`;
     if (this.armSub) {
-      this.armSub.textContent = info.connected
-        ? (st.bus || '总线') + ' · ' + info.slaveCount + ' 从站'
-        : '未连接';
+      this.armSub.textContent = armOn
+        ? (st.bus || '总线') + ' · ' + info.slaveCount + ' 从站' : '未连接';
+      this.armSub.setAttribute('class', 'tp-sub' + (armOn ? '' : ' tp-off'));
     }
     if (this.aoSub) {
-      // 协议目前只带一路负载 —— 如实说明，不假装三路都受控
-      this.aoSub.textContent = st.load && st.load.state
-        ? `第 1 路 ${st.load.presetNm} N·m`
-        : 'RS485 · Modbus';
+      // 协议目前只带一路负载 —— 如实说明"第 1 路"，不假装两路都受控
+      this.aoSub.textContent = aoOn
+        ? '在线 · ' + (st.load && st.load.state ? `第1路 ${st.load.presetNm} N·m` : 'RS485')
+        : '离线';
+      this.aoSub.setAttribute('class', 'tp-sub' + (aoOn ? '' : ' tp-off'));
     }
 
     if (this._hoverSlave != null) {

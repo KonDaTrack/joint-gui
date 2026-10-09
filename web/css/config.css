@@ -103,12 +103,32 @@
 @keyframes tp-ccw { to { transform: rotate(-360deg); } }
 
 /* ---- 文字 ---- */
+/* 注意：标签**不在**图形组里（见 topology.js 的 _buildChain）。
+   所以下面压暗图元时，文字不受影响 —— "离线"两个字必须读得出来。 */
 .tp-name { fill: #E7E9EC; font-family: var(--sans); font-size: 15px; font-weight: 600; }
 .tp-sub  { fill: #666C75; font-family: var(--mono); font-size: 11.5px; }
 .tp-sub.tp-err { fill: var(--danger); }
+.tp-sub.tp-off { fill: var(--warn); }   /* 离线用橙不用红：红留给驱动故障 */
 .tp-label    { fill: #B4BAC2; font-family: var(--mono); font-size: 11.5px; }
 .tp-sublabel { fill: #666C75; font-family: var(--mono); font-size: 10px; }
 .tp-hit { fill: transparent; }
+
+/* ============================================================
+   在线 / 离线
+   部件多的时候没人细读文字，必须**一眼扫得出来**。
+   离线 = 图形压暗 + 描边改虚线 + 标签变橙，三重信号叠加。
+   只作用于图元（rect/circle/ellipse/polyline），不碰 text。
+   ============================================================ */
+.tp-node.is-offline rect,
+.tp-node.is-offline circle,
+.tp-node.is-offline ellipse,
+.tp-node.is-offline polyline {
+  opacity: .26;
+  stroke-dasharray: 5 4;
+}
+/* 离线时转子停转（本来就要 is-on 才转，这是第二道保险） */
+.tp-node.is-offline .tp-j-spin-flex,
+.tp-node.is-offline .tp-j-spin-wave { animation-play-state: paused; }
 
 /* ============================================================
    线缆：深色护套 + 细的信号芯 + 两端接头
