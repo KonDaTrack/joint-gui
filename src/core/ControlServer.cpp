@@ -194,12 +194,33 @@ void ControlServer::onSlavesDetected(const QList<quint16>& slaves, quint16 activ
 {
     slaves_ = slaves;
     activeSlave_ = active;
+    sendSlaveList();   // 不能只存本地：客户端可能比扫描更早连上
 }
 
 void ControlServer::onSlaveModels(const QStringList& shortNames, const QStringList& modelInfos)
 {
     shortNames_ = shortNames;
     modelInfos_ = modelInfos;
+    sendSlaveList();   // 型号是紧接着从站列表到的，补推一次把型号带上
+}
+
+void ControlServer::sendSlaveList()
+{
+    if (!client_) return;
+    QJsonObject o;
+    o[QStringLiteral("type")] = QStringLiteral("slaves");
+    o[QStringLiteral("activeSlave")] = activeSlave_;
+    QJsonArray arr;
+    for (int i = 0; i < slaves_.size(); ++i) {
+        QJsonObject s;
+        s[QStringLiteral("slave")] = slaves_.at(i);
+        s[QStringLiteral("shortName")] = (i < shortNames_.size()) ? shortNames_.at(i) : QString();
+        s[QStringLiteral("model")] = (i < modelInfos_.size()) ? modelInfos_.at(i) : QString();
+        s[QStringLiteral("active")] = (slaves_.at(i) == activeSlave_);
+        arr.append(s);
+    }
+    o[QStringLiteral("slaves")] = arr;
+    send(o);
 }
 
 void ControlServer::onControlOwnerChanged(const QString& owner, const QString& reason)

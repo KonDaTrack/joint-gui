@@ -5,168 +5,276 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>关节模组上位机</title>
 <link rel="stylesheet" href="css/app.css">
+<link rel="stylesheet" href="css/shell.css">
+<link rel="stylesheet" href="css/config.css">
 </head>
 <body>
 
-<main class="layout">
+<!-- ============================================================
+     常驻安全条 —— 三个页面共用的唯一 DOM 实例
+     不随切页重渲（重渲会导致状态不同步）。
+     急停与失能恒可用，不受控制权和当前页面限制。
+     ============================================================ -->
+<header class="safety" id="safetyBar">
 
-  <!-- ============ 左：关节与实时读数 ============ -->
-  <!-- ============ 顶栏：在线关节（通栏，横向排） ============ -->
-  <section class="card card-rack">
-    <div class="card-core">
-    <h2 class="card-title card-title-inline">[ 在线关节 ]</h2>
-    <ul id="slaveList" class="slave-list"></ul>
-    <div class="spacer"></div>
-    <!-- 总线状态 / 控制权 / 请求按钮：并到同一行，省掉一整条顶栏 -->
-    <div id="busBadge" class="badge badge-idle">未连接</div>
-    <div id="ownerBadge" class="badge badge-local">控制权：本机</div>
-    <button id="btnTakeControl" class="btn btn-primary" disabled>请求控制权</button>
-    <button id="btnReleaseControl" class="btn" hidden>交还控制权</button>
+  <!-- 左：页面导航 -->
+  <nav class="nav" id="nav" role="tablist" aria-label="页面切换">
+    <button data-page="boot"    role="tab">初始</button>
+    <button data-page="config"  role="tab">组态</button>
+    <button data-page="monitor" role="tab">监控</button>
+  </nav>
+
+  <div class="sep"></div>
+
+  <!-- 身份：当前控制的关节（原来在监控页的 .module-badge 里） -->
+  <div class="ident">
+    <div class="n" id="moduleTitle">关节 --</div>
+    <div class="m" id="moduleModel">--</div>
+  </div>
+
+  <div class="sep"></div>
+
+  <!-- 状态：总线 / 控制权 -->
+  <div id="busBadge" class="badge badge-idle">未连接</div>
+  <div id="ownerBadge" class="badge badge-local">控制权：本机</div>
+  <button id="btnTakeControl" class="btn btn-primary" disabled>请求控制权</button>
+  <button id="btnReleaseControl" class="btn" hidden>交还控制权</button>
+
+  <div class="spacer"></div>
+
+  <!-- 健康：运动进行中 / 驱动状态 / 刷新率 -->
+  <!-- 「运动中」是**提醒不是锁**：任何页面都看得见，点了跳回监控页。
+       刻意不做硬锁——堵转时关节可能永远不"完成"，锁死会把人困住。 -->
+  <button id="motionBadge" class="badge badge-motion" hidden
+          title="关节运动中 —— 点击回到监控页">运动中</button>
+  <div id="driveBadge" class="badge badge-idle">--</div>
+  <div id="rateBadge" class="badge badge-idle">-- Hz</div>
+
+  <div class="sep"></div>
+
+  <!-- 安全操作：恒可用 -->
+  <button id="btnDisableBar" class="btn">失能</button>
+  <button id="btnEstopBar" class="estop-sm">急停 ESTOP</button>
+
+</header>
+
+<!-- ============================================================ 页面容器 -->
+<div class="pages" id="pages">
+
+  <!-- ============ 初始页 ============ -->
+  <section class="page" id="page-boot" role="tabpanel" aria-label="初始">
+    <div class="boot">
+      <section class="card boot-card">
+        <div class="card-core">
+
+          <h1>关节模组上位机</h1>
+          <div class="sub">连接下位机（ARM 板）后进入组态或监控</div>
+
+          <div class="row">
+            <label for="inpHost">下位机地址</label>
+            <input type="text" id="inpHost" spellcheck="false" autocomplete="off"
+                   placeholder="192.168.1.10">
+          </div>
+          <div class="row">
+            <label></label>
+            <div class="note-line">端口固定 9002。也可用地址栏 <code>?host=</code> 指定。</div>
+          </div>
+
+          <div class="actions">
+            <button id="btnConnect" class="btn btn-primary">连接</button>
+          </div>
+
+          <div class="status">
+            <span class="dot" id="bootDot"></span>
+            <span id="bootStatus">未连接下位机</span>
+          </div>
+
+          <div class="scan">
+            <div class="hd">扫描到的从站</div>
+            <ul id="bootSlaves"></ul>
+            <div class="scan-warn" id="bootWarn" hidden></div>
+          </div>
+
+          <div class="actions">
+            <button id="btnGoConfig" class="btn">进入组态</button>
+            <button id="btnGoMonitor" class="btn btn-primary">进入监控</button>
+          </div>
+
+        </div>
+      </section>
     </div>
   </section>
 
-  <section class="card card-slaves">
-    <div class="card-core">
+  <!-- ============ 组态页：系统拓扑 + 参数 ============ -->
+  <section class="page" id="page-config" role="tabpanel" aria-label="组态">
+    <div class="cfg">
 
-    <!-- 关节标识：当前控制的是哪个关节、型号、额定力矩 -->
-    <div class="module-badge">
-      <div class="module-line1"><span id="moduleTitle">关节 --</span></div>
-      <div class="module-line2" id="moduleModel">--</div>
-    </div>
+      <section class="card cfg-topo">
+        <div class="card-core">
+          <h2 class="card-title">
+            [ 系统拓扑与信号走向 ]
+            <span class="chart-note" id="topoNote">等待连接</span>
+          </h2>
+          <!-- 拓扑由 js/topology.js 生成（SVG），按 docs/host-embedded-architecture.md 画 -->
+          <div class="topo-wrap" id="topo"></div>
+        </div>
+      </section>
 
-    <div class="readouts">
-      <div class="readout">
-        <label>位置</label>
-        <div><span id="valPos" class="value">--</span><span class="unit">deg</span></div>
-      </div>
-      <div class="readout">
-        <label>速度</label>
-        <div><span id="valVel" class="value">--</span><span class="unit">deg/s</span></div>
-      </div>
-      <div class="readout">
-        <label>力矩</label>
-        <div><span id="valTor" class="value">--</span><span class="unit">N·m</span></div>
-      </div>
-    </div>
-
-    <dl class="telemetry">
-      <dt>驱动状态</dt><dd id="valState"><span id="dotState" class="dot"></span><span>--</span></dd>
-      <dt>状态字</dt><dd id="valStatusWord" class="mono">--</dd>
-      <dt>故障码</dt><dd id="valError" class="mono">--</dd>
-      <dt>温度</dt><dd id="valTemp" class="mono">--</dd>
-      <dt>刷新率</dt><dd id="valRate" class="mono">--</dd>
-    </dl>
-    </div>
-  </section>
-
-  <!-- ============ 中：操作（急停 / 使能 / 负载） ============ -->
-  <section class="card card-operate">
-    <div class="card-core">
-    <h2 class="card-title">[ 操作 ]</h2>
-
-
-    <button id="btnEstop" class="btn btn-estop">急停 ESTOP</button>
-
-    <label class="toggle" for="chkReady">
-      <input type="checkbox" id="chkReady">
-      <span class="toggle-track"><span class="toggle-thumb"></span></span>
-      <span class="toggle-text">已确认现场安全</span>
-    </label>
-
-    <div class="btn-row">
-      <button id="btnEnable" class="btn btn-primary" disabled>使能</button>
-      <button id="btnDisable" class="btn">失能</button>
-      <button id="btnFaultReset" class="btn">故障复位</button>
-    </div>
-    <div class="btn-row">
-      <button id="btnHome" class="btn">归零</button>
-      <button id="btnZero" class="btn">回0</button>
-    </div>
-
-    <!-- 单位不写进标题：.section-title 有 text-transform:uppercase，
-         "N·m" 会被渲染成 "N·M"——而 M 是"兆"，单位就错了。
-         额定值放在下面的 .load-rated 里（不受大写影响）。 -->
-    <h3 class="section-title">负载（RS485 · 0-10V）</h3>
-    <div class="load-row">
-      <input type="range" id="loadSlider" min="0" max="50" value="0" step="1">
-      <input type="number" id="loadValue" class="load-num" value="0" min="0" step="1">
-      <span class="unit">N·m</span>
-      <span class="load-volt" id="loadVolt">0.00 V</span>
-    </div>
-    <div class="load-row load-row-btns">
-      <!-- 「预设」只记住数值，点「下发目标」时才真正施加（先写负载、确认成功再发运动） -->
-      <button id="btnLoadSet" class="btn btn-primary">预设</button>
-      <!-- 堵转时负载会一直保持（没有超时），没有这个入口就只能靠失能/急停撤载，
-           而那会把关节一起失能 -->
-      <button id="btnLoadRelease" class="btn">松开负载</button>
-      <span class="load-rated" id="loadRated">额定 50 N·m</span>
-    </div>
-    <div id="loadHint" class="hint"></div>
+      <section class="card cfg-params">
+        <div class="card-core">
+          <h2 class="card-title">[ 关节参数 ]</h2>
+          <div class="p-list" id="paramList"></div>
+          <div class="p-note" id="paramNote"></div>
+        </div>
+      </section>
 
     </div>
   </section>
 
+  <!-- ============ 监控页（承载现有全部功能） ============ -->
+  <section class="page" id="page-monitor" role="tabpanel" aria-label="监控">
+    <main class="layout">
 
+      <!-- 顶栏：在线关节列表（点击切换控制对象） -->
+      <section class="card card-rack">
+        <div class="card-core">
+          <h2 class="card-title card-title-inline">[ 在线关节 ]</h2>
+          <ul id="slaveList" class="slave-list"></ul>
+          <div class="spacer"></div>
+        </div>
+      </section>
 
-  <!-- ============ 右：目标下发 ============ -->
-  <section class="card card-target">
-    <div class="card-core">
-    <h2 class="card-title">[ 目标 ]</h2>
+      <!-- 左：实时读数 -->
+      <section class="card card-slaves">
+        <div class="card-core">
 
-    <div class="field">
-      <label>操作模式</label>
-      <select id="selMode">
-        <option value="1">轮廓位置 PP</option>
-        <option value="3">轮廓速度 PV</option>
-        <option value="4">轮廓力矩 PT</option>
-      </select>
-    </div>
-    <div class="field" data-mode="pos">
-      <label>目标位置 (deg)</label><input type="number" id="inpPos" value="0" step="1">
-    </div>
-    <div class="field" data-mode="vel">
-      <label>目标速度 (deg/s)</label><input type="number" id="inpVel" value="0" step="1">
-    </div>
-    <div class="field" data-mode="tor">
-      <label>目标力矩 (N·m)</label><input type="number" id="inpTor" value="0" step="0.1">
-    </div>
-    <!-- 与 Qt 端 ControlPanel 的「力矩斜率 (N·m/s)」对齐（默认 10）。
-         它真的会被写进驱动器：EthercatDevice 按额定力矩归一化后调 eth_setTorqueSlope。
-         以前这里没有输入框、代码里写死 10 —— 下位机能调、网页不能调。 -->
-    <div class="field" data-mode="tor">
-      <label>力矩斜率 (N·m/s)</label><input type="number" id="inpTorSlope" value="10" step="1">
-    </div>
-    <div class="field" data-mode="pos">
-      <label>轮廓速度 (deg/s)</label><input type="number" id="inpProfVel" value="10" step="1">
-    </div>
-    <div class="field" data-mode="pos vel">
-      <label>轮廓加速度 (deg/s²)</label><input type="number" id="inpProfAcc" value="10" step="1">
-    </div>
-    <div class="field" data-mode="pos vel">
-      <label>轮廓减速度 (deg/s²)</label><input type="number" id="inpProfDec" value="10" step="1">
-    </div>
+          <div class="readouts">
+            <div class="readout">
+              <label>位置</label>
+              <div><span id="valPos" class="value">--</span><span class="unit">deg</span></div>
+            </div>
+            <div class="readout">
+              <label>速度</label>
+              <div><span id="valVel" class="value">--</span><span class="unit">deg/s</span></div>
+            </div>
+            <div class="readout">
+              <label>力矩</label>
+              <div><span id="valTor" class="value">--</span><span class="unit">N·m</span></div>
+            </div>
+          </div>
 
-    <div class="btn-row">
-      <button id="btnSend" class="btn btn-primary">下发目标</button>
-      <button id="btnStop" class="btn">停止运动</button>
-    </div>
+          <dl class="telemetry">
+            <dt>驱动状态</dt><dd id="valState"><span id="dotState" class="dot"></span><span>--</span></dd>
+            <dt>状态字</dt><dd id="valStatusWord" class="mono">--</dd>
+            <dt>故障码</dt><dd id="valError" class="mono">--</dd>
+            <dt>温度</dt><dd id="valTemp" class="mono">--</dd>
+            <dt>刷新率</dt><dd id="valRate" class="mono">--</dd>
+          </dl>
 
-    <div id="cmdHint" class="hint"></div>
-    </div>
+        </div>
+      </section>
+
+      <!-- 中：操作 -->
+      <section class="card card-operate">
+        <div class="card-core">
+          <h2 class="card-title">[ 操作 ]</h2>
+
+          <button id="btnEstop" class="btn btn-estop">急停 ESTOP</button>
+
+          <label class="toggle" for="chkReady">
+            <input type="checkbox" id="chkReady">
+            <span class="toggle-track"><span class="toggle-thumb"></span></span>
+            <span class="toggle-text">已确认现场安全</span>
+          </label>
+
+          <div class="btn-row">
+            <button id="btnEnable" class="btn btn-primary" disabled>使能</button>
+            <button id="btnDisable" class="btn">失能</button>
+            <button id="btnFaultReset" class="btn">故障复位</button>
+          </div>
+          <div class="btn-row">
+            <button id="btnHome" class="btn">归零</button>
+            <button id="btnZero" class="btn">回0</button>
+          </div>
+
+          <!-- 单位不写进标题：.section-title 有 text-transform:uppercase，
+               "N·m" 会被渲染成 "N·M"——而 M 是"兆"，单位就错了。 -->
+          <h3 class="section-title">负载（RS485 · 0-10V）</h3>
+          <div class="load-row">
+            <input type="range" id="loadSlider" min="0" max="50" value="0" step="1">
+            <input type="number" id="loadValue" class="load-num" value="0" min="0" step="1">
+            <span class="unit">N·m</span>
+            <span class="load-volt" id="loadVolt">0.00 V</span>
+          </div>
+          <div class="load-row load-row-btns">
+            <button id="btnLoadSet" class="btn btn-primary">预设</button>
+            <button id="btnLoadRelease" class="btn">松开负载</button>
+            <span class="load-rated" id="loadRated">额定 50 N·m</span>
+          </div>
+          <div id="loadHint" class="hint"></div>
+
+        </div>
+      </section>
+
+      <!-- 右：目标下发 -->
+      <section class="card card-target">
+        <div class="card-core">
+          <h2 class="card-title">[ 目标 ]</h2>
+
+          <div class="field">
+            <label>操作模式</label>
+            <select id="selMode">
+              <option value="1">轮廓位置 PP</option>
+              <option value="3">轮廓速度 PV</option>
+              <option value="4">轮廓力矩 PT</option>
+            </select>
+          </div>
+          <div class="field" data-mode="pos">
+            <label>目标位置 (deg)</label><input type="number" id="inpPos" value="0" step="1">
+          </div>
+          <div class="field" data-mode="vel">
+            <label>目标速度 (deg/s)</label><input type="number" id="inpVel" value="0" step="1">
+          </div>
+          <div class="field" data-mode="tor">
+            <label>目标力矩 (N·m)</label><input type="number" id="inpTor" value="0" step="0.1">
+          </div>
+          <div class="field" data-mode="tor">
+            <label>力矩斜率 (N·m/s)</label><input type="number" id="inpTorSlope" value="10" step="1">
+          </div>
+          <div class="field" data-mode="pos">
+            <label>轮廓速度 (deg/s)</label><input type="number" id="inpProfVel" value="10" step="1">
+          </div>
+          <div class="field" data-mode="pos vel">
+            <label>轮廓加速度 (deg/s²)</label><input type="number" id="inpProfAcc" value="10" step="1">
+          </div>
+          <div class="field" data-mode="pos vel">
+            <label>轮廓减速度 (deg/s²)</label><input type="number" id="inpProfDec" value="10" step="1">
+          </div>
+
+          <div class="btn-row">
+            <button id="btnSend" class="btn btn-primary">下发目标</button>
+            <button id="btnStop" class="btn">停止运动</button>
+          </div>
+
+          <div id="cmdHint" class="hint"></div>
+        </div>
+      </section>
+
+      <!-- 波形 -->
+      <section class="card card-chart">
+        <div class="card-core">
+          <h2 class="card-title">
+            [ 波形 ]
+            <span id="chartNote" class="chart-note">点「下发目标」后开始记录</span>
+          </h2>
+          <canvas id="chart"></canvas>
+        </div>
+      </section>
+
+    </main>
   </section>
 
-  <!-- ============ 曲线 ============ -->
-  <section class="card card-chart">
-    <div class="card-core">
-    <h2 class="card-title">
-      [ 波形 ]
-      <span id="chartNote" class="chart-note">点「下发目标」后开始记录</span>
-    </h2>
-    <canvas id="chart"></canvas>
-    </div>
-  </section>
-
-</main>
+</div>
 
 <!-- 消息条：连接/控制权/故障等一次性提示 -->
 <div id="toast" class="toast" hidden></div>
@@ -177,6 +285,9 @@
 <script src="js/ws.js"></script>
 <script src="js/chart.js"></script>
 <script src="js/anim.js"></script>
+<script src="js/router.js"></script>
+<script src="js/gfx.js"></script>
+<script src="js/topology.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

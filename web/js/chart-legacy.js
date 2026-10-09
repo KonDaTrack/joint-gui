@@ -1,0 +1,159 @@
+// 实时波形：Canvas 手绘三条轨迹。
+//
+// 与 Qt 端 CurvePanel 保持同样的取舍：
+//  1) 平时不采样、不显示；点「下发目标」才开始记录本次响应
+//  2) 每条轨迹独立自动缩放，但有**最小量程**——否则静止时的微小抖动会被
+//     拉伸到满屏，看着像剧烈震荡（这个坑在 Qt 端踩过）
+//  3) 量程平滑跟随，避免每帧重算导致波形整体跳动
+
+// 轨迹配色与 css/app.css 的变量同源（canvas 读不到 CSS 变量，只能重复一遍）。
+// 位置=冰青（与读数同色，视觉上"这两个是同一路数据"）、速度=绿、力矩=琥珀。
+const TRACES = [
+  { key: 'positionDeg', color: '#78D6EE', label: '位置', minSpan: 1.0 },
+  { key: 'velocityDps', color: '#4ECB8E', label: '速度', minSpan: 10.0 },
+  { key: 'torqueNm',    color: '#D9A441', label: '力矩', minSpan: 1.0 },
+];
+
+const MAX_POINTS = 3000;   // 10s @300Hz 上限，够装下一次完整运动
+
+class Chart {
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.ctx = canvas.getContext('2d');
+    this.recording = false;
+    this.traces = TRACES.map((t) => ({ ...t, buf: [], center: 0, span: 0, scaled: false }));
+    this.moved = false;
+    this.stillSince = 0;
+    this.startTs = 0;
+    this.lastTs = 0;
+
+    // 高分屏清晰度
+    const dpr = window.devicePixelRatio || 1;
+    const resize = () => {
+      const r = canvas.getBoundingClientRect();
+      canvas.width = r.width * dpr;
+      canvas.height = r.height * dpr;
+      this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      this.draw();
+    };
+    new ResizeObserver(resize).observe(canvas);
+    resize();
+  }
+
+  /** 点「下发目标」时调用：清空并开始记录本次响应 */
+  start(ratedTorqueNm) {
+    this.traces.forEach((t) => {
+      t.buf = []; t.scaled = false;
+      // 力矩最小量程按额定取 10%：驱动电流估算的力矩本身有约 1% 额定的纹波，
+      // 固定量程会让大关节被这点纹波占满整屏
+      if (t.key === 'torqueNm' && ratedTorqueNm > 0) t.minSpan = ratedTorqueNm * 0.1;
+    });
+    this.recording = true;
+    this.moved = false;
+    this.stillSince = 0;
+    this.startTs = 0;
+    this.draw();
+  }
+
+  stop() { this.recording = false; this.draw(); }
+
+  /** 每次收到所选从站的遥测调用一次 */
+  push(t, nowMs) {
+    if (!this.recording) return;
+    if (!this.startTs) this.startTs = nowMs;
+    this.lastTs = nowMs;
+
+    this.traces.forEach((tr) => {
+      tr.buf.push(t[tr.key]);
+      if (tr.buf.length > MAX_POINTS) tr.buf.shift();
+    });
+
+    // 运动完成自动收尾：先"动过"，再连续静止 500ms
+    const still = Math.abs(t.velocityDps) < 0.5;
+    if (!still) { this.moved = true; this.stillSince = 0; }
+    else if (this.moved) {
+      if (!this.stillSince) this.stillSince = nowMs;
+      else if (nowMs - this.stillSince > 500) this.recording = false;
+    }
+    if (this.traces[0].buf.length >= MAX_POINTS) this.recording = false;
+
+    this.draw();
+  }
+
+  draw() {
+    const ctx = this.ctx;
+    const w = this.canvas.clientWidth, h = this.canvas.clientHeight;
+    ctx.clearRect(0, 0, w, h);
+
+    // 网格：比原来密（6×8），像仪器刻度。中性灰——青色只留给轨迹本身，
+    // 网格跟着泛青会让"哪条线是数据"变得含糊。
+    ctx.strokeStyle = 'rgba(255,255,255,0.055)';
+    ctx.lineWidth = 1;
+    for (let i = 1; i < 6; i++) {
+      const y = (h * i) / 6;
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+    }
+    for (let i = 1; i < 8; i++) {
+      const x = (w * i) / 8;
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+    }
+
+    const hasData = this.traces.some((t) => t.buf.length > 1);
+    if (!hasData) {
+      ctx.fillStyle = '#666C75';
+      ctx.font = '15px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('点「下发目标」后开始记录波形', w / 2, h / 2);
+      return;
+    }
+
+    const pad = 10;
+    this.traces.forEach((tr) => {
+      if (tr.buf.length < 2) return;
+      let lo = Math.min(...tr.buf), hi = Math.max(...tr.buf);
+      const targetSpan = Math.max(tr.minSpan, (hi - lo) * 1.2);
+      const targetCenter = (lo + hi) / 2;
+      if (!tr.scaled) { tr.center = targetCenter; tr.span = targetSpan; tr.scaled = true; }
+      else { tr.center += (targetCenter - tr.center) * 0.15; tr.span += (targetSpan - tr.span) * 0.15; }
+
+      const loDisp = tr.center - tr.span / 2;
+      const range = Math.max(1e-9, tr.span);
+      const xSpan = Math.max(1, tr.buf.length - 1);
+
+      // 轨迹带发光（HUD 感来源）。blur 控制在 8px——再大就糊成一片，
+      // 而波形是给人读数值趋势的，锐利比炫更重要。
+      ctx.strokeStyle = tr.color;
+      ctx.lineWidth = 1.5;
+      ctx.shadowColor = tr.color;
+      ctx.shadowBlur = 8;
+      ctx.beginPath();
+      tr.buf.forEach((v, i) => {
+        const x = (i / xSpan) * (w - 2 * pad) + pad;
+        const y = h - pad - ((v - loDisp) / range) * (h - 2 * pad);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+      ctx.shadowBlur = 0;   // 复位：否则后续文字也会带上发光而发虚
+    });
+
+    // 图例 + **每条轨迹当前的显示量程** + 记录状态。
+    // 标出量程很关键：三条轨迹各自独立自动缩放，不标的话根本判断不出
+    // "这点毛刺"到底是 0.1 还是 5 N·m（实际踩过这个坑）。
+    const secs = this.startTs ? ((this.lastTs - this.startTs) / 1000).toFixed(1) : '0.0';
+    const fmt = (v) => (Math.abs(v) < 10 ? v.toFixed(2) : v.toFixed(1));
+    ctx.textAlign = 'left';
+    ctx.font = '12px monospace';
+    let x = 12;
+    this.traces.forEach((tr) => {
+      ctx.fillStyle = tr.color;
+      ctx.fillText('■', x, 19);
+      ctx.fillStyle = '#9BA1A9';
+      const lo = tr.center - tr.span / 2, hi = tr.center + tr.span / 2;
+      const txt = `${tr.label} ${fmt(lo)}~${fmt(hi)}`;
+      ctx.fillText(txt, x + 14, 19);
+      x += ctx.measureText(txt).width + 34;
+    });
+    ctx.fillStyle = this.recording ? '#4ECB8E' : '#9BA1A9';
+    ctx.fillText(`${this.recording ? '● 记录中' : '记录完成'} ${secs}s`, x, 19);
+  }
+}

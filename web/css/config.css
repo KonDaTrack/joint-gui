@@ -1,0 +1,209 @@
+/* 组态页 + 初始页样式
+ *
+ * 视觉语汇沿用 app.css：双层描边、中性灰基底、青色留给数据、红=故障/急停、琥珀=需注意。
+ * 拓扑图里颜色的**语义是状态编码不是装饰**——链路断了必须一眼看出来。
+ */
+
+/* ============================================================
+   组态页：左拓扑 + 右参数
+   ============================================================ */
+.cfg {
+  height: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 348px;
+  gap: 12px;
+  padding: 12px;
+}
+.cfg .card-core { min-height: 0; }
+.cfg-topo .card-core { padding: 10px 12px; }
+.cfg-params .card-core { overflow-y: auto; }
+
+.topo-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.topo-svg { width: 100%; height: 100%; display: block; }
+
+/* ---- 拓扑：节点 ---- */
+.tp-box {
+  fill: rgba(255, 255, 255, 0.030);
+  stroke: rgba(255, 255, 255, 0.18);
+  stroke-width: 1.4;
+  transition: fill .5s var(--ease), stroke .5s var(--ease);
+}
+.tp-box-host  { fill: rgba(120, 214, 238, 0.055); stroke: rgba(120, 214, 238, 0.42); }
+.tp-box-mcu   { fill: rgba(255, 255, 255, 0.045); stroke: rgba(255, 255, 255, 0.26); }
+.tp-box-joint { fill: rgba(255, 255, 255, 0.028); stroke: rgba(255, 255, 255, 0.16); }
+.tp-box-joint.is-on { fill: rgba(78, 203, 142, 0.07); stroke: rgba(78, 203, 142, 0.45); }
+.tp-box-load  { fill: rgba(217, 164, 65, 0.055); stroke: rgba(217, 164, 65, 0.40); }
+
+/* ---- 拓扑：文字 ---- */
+.tp-t1 { fill: #E7E9EC; font-family: var(--sans); font-size: 14px; font-weight: 600; }
+.tp-t2 { fill: #9BA1A9; font-family: var(--mono); font-size: 11.5px; }
+.tp-t2-auth { fill: var(--warn); font-family: var(--mono); font-size: 11.5px; }
+.tp-t3 { fill: #666C75; font-family: var(--mono); font-size: 11px; }
+.tp-t3.tp-err { fill: var(--danger); }
+.tp-tag { fill: #666C75; font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; }
+.tp-tag-warn { fill: var(--warn); font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; }
+
+.tp-dot      { fill: #666C75; }
+.tp-dot-ok   { fill: var(--ok); }
+.tp-dot-warn { fill: var(--warn); }
+.tp-dot-fault{ fill: var(--danger); }
+.tp-dot-auth { fill: var(--warn); }
+
+/* ---- 拓扑：连线 ---- */
+.tp-path {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.16);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  transition: stroke .5s var(--ease);
+}
+.tp-path-dash { stroke-dasharray: 5 5; stroke: rgba(217, 164, 65, 0.30); }
+
+.tp-link.is-ok     .tp-path { stroke: rgba(78, 203, 142, 0.55); }
+.tp-link.is-sim    .tp-path { stroke: rgba(217, 164, 65, 0.65); }
+.tp-link.is-active .tp-path { stroke: rgba(120, 214, 238, 0.75); }
+.tp-link.is-off    .tp-path { stroke: rgba(255, 255, 255, 0.10); }
+.tp-link.is-mech   .tp-path { stroke: rgba(217, 164, 65, 0.30); }
+
+.tp-label    { fill: #B4BAC2; font-family: var(--mono); font-size: 11px; }
+.tp-sublabel { fill: #666C75; font-family: var(--mono); font-size: 10px; }
+
+/* ---- 拓扑：数据包 ---- */
+.tp-packet {
+  fill: rgba(255, 255, 255, 0.25);
+  transition: fill .5s var(--ease);
+}
+.tp-packet.is-ok     { fill: var(--ok); }
+.tp-packet.is-sim    { fill: var(--warn); }
+.tp-packet.is-active { fill: var(--cyan); }
+.tp-packet.is-off    { fill: rgba(255, 255, 255, 0.08); }
+.tp-packet.is-mech   { fill: rgba(217, 164, 65, 0.35); }
+
+/* ---- 参数面板 ---- */
+.p-list { margin: 0; }
+.p-row {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--hair);
+}
+.p-row .k { color: var(--dim); font-size: 11.5px; letter-spacing: 0.1em; text-align: right; }
+.p-row .v { font-family: var(--mono); font-size: 13.5px; color: var(--fg);
+            font-variant-numeric: tabular-nums; word-break: break-all; }
+.p-row .v.cy { color: var(--cyan); }
+.p-row .v.wn { color: var(--warn); }
+.p-row .v.dg { color: var(--danger); }
+.p-note {
+  margin-top: 12px;
+  font-size: 11px;
+  line-height: 1.75;
+  color: var(--dimmer);
+  border-left: 2px solid rgba(255, 255, 255, 0.10);
+  padding-left: 10px;
+}
+
+/* ============================================================
+   初始页
+   ============================================================ */
+.boot {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.boot-card { width: 560px; }
+.boot-card .card-core { padding: 26px 30px 24px; }
+
+.boot h1 {
+  margin: 0 0 4px;
+  font-family: var(--sans);
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--fg);
+}
+.boot .sub { font-size: 12.5px; color: var(--dimmer); margin-bottom: 22px; }
+
+.boot .row {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.boot .row > label { text-align: right; color: var(--dim); font-size: 12px; }
+.boot input[type="text"] {
+  background: linear-gradient(180deg, var(--raised-hi), var(--raised));
+  color: var(--fg);
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 10px;
+  padding: 9px 12px;
+  font-family: var(--mono);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 2px 5px -2px rgba(0, 0, 0, 0.9);
+}
+.boot input[type="text"]:focus {
+  outline: none; color: var(--cyan-hi);
+  border-color: rgba(120, 214, 238, 0.55);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 0 16px -4px rgba(120, 214, 238, 0.6);
+}
+.boot .note-line { font-size: 11px; color: var(--dimmer); line-height: 1.6; }
+.boot code {
+  font-family: var(--mono); font-size: 11px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 4px; padding: 1px 5px; color: var(--dim);
+}
+/* 连接中：呼吸。否则"正在连接"和"未连接"看着一模一样，分不出它在不在试 */
+.dot.bounce { animation: dot-bounce 1.2s ease-in-out infinite; }
+@keyframes dot-bounce {
+  0%, 100% { opacity: 1;   box-shadow: 0 0 0 0 rgba(217, 164, 65, 0.55); }
+  50%      { opacity: 0.45; box-shadow: 0 0 0 6px rgba(217, 164, 65, 0); }
+}
+@media (prefers-reduced-motion: reduce) { .dot.bounce { animation: none; } }
+
+.boot .status {
+  display: flex; align-items: center; gap: 10px;
+  margin: 18px 0 6px; padding-top: 16px;
+  border-top: 1px solid var(--hair);
+  font-size: 12.5px; color: var(--dim);
+}
+.boot .scan {
+  margin-top: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 12px;
+  background: var(--sunken);
+  box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.9);
+  padding: 10px 14px;
+  min-height: 74px;
+}
+.boot .scan .hd {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.18em;
+  color: var(--dimmer); margin-bottom: 8px;
+}
+.boot .scan ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 7px; }
+.boot .scan li {
+  font-family: var(--mono); font-size: 11.5px; color: var(--fg);
+  border: 1px solid rgba(120, 214, 238, 0.30);
+  background: rgba(120, 214, 238, 0.07);
+  border-radius: 8px; padding: 4px 10px;
+}
+.boot .scan .empty { color: var(--dimmer); font-size: 12px; }
+/* 列表过期提示：这是"数据可能不对"的告警，用琥珀不用红——红留给故障/急停 */
+.boot .scan-warn {
+  margin-top: 10px; padding-top: 9px;
+  border-top: 1px solid var(--hair);
+  font-size: 11.5px; line-height: 1.6;
+  color: var(--warn);
+}
+.boot .actions { display: flex; gap: 10px; margin-top: 20px; }
+.boot .actions .btn { flex: 1; }

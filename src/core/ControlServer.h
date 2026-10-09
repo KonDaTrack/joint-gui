@@ -57,6 +57,10 @@ private slots:
 private:
     void send(const QJsonObject& obj);
     void sendTelemetryThrottled();
+    /** 把当前从站列表推给已连接的客户端。
+     *  hello 只在握手时发一次，而下位机扫到从站往往**晚于**客户端连上——
+     *  不推的话网页会一直停在"无关节"，只能靠刷新重新握手。 */
+    void sendSlaveList();
 
     QWebSocketServer* server_ = nullptr;
     QWebSocket* client_ = nullptr;   // P1 单客户端
