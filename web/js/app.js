@@ -851,6 +851,9 @@ document.addEventListener('fullscreenchange', () => {
     void box.offsetWidth;               // 强制重排，否则同一个 class 不会重放动画
     box.classList.add('joint-smooth');
   }
+  // 镜头先回拉再归位：把"模型突然变大/变小"变成一个有意做的镜头动作。
+  // 光靠淡入盖不住尺寸变化 —— 人能感知到"东西变了大小"。
+  if (window.Joint3D) window.Joint3D.settle();
   setTimeout(() => { if (window.Joint3D) window.Joint3D.resize(); }, 80);
 });
 

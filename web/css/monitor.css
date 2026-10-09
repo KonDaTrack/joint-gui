@@ -312,9 +312,10 @@
 /* ---- 全屏切换的遮罩 ----
    浏览器切全屏是**瞬时**的，画布尺寸会瞬间跳变（还伴随一次重排）。
    加一次短促的淡入把这一跳盖住 —— 看起来是"切过去"而不是"闪一下"。 */
-.joint-smooth { animation: joint-smooth .44s var(--ease) both; }
+.joint-smooth { animation: joint-smooth .52s var(--ease) both; }
 @keyframes joint-smooth {
-  from { opacity: .3; transform: scale(1.012); }
-  to   { opacity: 1;  transform: none; }
+  /* 起点压得很低：切全屏那一帧画布尺寸已经跳完了，只有几乎全透明才盖得住 */
+  from { opacity: .18; transform: scale(1.02); }
+  to   { opacity: 1;   transform: none; }
 }
 @media (prefers-reduced-motion: reduce) { .joint-smooth { animation: none; } }

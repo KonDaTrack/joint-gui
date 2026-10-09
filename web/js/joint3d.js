@@ -85,6 +85,17 @@ const Joint3D = (() => {
     zoomTarget = null;
   }
 
+  /**
+   * 进出全屏时调用。浏览器切全屏是**瞬时**的，画布尺寸一跳、模型在屏幕上的
+   * 占比跟着跳 —— 光靠淡入盖不住"东西突然变大/变小"这个感知。
+   * 这里让镜头**先回拉、再归位**（约 0.5s），把这一跳变成一个有意做的镜头动作。
+   */
+  function settle() {
+    const d = zoomTarget != null ? zoomTarget : curDist();
+    zoomTarget = Math.min(controls.maxDistance, d * 1.3);   // 先退出去
+    setTimeout(() => { zoomTarget = d; }, 150);             // 再回到原位
+  }
+
   // 环境贴图给金属底子，三盏方向光给轮廓
   scene.add(new THREE.HemisphereLight(0xcfe0ff, 0x1A1D22, 0.85));
   const key  = new THREE.DirectionalLight(0xffffff, 3.2); key.position.set(2.6, 3.2, 2.4);
@@ -243,7 +254,7 @@ const Joint3D = (() => {
   // 先跑起来（监控页是唯一页面，默认可见）
   setActive(true);
 
-  return { resize, setActive, update, zoomBy, resetView,
+  return { resize, setActive, update, zoomBy, resetView, settle,
            get enabled() { return enabled; } };
 })();
 
