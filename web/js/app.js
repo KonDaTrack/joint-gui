@@ -659,7 +659,13 @@ $('btnSend').onclick = () => {
   loadHint(loadPresetNm > 0 ? '下发中…（先写负载，确认后再发运动指令）' : '', true);
   const t = state.telemetry.get(state.active);
   motionStart();                          // 安全条上亮起「运动中」
-  chart.start(t ? t.ratedTorqueNm : 0);   // 每次下发都重新记录本次响应
+  // 把目标值一起传进波形，它会画一条目标虚线 —— 一眼看出到没到位。
+  // 按模式只传对应的那一路：PV 的目标是速度，画到位置窗格上是错的。
+  const targets = {};
+  if (mode === 1) targets.positionDeg = args.positionDeg;
+  else if (mode === 3) targets.velocityDps = args.velocityDps;
+  else targets.torqueNm = args.torqueNm;
+  chart.start(t ? t.ratedTorqueNm : 0, targets);   // 每次下发都重新记录本次响应
   Anim.chartStarted();
 };
 
