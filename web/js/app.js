@@ -720,9 +720,16 @@ const LOAD_RATED_NM = 50;    // 额定：只显示，不硬性限制输入
 const NM_PER_VOLT   = 5;     // 50 / 10
 let loadPresetNm = 0;        // 预设值：只记住，点「下发目标」时才施加
 
+// 只显示**失败**。预设/生效/正在写入这类"一切正常"的话不再占地方 ——
+// 负载值本身就摆在滑块和数字框里，重复一遍没意义；"正在写入"更是噪音。
+// ★ 但**失败必须显示**：写失败时制动器毫无反应，界面不提示会把排查引向
+//   完全错误的方向（这个项目在别处吃过同类亏）。所以 ok=true 一律清空，
+//   只有 ok=false 才落字。
 const loadHint = (msg, ok) => {
-  $('loadHint').textContent = msg || '';
-  $('loadHint').style.color = ok ? 'var(--ok)' : 'var(--warn)';
+  const el = $('loadHint');
+  if (ok) { el.textContent = ''; return; }
+  el.textContent = msg || '';
+  el.style.color = 'var(--warn)';
 };
 
 /** 按 N·m 刷新滑块/数字框/电压显示。超额定只标红提示，不夹取 */
@@ -766,7 +773,7 @@ renderLoad(0);
 // 而 CSS 里算不出可用高度（要扣掉三维视图、遥测表、内外边距，还随边框盒变），
 // 所以这里**实测反推**：二分几次，逼出"刚好不溢出"的最大字号。
 // 下限 14px：再往下就不清晰了，宁可让容器滚动。
-const READOUT_MIN = 13, READOUT_MAX = 34;
+const READOUT_MIN = 12, READOUT_MAX = 26;
 
 function fitReadouts() {
   const box = document.querySelector('.readouts');

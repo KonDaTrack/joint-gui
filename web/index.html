@@ -166,31 +166,34 @@
             </div>
           </div>
 
-          <!-- 三个大数字。字号由 app.js 的 fitReadouts() 实测反推 ——
-               这一栏还塞着三维视图和遥测表，窗口矮的时候必须能把字号压下来。 -->
-          <div class="readouts">
-            <div class="readout">
-              <label>位置</label>
-              <div><span id="valPos" class="value">--</span><span class="unit">deg</span></div>
-            </div>
-            <div class="readout">
-              <label>速度</label>
-              <div><span id="valVel" class="value">--</span><span class="unit">deg/s</span></div>
-            </div>
-            <div class="readout">
-              <label>力矩</label>
-              <div><span id="valTor" class="value">--</span><span class="unit">N·m</span></div>
-            </div>
-          </div>
+          <!-- 三维下方**并排两栏**：左＝三个大数字，右＝遥测。
+               不能上下堆 —— 堆起来的话三个大数字吃满高度，遥测会被挤出可视区。 -->
+          <div class="left-split">
 
-          <!-- 遥测表：从目标卡挪过来的，填掉三维视图下方的空间 -->
-          <dl class="telemetry">
-            <dt>驱动状态</dt><dd id="valState"><span id="dotState" class="dot"></span><span>--</span></dd>
-            <dt>状态字</dt><dd id="valStatusWord" class="mono">--</dd>
-            <dt>故障码</dt><dd id="valError" class="mono">--</dd>
-            <dt>温度</dt><dd id="valTemp" class="mono">--</dd>
-            <dt>刷新率</dt><dd id="valRate" class="mono">--</dd>
-          </dl>
+            <div class="readouts">
+              <div class="readout">
+                <label>位置</label>
+                <div><span id="valPos" class="value">--</span><span class="unit">deg</span></div>
+              </div>
+              <div class="readout">
+                <label>速度</label>
+                <div><span id="valVel" class="value">--</span><span class="unit">deg/s</span></div>
+              </div>
+              <div class="readout">
+                <label>力矩</label>
+                <div><span id="valTor" class="value">--</span><span class="unit">N·m</span></div>
+              </div>
+            </div>
+
+            <dl class="telemetry">
+              <dt>驱动状态</dt><dd id="valState"><span id="dotState" class="dot"></span><span>--</span></dd>
+              <dt>状态字</dt><dd id="valStatusWord" class="mono">--</dd>
+              <dt>故障码</dt><dd id="valError" class="mono">--</dd>
+              <dt>温度</dt><dd id="valTemp" class="mono">--</dd>
+              <dt>刷新率</dt><dd id="valRate" class="mono">--</dd>
+            </dl>
+
+          </div>
 
         </div>
       </section>
