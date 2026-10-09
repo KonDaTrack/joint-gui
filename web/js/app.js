@@ -51,8 +51,8 @@ const state = {
   // 用于识别"变化"以触发动画（动画只该由变化触发，而不是每次刷新）
   prevDriveState: null, prevHadError: false,
   gfx: Gfx.caps,   // 图形能力（gfx.js 在加载时已探测一次）
-  page: 'config',  // 当前页面，由 Router 维护（开场画面不在路由里）
-  // 负载链状态：组态页的拓扑图要用它判断 RS485 链路是否正常
+  page: 'monitor', // 当前页面，由 Router 维护（开场画面不在路由里）
+  // 负载链状态（协议目前只有一路）。用于负载提示，以及判断写负载是否失败。
   load: { state: '', presetNm: 0 },
   // 下位机自报的从站数量。-1 = 还没收到。与本页列表长度对不上 = 列表过期
   reportedCount: -1,
@@ -114,7 +114,7 @@ function renderMotionBadge() {
 }
 
 // ============ 渲染 ============
-// 安全条：跨页常驻，三个页面共用同一个 DOM 实例。
+// 安全条：常驻，所有页面共用同一个 DOM 实例。
 // 它替代了原来监控页顶栏右半部分（总线/控制权/请求按钮）——那段本就该是全局的。
 // 身份（关节型号）也从监控页的 .module-badge 挪到了这里，让读数区腾出高度。
 function renderSafetyBar() {
@@ -186,10 +186,9 @@ function applySlaves(list, activeSlave) {
   if (state.active !== prev) { chart.stop(); motionClear(); }
 
   renderSlaves();
-  Topology.setSlaves(state.slaves);
   renderCommandEnabled();
   renderSplash();
-  renderConfigLive();
+  renderSlaveWarn();
 }
 
 function renderSlaves() {
@@ -480,40 +479,20 @@ function stopSplashTimer() {
   if (SPLASH.timer) { clearInterval(SPLASH.timer); SPLASH.timer = null; }
 }
 
-// ============ 组态页 ============
-// 关节参数不再单列一张卡：鼠标移到拓扑里的关节上时，在其上方弹出浮层。
-// 浮层内容由 Topology 自己渲染（它才知道节点的位置和当前悬停的是哪个轴）。
-
-/** 拓扑只在组态页可见时刷新 —— 50Hz 下没必要给隐藏页面做 DOM 写入 */
-function renderConfigLive() {
-  if (state.page !== 'config') return;
-  Topology.refresh(state, {
-    connected: link.connected,
-    deviceConnected: state.deviceConnected,
-    simulated: state.simulated,
-    owner: state.owner,
-    slaveCount: state.slaves.length,   // 拓扑里 ARM 节点下方要显示
-  });
-  const n = $('topoNote');
-  if (n) {
-    n.textContent = !link.connected ? '未连接下位机'
-                  : state.simulated ? '⚠️ 仿真链路（非真机）'
-                  : '链路实时状态 · 悬停关节看参数';
-  }
-
-  // 从站列表过期告警：下位机自报的数量与手上的列表对不上。
-  // 新版下位机会主动推 slaves 消息，这条主要是**对接老版本时的兜底**——
-  // 否则操作员只会看到"无关节/少了一个"，完全不知道是列表没同步。
-  // 放在这里而不是开场画面：开场画面连上就消失，告警放那儿等于看不见。
+// ============ 从站列表过期告警 ============
+// 下位机自报的从站数量与本页手上的列表对不上 → 列表没同步。
+// 新版下位机会主动推 slaves 消息，这条主要是**对接老版本时的兜底**，
+// 否则操作员只会看到"无关节/少了一个"，完全不知道是列表没同步。
+// 挂在监控页顶栏那张在线关节列表旁边 —— 它本来就是关于那张列表的。
+function renderSlaveWarn() {
   const warn = $('bootWarn');
-  if (warn) {
-    const stale = state.reportedCount >= 0 && state.reportedCount !== state.slaves.length;
-    warn.hidden = !stale;
-    if (stale) {
-      warn.textContent =
-        `下位机报告 ${state.reportedCount} 个从站，本页只有 ${state.slaves.length} 个 —— `
-        + `点顶栏左侧的关节名重新连接，会重新握手取回完整列表。`;
-    }
+  if (!warn) return;
+  const stale = state.reportedCount >= 0 && state.reportedCount !== state.slaves.length;
+  warn.hidden = !stale;
+  if (stale) {
+    warn.textContent =
+      `下位机报告 ${state.reportedCount} 个从站，本页只有 ${state.slaves.length} 个 —— `
+      + `点上方关节名重新连接，会重新握手取回完整列表。`;
   }
 }
 
@@ -571,7 +550,7 @@ link.on('open', () => { renderSafetyBar(); renderSplash(); toast('已连接下�
         else motionTick(t);
       }
 
-      renderConfigLive();   // 内部判页，非组态页直接返回
+      renderSlaveWarn();
     })
     .on('controlOwner', (m) => {
       const changed = state.owner !== m.owner;
@@ -611,7 +590,7 @@ link.on('open', () => { renderSafetyBar(); renderSplash(); toast('已连接下�
       state.reportedCount = Number.isFinite(n) ? n : state.slaves.length;
       renderSafetyBar();
       renderSplash();
-      renderConfigLive();
+      renderSlaveWarn();
       toast(m.connected ? `下位机已连接设备（${state.bus}）` : '下位机未连接设备');
     });
 
@@ -798,17 +777,12 @@ Router.onChange((name, prev) => {
     setTimeout(() => { if (chart && chart.resize) chart.resize(); }, 700);
   }
 
-  // 拓扑动画只在组态页可见时跑：rAF 循环不该给隐藏页面白烧 CPU
-  Topology.setActive(name === 'config');
-  if (name === 'config') renderConfigLive();
+  renderSlaveWarn();
   renderSplash();
 });
 
-// 拓扑图先挂载再 init —— init 会触发 onChange，可能立刻就要 refresh
-Topology.mount(document.getElementById('topo'));
-
 // 导航里只剩正式界面。开场画面不是"一页"，连上后被摘掉，不参与路由。
-Router.init('config');
+Router.init('monitor');
 
 // ============ 开场画面的动作 ============
 // 换地址只能重载：ws.js 的连接 URL 在加载时就定死了。

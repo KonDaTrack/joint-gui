@@ -6,7 +6,6 @@
 <title>关节模组上位机</title>
 <link rel="stylesheet" href="css/app.css">
 <link rel="stylesheet" href="css/shell.css">
-<link rel="stylesheet" href="css/config.css">
 </head>
 <body>
 
@@ -72,7 +71,7 @@
 </div>
 
 <!-- ============================================================
-     常驻安全条 —— 三个页面共用的唯一 DOM 实例
+     常驻安全条 —— 所有页面共用的唯一 DOM 实例
      不随切页重渲（重渲会导致状态不同步）。
      急停与失能恒可用，不受控制权和当前页面限制。
      ============================================================ -->
@@ -81,7 +80,6 @@
   <!-- 左：页面导航。**只有正式界面才在这里** —— 开场画面不是"一页"，
        它是启动时的一次性覆盖层，连上就消失，不该出现在导航里。 -->
   <nav class="nav" id="nav" role="tablist" aria-label="页面切换">
-    <button data-page="config"  role="tab">组态</button>
     <button data-page="monitor" role="tab">监控</button>
   </nav>
 
@@ -123,25 +121,6 @@
 <!-- ============================================================ 页面容器 -->
 <div class="pages" id="pages">
 
-  <!-- ============ 组态页：系统拓扑（参数改为悬停关节时弹出） ============ -->
-  <section class="page" id="page-config" role="tabpanel" aria-label="组态">
-    <div class="cfg">
-      <section class="card cfg-topo">
-        <div class="card-core">
-          <h2 class="card-title">
-            [ 系统拓扑与信号走向 ]
-            <span class="chart-note" id="topoNote">等待连接</span>
-          </h2>
-          <!-- 从站列表过期的告警（对接老版本下位机时的兜底） -->
-          <div class="scan-warn" id="bootWarn" hidden></div>
-          <!-- 拓扑由 js/topology.js 生成（SVG）。关节参数不再单列一张卡，
-               改为鼠标移到关节上时在其上方弹出。 -->
-          <div class="topo-wrap" id="topo"></div>
-        </div>
-      </section>
-    </div>
-  </section>
-
   <!-- ============ 监控页（承载现有全部功能） ============ -->
   <section class="page" id="page-monitor" role="tabpanel" aria-label="监控">
     <main class="layout">
@@ -151,6 +130,9 @@
         <div class="card-core">
           <h2 class="card-title card-title-inline">[ 在线关节 ]</h2>
           <ul id="slaveList" class="slave-list"></ul>
+          <!-- 从站列表过期的告警（对接老版本下位机时的兜底）。
+               原在组态页，组态页删除后挪到这里 —— 它本来就是关于这张列表的。 -->
+          <div class="scan-warn" id="bootWarn" hidden></div>
           <div class="spacer"></div>
         </div>
       </section>
@@ -298,7 +280,6 @@
 <script src="js/anim.js"></script>
 <script src="js/router.js"></script>
 <script src="js/gfx.js"></script>
-<script src="js/topology.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

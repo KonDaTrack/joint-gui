@@ -483,3 +483,32 @@ row5                       └─RS485─►[三路模拟输出]──1──2�
 
 在改之前，图上只标 **第 1 路**的真实值（模拟输出下方"在线 · 第1路 X N·m"），
 两列负载/控制器的在线状态共用 RS485 链的判据 —— 不假装能分路判断。
+
+### 10.17 删除组态页（用户决定）
+
+用户看过实现后认为拓扑图"不好看"，决定删掉组态页，把精力放回监控页。
+
+删除内容：`index.html` 的 `#page-config` 段与导航项、`css/config.css`、`js/topology.js`、
+`app.js` 里全部 `Topology.*` 调用与 `renderConfigLive()`。
+
+**删除前先查了依赖**（这一步不能省）——`config.css` 里有两条样式**别处在用**，
+直接删会连带打断：
+- `@keyframes dot-bounce` —— `shell.css` 的步骤条在引用它
+- `.scan-warn` —— 从站列表过期告警
+
+两条已搬到 `shell.css`；过期告警挪到监控页顶栏（它本来就是关于那张列表的）。
+`.stub` 占位壳样式是死代码，一并删除。代码都在 git 里（`7372fee` 及之前），随时可捡回。
+
+**★ 删页面时漏改一处，导致主界面整个空白（只剩安全条）：**
+
+```
+PAGES = ['monitor']          ← 改成了单页
+Router.init('config')        ← 这行没跟着改
+```
+
+`show('config')` 时 `'config'` 不在 `PAGES` 里 → 回退到 `defaultPage`，
+**而 defaultPage 也是 'config'** → 归一化循环里 `page-monitor` 被置为 `hidden`。
+表现是主界面空白、只剩安全条，且控制台**零报错**，从现象完全看不出原因。
+
+修法：`init('monitor')`，并在 `Router.init` 里加一道防呆 ——
+默认页不在 `PAGES` 里就 `console.error` 并改用 `PAGES[0]`。

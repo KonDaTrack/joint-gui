@@ -7,13 +7,13 @@
 //  3) 页面在 hidden 状态下所有元素尺寸为 0，箱内做尺寸自适应的东西（波形 canvas、
 //     读数区二分字号）**必须重测**。所以这里提供 onChange 回调，别在页面里各写一套。
 //
-// hash 为空时的默认页由调用方传入（app.js），当前是 'config'。
+// hash 为空时的默认页由调用方传入（app.js）。目前只剩 'monitor' 一页。
 //
 // ★ 本路由**只管正式界面**。开场画面（连接/握手）不是"一页"——
 //   它是启动时的一次性覆盖层，连上就被摘掉，不参与路由，也不在导航里出现。
 
 const Router = {
-  PAGES: ['config', 'monitor'],
+  PAGES: ['monitor'],
   current: null,
 
   // 交叉过渡最长 460ms（见 shell.css 的 page-in-*）。收尾定时器留点余量，
@@ -30,6 +30,13 @@ const Router = {
    */
   init(defaultPage) {
     this.defaultPage = defaultPage;
+    // 防呆：默认页必须自己在 PAGES 里。否则 show() 会回退到 defaultPage，
+    // 而那名字同样不在 PAGES 里 → 循环里每一页都被置为 hidden，
+    // **整个主界面空白**，只剩安全条。删页面时漏改这个参数就踩过。
+    if (!this.PAGES.includes(defaultPage)) {
+      console.error(`[router] 默认页 "${defaultPage}" 不在 PAGES 里，改用 "${this.PAGES[0]}"`);
+      this.defaultPage = this.PAGES[0];
+    }
 
     document.querySelectorAll('#nav button').forEach((btn) => {
       btn.addEventListener('click', () => this.go(btn.dataset.page));
