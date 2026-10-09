@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="css/app.css">
 <link rel="stylesheet" href="css/shell.css">
 <link rel="stylesheet" href="css/monitor.css">
+<link rel="stylesheet" href="css/history.css">
 <!-- three.js 走本地副本（试验台多为离线环境）。import map 只有模块脚本能用，
      所以 joint3d.js 是 type="module"；它是 deferred 的，会在 app.js 之后执行。 -->
 <script type="importmap">
@@ -88,6 +89,7 @@
        它是启动时的一次性覆盖层，连上就消失，不该出现在导航里。 -->
   <nav class="nav" id="nav" role="tablist" aria-label="页面切换">
     <button data-page="monitor" role="tab">监控</button>
+    <button data-page="history" role="tab">历史数据</button>
   </nav>
 
   <div class="sep"></div>
@@ -277,6 +279,14 @@
           </div>
 
           <div id="cmdHint" class="hint"></div>
+
+          <!-- 本次运行的名称。**下发目标时**用它当主键存进历史，重名覆盖。
+               默认是保存时间，学生可以改成"第一次·负载20"这种有意义的名字。 -->
+          <div class="run-name">
+            <label for="inpRunName">本次名称</label>
+            <input type="text" id="inpRunName" spellcheck="false" autocomplete="off">
+            <button id="btnGoHistory" class="btn">历史数据</button>
+          </div>
         </div>
       </section>
 
@@ -294,6 +304,42 @@
     </main>
   </section>
 
+  <!-- ============ 历史数据页 ============
+       与监控页**完全分开**：实时波形只画本次运行，对比放到这里，互不干扰。
+       左＝历次运行（勾选要对比的），右＝对比波形。 -->
+  <section class="page" id="page-history" role="tabpanel" aria-label="历史数据" hidden>
+    <div class="hist">
+
+      <section class="card hist-side">
+        <div class="card-core">
+          <div class="hist-head">
+            <span class="hd">历次运行</span>
+            <span class="spacer"></span>
+            <span class="hist-count" id="histCount">0 条</span>
+            <button id="btnHistClear" class="btn hist-mini">清空</button>
+          </div>
+
+          <!-- 轨迹筛选：只留一条轨迹时就是 N 条纯色线，最干净 -->
+          <div class="hist-traces" id="histTraces">
+            <button data-trace="positionDeg" class="on">位置</button>
+            <button data-trace="velocityDps" class="on">速度</button>
+            <button data-trace="torqueNm" class="on">力矩</button>
+          </div>
+
+          <ul class="hist-runs" id="histRuns"></ul>
+        </div>
+      </section>
+
+      <section class="card hist-main">
+        <div class="card-core">
+          <canvas id="cmpChart"></canvas>
+          <div class="hist-tip" id="histTip">勾选左侧的运行开始对比</div>
+        </div>
+      </section>
+
+    </div>
+  </section>
+
 </div>
 
 <!-- 消息条：连接/控制权/故障等一次性提示 -->
@@ -307,6 +353,8 @@
 <script src="js/anim.js"></script>
 <script src="js/router.js"></script>
 <script src="js/gfx.js"></script>
+<script src="js/history.js"></script>
+<script src="js/compare.js"></script>
 <script src="js/app.js"></script>
 <!-- 三维关节：ES 模块（three 是 ESM 包）。deferred，跑在 app.js 之后，
      自己初始化，只对外暴露 window.Joint3D 供 app.js"事后"取用。 -->

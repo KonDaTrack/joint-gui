@@ -13,7 +13,7 @@
 //   它是启动时的一次性覆盖层，连上就被摘掉，不参与路由，也不在导航里出现。
 
 const Router = {
-  PAGES: ['monitor'],
+  PAGES: ['monitor', 'history'],
   current: null,
 
   // 交叉过渡最长 460ms（见 shell.css 的 page-in-*）。收尾定时器留点余量，

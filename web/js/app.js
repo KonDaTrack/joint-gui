@@ -56,6 +56,9 @@ const state = {
   load: { state: '', presetNm: 0 },
   // 下位机自报的从站数量。-1 = 还没收到。与本页列表长度对不上 = 列表过期
   reportedCount: -1,
+  lastTarget: {},      // 本次下发的目标，存历史时带上
+  wasRecording: false, // 上一帧图表是否在记录，用来识别「运动结束」
+  lastTs: 0,
 };
 
 // ============ 提示条 ============
@@ -539,6 +542,147 @@ function renderSlaveWarn() {
   }
 }
 
+// ============ 历史运行 ============
+// 实时波形只画本次运行；历史与对比在**独立的历史数据页**，互不干扰。
+// 一次运行在「运动结束」时存进 IndexedDB（名称是主键，重名覆盖）。
+
+const HIST = {
+  sel: new Set(),                        // 选中对比的运行名
+  traces: ['positionDeg', 'velocityDps', 'torqueNm'],
+  cache: [],                             // 最近一次读到的全部记录
+};
+
+/** 名称默认 = 当前时间（精确到秒）。学生可以改成"第一次·负载20"这种。 */
+function resetRunName() {
+  const el = $('inpRunName');
+  if (el) el.value = History.defaultName();
+}
+
+/** 把这次运行打包成一条记录。数据直接取自图表的缓冲区。 */
+function buildRun() {
+  const name = ($('inpRunName').value || '').trim() || History.defaultName();
+  const t = state.telemetry.get(state.active);
+  const s = state.slaves.find((x) => x.slave === state.active);
+  const traces = {};
+  chart.traces.forEach((tr) => { traces[tr.key] = tr.buf.slice(); });
+  if (!traces.positionDeg || traces.positionDeg.length < 3) return null;   // 没采到就别存
+
+  // 派生结果：曲线之外，学生最常问的三个数
+  const tor = traces.torqueNm.filter((v) => Number.isFinite(v));
+  const peak = tor.length ? tor.reduce((a, b) => Math.max(a, Math.abs(b)), 0) : 0;
+  const durMs = traces.positionDeg.length * (chart.dtMs || 20);
+
+  return {
+    name, ts: Date.now(),
+    slave: state.active,
+    shortName: s ? (s.shortName || '') : '',
+    mode: +$('selMode').value,
+    target: state.lastTarget || {},
+    loadNm: loadPresetNm,
+    ratedTorqueNm: t ? t.ratedTorqueNm : 0,
+    dtMs: chart.dtMs || 20,
+    traces,
+    result: { peakTorqueNm: peak, durationMs: durMs, points: traces.positionDeg.length },
+  };
+}
+
+async function saveRun() {
+  const rec = buildRun();
+  if (!rec) return;
+  await History.save(rec);
+  resetRunName();                        // 存完换一个新的默认名，避免连着两次同名
+  if (state.page === 'history') renderHistory();
+}
+
+/** 列表里每条运行显示成什么样：名称 + 参数摘要（摘要才是区分它们的依据） */
+function runSummary(r) {
+  const modeName = { 1: 'PP', 3: 'PV', 4: 'PT' }[r.mode] || '--';
+  const tv = r.target || {};
+  const tgt = r.mode === 1 ? `${tv.positionDeg}°`
+            : r.mode === 3 ? `${tv.velocityDps}°/s`
+            : `${tv.torqueNm}N·m`;
+  return `${modeName} ${tgt} · 负载 ${r.loadNm}N·m · 峰值 ${r.result.peakTorqueNm.toFixed(2)}`;
+}
+
+async function renderHistory() {
+  const ul = $('histRuns');
+  if (!ul) return;
+  HIST.cache = await History.list();
+
+  $('histCount').textContent = HIST.cache.length + ' 条';
+
+  // 记录被删掉的运行要从选中集里摘掉，否则会留下"选了但不存在"的名字
+  const names = new Set(HIST.cache.map((r) => r.name));
+  HIST.sel.forEach((n) => { if (!names.has(n)) HIST.sel.delete(n); });
+
+  if (!HIST.cache.length) {
+    ul.innerHTML = '<div class="hist-empty">还没有历史记录。<br>'
+      + '在下达目标跑完一次之后，这次运行会自动存在这里。</div>';
+  } else {
+    ul.innerHTML = HIST.cache.map((r) => `
+      <li data-name="${r.name.replace(/"/g, '&quot;')}">
+        <span class="sw"></span>
+        <span class="txt">
+          <span class="n">${r.name}</span>
+          <span class="p">${runSummary(r)}</span>
+        </span>
+        <button class="del" title="删除">×</button>
+      </li>`).join('');
+    ul.querySelectorAll('li').forEach((li) => {
+      li.onclick = (e) => {
+        if (e.target.classList.contains('del')) return;
+        toggleRun(li.dataset.name);
+      };
+      li.querySelector('.del').onclick = async (e) => {
+        e.stopPropagation();
+        await History.remove(li.dataset.name);
+        HIST.sel.delete(li.dataset.name);
+        renderHistory();
+      };
+    });
+  }
+  syncHistSel();
+}
+
+/** 选中/取消一次运行。颜色按它在**已选列表里的次序**分配 —— 与图上的线一一对应。 */
+function toggleRun(name) {
+  if (HIST.sel.has(name)) HIST.sel.delete(name);
+  else HIST.sel.add(name);
+  syncHistSel();
+}
+
+function syncHistSel() {
+  const order = HIST.cache.filter((r) => HIST.sel.has(r.name));
+  // 列表：描边用该次的颜色，和图上对应
+  document.querySelectorAll('#histRuns li').forEach((li) => {
+    const i = order.findIndex((r) => r.name === li.dataset.name);
+    li.classList.toggle('on', i >= 0);
+    li.style.setProperty('--rc', Compare.colorFor(Math.max(0, i)));
+  });
+  Compare.setRuns(order);
+  const tip = $('histTip');
+  if (tip) tip.hidden = order.length > 0;
+}
+
+// ---- 历史页的控件 ----
+$('btnGoHistory').onclick = () => Router.go('history');
+$('btnHistClear').onclick = async () => {
+  if (!confirm('清空全部历史运行记录？此操作不可撤销。')) return;
+  await History.clear();
+  HIST.sel.clear();
+  renderHistory();
+};
+document.querySelectorAll('#histTraces button').forEach((b) => {
+  b.onclick = () => {
+    const k = b.dataset.trace;
+    const i = HIST.traces.indexOf(k);
+    if (i >= 0) { if (HIST.traces.length > 1) HIST.traces.splice(i, 1); }
+    else HIST.traces.push(k);
+    b.classList.toggle('on', HIST.traces.includes(k));
+    Compare.setTraces(HIST.traces);
+  };
+});
+
 // ============ 事件 ============
 link.on('open', () => { renderSafetyBar(); renderSplash(); toast('已连接下位机'); })
     .on('close', () => {
@@ -594,6 +738,19 @@ link.on('open', () => { renderSafetyBar(); renderSplash(); toast('已连接下�
         if (!t.connected || t.errorCode || t.driveState === 7) motionClear();
         else motionTick(t);
       }
+
+      // 采样间隔：历史记录要用它把"点数"还原成"时间轴"
+      if (m.ts && state.lastTs) {
+        const dt = m.ts - state.lastTs;
+        if (dt > 0 && dt < 1000) chart.dtMs = dt;
+      }
+      if (m.ts) state.lastTs = m.ts;
+
+      // 运动结束（图表自动收尾）→ 把这次运行存进历史。
+      // 存的是**结束时刻**的完整缓冲；下发时缓冲还是空的，不能那时存。
+      const recNow = chart.recording;
+      if (state.wasRecording && !recNow) saveRun();
+      state.wasRecording = recNow;
 
       renderSlaveWarn();
     })
@@ -694,6 +851,7 @@ $('btnSend').onclick = () => {
   if (mode === 1) targets.positionDeg = args.positionDeg;
   else if (mode === 3) targets.velocityDps = args.velocityDps;
   else targets.torqueNm = args.torqueNm;
+  state.lastTarget = targets;                      // 存历史时带上（对比要看目标差异）
   chart.start(t ? t.ratedTorqueNm : 0, targets);   // 每次下发都重新记录本次响应
   Anim.chartStarted();
 };
@@ -826,11 +984,19 @@ Router.onChange((name, prev) => {
     setTimeout(() => { if (chart && chart.resize) chart.resize(); }, 700);
   }
 
+  // 进历史页：挂对比图（幂等）+ 读一次记录
+  if (name === 'history') {
+    Compare.mount();
+    Compare.setTraces(HIST.traces);
+    renderHistory();
+  }
+
   renderSlaveWarn();
   renderSplash();
 });
 
 // 导航里只剩正式界面。开场画面不是"一页"，连上后被摘掉，不参与路由。
+resetRunName();
 Router.init('monitor');
 
 // ============ 开场画面的动作 ============
