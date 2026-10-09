@@ -114,18 +114,16 @@
 
   <div class="spacer"></div>
 
-  <!-- 健康：运动进行中 / 驱动状态 / 刷新率 -->
   <!-- 「运动中」是**提醒不是锁**：任何页面都看得见，点了跳回监控页。
        刻意不做硬锁——堵转时关节可能永远不"完成"，锁死会把人困住。 -->
   <button id="motionBadge" class="badge badge-motion" hidden
           title="关节运动中 —— 点击回到监控页">运动中</button>
-  <div id="driveBadge" class="badge badge-idle">--</div>
-  <div id="rateBadge" class="badge badge-idle">-- Hz</div>
 
   <div class="sep"></div>
 
-  <!-- 安全操作：恒可用 -->
-  <button id="btnDisableBar" class="btn">失能</button>
+  <!-- 安全操作：急停恒可用。
+       原来的「失能」「驱动状态」「刷新率」三项已删 —— 前两个在左栏遥测表里，
+       失能在操作卡里，都是重复。 -->
   <button id="btnEstopBar" class="estop-sm">急停 ESTOP</button>
 
 </header>
@@ -317,6 +315,21 @@
             <span class="spacer"></span>
             <span class="hist-count" id="histCount">0 条</span>
             <button id="btnHistClear" class="btn hist-mini">清空</button>
+          </div>
+
+          <!-- 筛选：**必须先选关节和模式**，再在这两个条件下挑要对比的运行。
+               跨模式比较没有意义（PP 跑的是位置，PV 跑的是速度，曲线根本不可比）；
+               跨关节也不行（额定力矩不同，同样的目标值含义不同）。 -->
+          <div class="hist-filter">
+            <label for="histSlave">关节</label>
+            <select id="histSlave"></select>
+            <label for="histMode">模式</label>
+            <select id="histMode">
+              <option value="0">全部</option>
+              <option value="1">位置 PP</option>
+              <option value="3">速度 PV</option>
+              <option value="4">力矩 PT</option>
+            </select>
           </div>
 
           <!-- 轨迹筛选：只留一条轨迹时就是 N 条纯色线，最干净 -->

@@ -299,17 +299,6 @@ function renderTelemetry() {
     $('travelPos').textContent = (LIMIT - Math.max(p, 0)).toFixed(1) + '°';
   }
 
-  // 安全条上的驱动状态与刷新率。**必须在这里一起更新**——安全条跨页可见，
-  // 在组态页/初始页时监控页是 hidden，只更新监控页里的元素等于没更新。
-  const db = $('driveBadge');
-  if (db) {
-    db.className = 'badge ' + (lvl === 'ok' ? 'badge-real'
-                             : lvl === 'fault' ? 'badge-fault'
-                             : lvl === 'warn' ? 'badge-sim' : 'badge-idle');
-    db.textContent = t.connected ? st : '离线';
-  }
-  const rb = $('rateBadge');
-  if (rb) rb.textContent = state.rate.hz.toFixed(1) + ' Hz';
 
   // 动效只由「变化」触发，不随每次刷新播放——否则 50Hz 下会一直闪
   if (state.prevDriveState !== t.driveState) {
@@ -550,6 +539,8 @@ const HIST = {
   sel: new Set(),                        // 选中对比的运行名
   traces: ['positionDeg', 'velocityDps', 'torqueNm'],
   cache: [],                             // 最近一次读到的全部记录
+  view: [],                              // 当前筛选下的记录
+  filter: { slave: 0, mode: 0 },         // 0 = 全部
 };
 
 /** 名称默认 = 当前时间（精确到秒）。学生可以改成"第一次·负载20"这种。 */
@@ -609,17 +600,41 @@ async function renderHistory() {
   if (!ul) return;
   HIST.cache = await History.list();
 
-  $('histCount').textContent = HIST.cache.length + ' 条';
+  // ---- 筛选：先定关节和模式，再在这两个条件下挑要对比的运行 ----
+  // 跨模式比较没有意义（PP 看位置、PV 看速度，曲线不可比）；跨关节也不行
+  // （额定力矩不同，同样的目标值含义不同）。
+  const slaveSel = $('histSlave');
+  const ids = [...new Set(HIST.cache.map((r) => r.slave))].sort((a, b) => a - b);
+  const prev = +slaveSel.value || 0;
+  slaveSel.innerHTML = '<option value="0">全部</option>'
+    + ids.map((i) => `<option value="${i}">关节 ${i}</option>`).join('');
+  slaveSel.value = String(ids.includes(prev) ? prev : 0);
 
-  // 记录被删掉的运行要从选中集里摘掉，否则会留下"选了但不存在"的名字
-  const names = new Set(HIST.cache.map((r) => r.name));
+  HIST.filter.slave = +slaveSel.value || 0;
+  HIST.filter.mode = +$('histMode').value || 0;
+  HIST.view = HIST.cache.filter((r) =>
+    (HIST.filter.slave === 0 || r.slave === HIST.filter.slave)
+    && (HIST.filter.mode === 0 || r.mode === HIST.filter.mode));
+
+  $('histCount').textContent = HIST.cache.length
+    ? (HIST.view.length === HIST.cache.length
+        ? HIST.cache.length + ' 条'
+        : HIST.view.length + ' / ' + HIST.cache.length + ' 条')
+    : '0 条';
+
+  // 选中集**收敛到当前筛选内** —— 否则会留下"选了但看不见"的运行，
+  // 图上有线、列表里找不到，没法解释
+  const names = new Set(HIST.view.map((r) => r.name));
   HIST.sel.forEach((n) => { if (!names.has(n)) HIST.sel.delete(n); });
 
   if (!HIST.cache.length) {
     ul.innerHTML = '<div class="hist-empty">还没有历史记录。<br>'
       + '在下达目标跑完一次之后，这次运行会自动存在这里。</div>';
+  } else if (!HIST.view.length) {
+    ul.innerHTML = '<div class="hist-empty">这个筛选下没有记录。<br>'
+      + '换一个关节或模式看看。</div>';
   } else {
-    ul.innerHTML = HIST.cache.map((r) => `
+    ul.innerHTML = HIST.view.map((r) => `
       <li data-name="${r.name.replace(/"/g, '&quot;')}">
         <span class="sw"></span>
         <span class="txt">
@@ -652,7 +667,7 @@ function toggleRun(name) {
 }
 
 function syncHistSel() {
-  const order = HIST.cache.filter((r) => HIST.sel.has(r.name));
+  const order = HIST.view.filter((r) => HIST.sel.has(r.name));
   // 列表：描边用该次的颜色，和图上对应
   document.querySelectorAll('#histRuns li').forEach((li) => {
     const i = order.findIndex((r) => r.name === li.dataset.name);
@@ -666,6 +681,8 @@ function syncHistSel() {
 
 // ---- 历史页的控件 ----
 $('btnGoHistory').onclick = () => Router.go('history');
+$('histSlave').onchange = () => renderHistory();
+$('histMode').onchange  = () => renderHistory();
 $('btnHistClear').onclick = async () => {
   if (!confirm('清空全部历史运行记录？此操作不可撤销。')) return;
   await History.clear();
@@ -804,7 +821,6 @@ $('chkReady').onchange = renderCommandEnabled;
 // 这是设计文档 4.4 的硬约束，任何时候都要能点。
 // 与监控页操作卡里的同名按钮是两个入口、同一个命令，不冲突。
 $('btnEstopBar').onclick = () => { motionClear(); link.command('estop'); };
-$('btnDisableBar').onclick = () => { motionClear(); link.command('disable'); };
 
 // 「运动中」徽章可点，点了跳回监控页（它是提醒，不做任何拦截）
 $('motionBadge').onclick = () => Router.go('monitor');
