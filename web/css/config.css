@@ -53,13 +53,27 @@
 .tp-jack { fill: #4A515B; stroke: rgba(255,255,255,.22); stroke-width: 1; }
 .tp-pin  { fill: #C29A4A; opacity: .75; }
 
-/* ---- 制动器：盘 + 钳 ---- */
+/* ---- 负载（磁粉制动器）：盘 + 钳 ---- */
 .tp-disc      { fill: #2C3138; stroke: rgba(255,255,255,.24); stroke-width: 1.4; }
 .tp-disc-inner{ fill: none;    stroke: rgba(255,255,255,.13); stroke-width: 1.2; }
 .tp-disc-hub  { fill: #565E68; }
 .tp-caliper      { fill: #3E444D; stroke: rgba(217,164,65,.45); stroke-width: 1.2; }
-.tp-caliper-body { fill: #33383F; stroke: rgba(255,255,255,.16); stroke-width: 1; }
 .tp-caliper-vent { fill: rgba(0,0,0,.45); }
+
+/* ---- 三路模拟输出模块 / 负载控制器：共用的机壳语汇 ---- */
+.tp-module { fill: #262A31; stroke: rgba(255,255,255,.20); stroke-width: 1.3; }
+.tp-module-label {
+  fill: rgba(255,255,255,.05);
+  stroke: rgba(255,255,255,.10);
+  stroke-width: 1;
+}
+.tp-module-led { fill: var(--ok); opacity: .9; }
+.tp-terminal   { fill: #C29A4A; opacity: .65; }
+.tp-terminal-n {
+  fill: #0D0D0F; font-family: var(--mono); font-size: 8.5px; font-weight: 700;
+}
+.tp-knob      { fill: #3A4048; stroke: rgba(255,255,255,.22); stroke-width: 1.2; }
+.tp-knob-mark { fill: rgba(255,255,255,.55); }
 
 /* ---- 关节：谐波减速器意象 ---- */
 .tp-j-ring  { fill: rgba(255,255,255,.035); stroke: rgba(255,255,255,.20); stroke-width: 2; }
