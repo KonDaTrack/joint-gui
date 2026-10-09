@@ -1,0 +1,233 @@
+/* 监控页：三维关节 + 径向仪表 + 速度条
+ *
+ * 色彩与波形图对齐（位置=青 / 速度=绿 / 力矩=琥珀），这样"仪表上的颜色"
+ * 和"曲线上的颜色"指的是同一条数据 —— 不用再记第二套对应关系。
+ * 青色仍然是唯一的强调色；红只给故障/急停。
+ */
+
+/* 左栏要放得下三维视图和两个表盘，比原来宽一点；操作栏相应收窄 */
+.layout { grid-template-columns: 424px 372px minmax(0, 1fr); }
+
+/* ============================================================
+   三维关节
+   ============================================================ */
+.joint-box {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  /* 比面板更深的内凹底：三维视图要"陷进面板里"，像一块显示屏 */
+  background: radial-gradient(70% 60% at 50% 38%, #14161A, #0A0B0D 78%);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: inset 0 3px 18px rgba(0, 0, 0, 0.92);
+}
+#joint3d { width: 100%; height: 100%; display: block; }
+
+.joint-hint {
+  position: absolute;
+  left: 11px; top: 9px;
+  pointer-events: none;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: var(--dimmer);
+}
+.joint-legend {
+  position: absolute;
+  right: 11px; bottom: 9px;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--dim);
+}
+.joint-legend i {
+  display: inline-block;
+  width: 8px; height: 8px;
+  border-radius: 2px;
+  margin-right: 6px;
+  vertical-align: -1px;
+}
+
+/* WebGL 拿不到时的兜底提示（joint3d.js 放进来） */
+.gfx-warn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 20px;
+  text-align: center;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--warn);
+}
+
+/* ============================================================
+   径向仪表
+   ============================================================ */
+.gauge-row {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+}
+.gauge { flex: 1 1 0; min-width: 0; }
+.g-dial { width: 100%; height: auto; display: block; overflow: visible; }
+
+/* 刻度 */
+.g-track {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.09);
+  stroke-width: 8;
+  stroke-linecap: round;
+}
+.g-tick       { stroke: rgba(255, 255, 255, 0.16); stroke-width: 1; }
+.g-tick-major { stroke: rgba(255, 255, 255, 0.34); stroke-width: 1.5; }
+.g-tick-label {
+  fill: #666C75;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.g-zero { stroke: rgba(255, 255, 255, 0.30); stroke-width: 1.5; }
+
+/* 填充弧：从 0 扫到当前值 —— "占了多少量程"一眼可见 */
+.g-fill {
+  fill: none;
+  stroke: var(--cyan);
+  stroke-width: 8;
+  stroke-linecap: round;
+}
+.g-dot {
+  fill: #C6F2FF;
+  stroke: rgba(120, 214, 238, 0.95);
+  stroke-width: 1.4;
+}
+.g-num {
+  fill: var(--cyan);
+  font-family: var(--mono);
+  font-size: 26px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+.g-unit { fill: var(--dimmer); font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.12em; }
+
+/* 力矩用琥珀（与波形图上力矩那条线同色）；速度用绿 */
+#gaugeTor .g-fill { stroke: var(--warn); }
+#gaugeTor .g-num  { fill: var(--warn); }
+#gaugeTor .g-dot  { fill: #FFE0A8; stroke: rgba(217, 164, 65, 0.95); }
+
+/* ============================================================
+   速度条（中心零点双向）
+   ============================================================ */
+.g-bar { flex: 0 0 auto; margin-top: 8px; }
+.g-bar-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--dim);
+  letter-spacing: 0.14em;
+  margin-bottom: 4px;
+}
+.g-bar-head .v {
+  font-family: var(--mono);
+  font-size: 14px;
+  letter-spacing: 0;
+  color: var(--ok);
+  font-variant-numeric: tabular-nums;
+}
+.g-bar-head .v .u { color: var(--dimmer); font-size: 11px; }
+.g-bar-track {
+  position: relative;
+  height: 13px;
+  border-radius: 7px;
+  background: var(--sunken);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  box-shadow: inset 0 2px 7px rgba(0, 0, 0, 0.95);
+  overflow: hidden;
+}
+.g-bar-fill {
+  position: absolute;
+  top: 1px; bottom: 1px;
+  left: 50%;                       /* 从中心向正方向长 */
+  width: 0;
+  border-radius: 6px;
+  background: var(--ok);
+  box-shadow: 0 0 8px rgba(78, 203, 142, 0.6);
+  transition: width .12s linear;
+}
+/* 负速度：从中心向负方向长 */
+.g-bar-fill.neg { left: auto; right: 50%; }
+.g-bar-zero {
+  position: absolute;
+  left: 50%; top: 0; bottom: 0;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.28);
+}
+.g-bar-lim {
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 2px;
+  display: none;                   /* 量程上限要到才知道在哪，先不画 */
+}
+
+/* ============================================================
+   剩余行程（操作卡内）
+   原来的读数只有"当前在哪"，没有"还剩多少"。离 ±170° 限位还有多远
+   是安全相关的信息 —— 填掉这张卡下方的空白，同时补上一个真的缺的东西。
+   ============================================================ */
+.travel { flex: 0 0 auto; }
+.travel-bar {
+  position: relative;
+  height: 13px;
+  border-radius: 7px;
+  background: var(--sunken);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  box-shadow: inset 0 2px 7px rgba(0, 0, 0, 0.95);
+  overflow: hidden;
+}
+/* 填充 = 从 0 到当前位置（与位置表盘的扫掠弧同一个意思） */
+.travel-fill {
+  position: absolute;
+  top: 1px; bottom: 1px;
+  left: 50%;
+  width: 0;
+  border-radius: 6px;
+  background: var(--cyan);
+  box-shadow: 0 0 8px rgba(120, 214, 238, 0.55);
+  transition: width .12s linear;
+}
+.travel-fill.neg { left: auto; right: 50%; }
+.travel-zero {
+  position: absolute;
+  left: 50%; top: 0; bottom: 0;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.28);
+}
+.travel-legend {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 5px;
+  font-size: 11px;
+  color: var(--dim);
+  letter-spacing: 0.06em;
+}
+.travel-legend b {
+  font-family: var(--mono);
+  font-weight: 500;
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 三张卡等高，而操作卡的内容本来就最多。收紧这里的行距，
+   保证底部不会被挤到可视区外（实测不收紧会超 27px，行程块被裁）。 */
+.card-operate .btn-row { margin: 8px 0; }
+.card-operate .section-title { margin-top: 9px; }
+.travel { margin-top: 10px; }
+.travel-legend { margin: 0 0 5px; }   /* 图例移到进度条上方 */

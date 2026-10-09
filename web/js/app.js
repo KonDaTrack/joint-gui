@@ -235,9 +235,12 @@ function renderSlaves() {
 function renderTelemetry() {
   const t = state.telemetry.get(state.active);
   if (!t) return;
-  $('valPos').textContent = t.positionDeg.toFixed(2);
-  $('valVel').textContent = t.velocityDps.toFixed(2);
-  $('valTor').textContent = t.torqueNm.toFixed(3);
+
+  // 位置/速度/力矩走径向仪表（读数框已换成表盘 —— 表盘还告诉你"占了多少量程"）
+  Gauges.update(t);
+  // 三维关节：只喂数据，渲染由它自己的 rAF 驱动。
+  // 它是 ES 模块、deferred 执行，所以这里必须判空 —— app.js 跑在它前面。
+  if (window.Joint3D) window.Joint3D.update(t);
 
   const st = DRIVE_STATES[t.driveState] ?? '未知';
   // 状态等级只算一次，监控页的圆点和安全条的徽章共用，避免两处判断走偏
@@ -251,7 +254,18 @@ function renderTelemetry() {
   $('valStatusWord').textContent = '0x' + t.statusWord.toString(16).padStart(4, '0');
   $('valError').textContent = t.errorCode ? '0x' + t.errorCode.toString(16).padStart(4, '0') : '无';
   $('valTemp').textContent = t.temperatureC > 0 ? t.temperatureC.toFixed(1) + ' ℃' : 'N/A';
-  $('valRate').textContent = state.rate.hz.toFixed(1) + ' Hz';
+  $('valRate').textContent =
+    (Number.isFinite(state.rate.hz) ? state.rate.hz.toFixed(1) : '--') + ' Hz';
+
+  // 剩余行程：离 ±170° 限位还有多远。行程来自机械限位，不随关节型号变。
+  const LIMIT = 170, p = Number.isFinite(t.positionDeg) ? t.positionDeg : 0;
+  const fillEl = $('travelFill');
+  if (fillEl) {
+    fillEl.style.width = Math.min(50, Math.abs(p) / LIMIT * 50) + '%';
+    fillEl.classList.toggle('neg', p < 0);
+    $('travelNeg').textContent = (LIMIT + Math.min(p, 0)).toFixed(1) + '°';
+    $('travelPos').textContent = (LIMIT - Math.max(p, 0)).toFixed(1) + '°';
+  }
 
   // 安全条上的驱动状态与刷新率。**必须在这里一起更新**——安全条跨页可见，
   // 在组态页/初始页时监控页是 hidden，只更新监控页里的元素等于没更新。
@@ -532,11 +546,13 @@ link.on('open', () => { renderSafetyBar(); renderSplash(); toast('已连接下�
       state.owner = m.owner || state.owner;
       (m.slaves || []).forEach((t) => state.telemetry.set(t.slave, t));
 
-      // 刷新率统计
+      // 刷新率统计。dt 为 0 时必须跳过 —— 除零会算出 Infinity Hz 显示出来
+      // （虚拟时间/时钟抖动下真的会，看着像"刷新率爆表"）。
       const r = state.rate;
       if (!r.t0) r.t0 = performance.now();
       if (++r.n >= 20) {
-        r.hz = (r.n * 1000) / (performance.now() - r.t0);
+        const dt = performance.now() - r.t0;
+        if (dt > 0) r.hz = (r.n * 1000) / dt;
         r.n = 0; r.t0 = performance.now();
       }
 
@@ -710,46 +726,10 @@ $('btnLoadRelease').onclick = () => {
 
 renderLoad(0);
 
-// ============ 读数字号自适应 ============
-// 「位置/速度/力矩」是操作员盯得最多的三块，**任何窗口尺寸下都不该出现滚动条**。
-// 固定字号做不到：实测 1440×900 溢出 46px、1366×768 差 44px。
-// 而 CSS 里算不出可用高度（要减掉型号条、遥测表、内外边距，还随边框盒变），
-// 所以这里**实测反推**：二分几次，逼出"刚好不溢出"的最大字号。
-// 只在尺寸变化时跑，不跟渲染帧走。
-// 下限 14px：1366×768 这类矮窗口要压到 ~15px 才装得下，
-// 卡在 16 会差 5px → 又冒出滚动条。14px 仍清晰可读，再往下就不划算了。
-const READOUT_MIN = 14, READOUT_MAX = 44;
-
-function fitReadouts() {
-  const box = document.querySelector('.readouts');
-  if (!box || !box.clientHeight || !box.querySelector('.readout')) return;
-
-  // 返回当前字号下的溢出量。读 scrollHeight 会同步触发布局，不用额外等待。
-  const overflowAt = (size) => {
-    box.style.setProperty('--readout-size', size.toFixed(1) + 'px');
-    return box.scrollHeight - box.clientHeight;
-  };
-
-  if (overflowAt(READOUT_MAX) <= 0) return;      // 大屏：直接用上限，省掉二分
-  let lo = READOUT_MIN, hi = READOUT_MAX;
-  for (let i = 0; i < 7 && hi - lo > 0.5; i++) {
-    const mid = (lo + hi) / 2;
-    if (overflowAt(mid) <= 0) lo = mid; else hi = mid;
-  }
-  overflowAt(lo);
-}
-
-fitReadouts();
-// 首次布局时字体可能还没加载完，行高会变——字体就绪后再量一次
-if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitReadouts);
-let fitPending = false;
-window.addEventListener('resize', () => {
-  if (fitPending) return;
-  fitPending = true;
-  requestAnimationFrame(() => { fitPending = false; fitReadouts(); });
-});
-// 卡片高度由网格决定，改字号不会反过来改变它 → 不会形成观察者死循环
-new ResizeObserver(fitReadouts).observe(document.querySelector('.card-slaves'));
+// ============ 径向仪表 ============
+// 位置/速度/力矩的数字框已换成表盘，原来那套"二分逼出最大字号"的自适应
+// （fitReadouts）随之删除 —— 表盘是 SVG 按容器比例缩放，不存在溢出问题。
+Gauges.mount();
 
 // ============ 页面路由 ============
 // hidden 状态下页面内所有元素尺寸为 0，箱内做尺寸自适应的东西会算错。
@@ -763,17 +743,14 @@ Router.onChange((name, prev) => {
   if (prev === 'monitor' && name !== 'monitor' && MOTION.active) {
     toast('关节运动执行中 —— 点顶部「运动中」可回到监控页');
   }
-  // 切到监控页要重测两样东西的尺寸：
-  //   · 读数区（二分字号）
-  //   · 波形画布 —— **必须显式重测**，不能只靠 ResizeObserver：
-  //     页面显示时它不一定触发（实测 2/3 概率不触发），波形会一直空白
+  // 切到监控页要重测画布尺寸。**必须显式重测**，不能只靠 ResizeObserver：
+  // 页面显示时它不一定触发（实测 2/3 概率不触发），波形会一直空白。
+  // 三维视图同理 —— 它也是自己的 canvas。
   if (name === 'monitor') {
     requestAnimationFrame(() => {
-      fitReadouts();
       if (chart && chart.resize) chart.resize();
+      if (window.Joint3D) window.Joint3D.resize();
     });
-    // 再补一次：fitReadouts 自身挂着 ResizeObserver，可能在上面那次之后
-    // 又改一次布局（读数区字号 → 网格行高 → 波形高度），把画布尺寸带偏几像素。
     setTimeout(() => { if (chart && chart.resize) chart.resize(); }, 700);
   }
 
