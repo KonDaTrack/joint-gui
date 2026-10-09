@@ -11,23 +11,71 @@
 <body>
 
 <!-- ============================================================
+     开场画面 —— 启动时出现一次，连上后过渡进场
+     ★ 它**不是**"未连接状态"的显示：中途断连绝不重新弹出，
+       否则会盖住急停与整个操作界面（那是安全事故，不是体验问题）。
+       只在页面加载时显示，之后由 app.js 摘掉，不再回来。
+     ============================================================ -->
+<div id="splash" class="splash">
+  <div class="splash-inner">
+
+    <!-- 谐波关节意象：固定环 + 波浪轮（柔轮）+ 椭圆（波发生器） -->
+    <div class="splash-ring" aria-hidden="true">
+      <svg viewBox="0 0 120 120">
+        <circle class="sr-outer" cx="60" cy="60" r="52"/>
+        <circle class="sr-ticks" cx="60" cy="60" r="45"/>
+        <!-- 柔轮（输出）与波发生器（输入）反向转，对应真实谐波减速器的两级 -->
+        <g class="sr-spin-flex"><circle class="sr-flex" cx="60" cy="60" r="37"/></g>
+        <g class="sr-spin-wave"><ellipse class="sr-wave" cx="60" cy="60" rx="31" ry="21"/></g>
+        <circle class="sr-hub" cx="60" cy="60" r="3.5"/>
+      </svg>
+    </div>
+
+    <h1 class="splash-title">关节模组上位机</h1>
+    <div class="splash-sub">HARMONIC JOINT CONTROL</div>
+
+    <ol class="splash-steps" id="splashSteps">
+      <li data-step="link"><i></i><span>连接下位机</span></li>
+      <li data-step="hello"><i></i><span>握手</span></li>
+      <li data-step="device"><i></i><span>扫描从站</span></li>
+    </ol>
+
+    <div class="splash-status">
+      <span class="dot" id="bootDot"></span><span id="bootStatus">正在连接…</span>
+    </div>
+
+    <!-- 连不上若干秒后才滑出，避免开场就被表单占满 -->
+    <div class="splash-form" id="splashForm" hidden>
+      <input type="text" id="inpHost" spellcheck="false" autocomplete="off"
+             placeholder="192.168.1.10" aria-label="下位机地址">
+      <button id="btnConnect" class="btn btn-primary">连接</button>
+    </div>
+    <div class="splash-hint" id="splashHint" hidden>
+      端口固定 9002，填一次就会记住
+    </div>
+
+  </div>
+</div>
+
+<!-- ============================================================
      常驻安全条 —— 三个页面共用的唯一 DOM 实例
      不随切页重渲（重渲会导致状态不同步）。
      急停与失能恒可用，不受控制权和当前页面限制。
      ============================================================ -->
 <header class="safety" id="safetyBar">
 
-  <!-- 左：页面导航 -->
+  <!-- 左：页面导航。**只有正式界面才在这里** —— 开场画面不是"一页"，
+       它是启动时的一次性覆盖层，连上就消失，不该出现在导航里。 -->
   <nav class="nav" id="nav" role="tablist" aria-label="页面切换">
-    <button data-page="boot"    role="tab">初始</button>
     <button data-page="config"  role="tab">组态</button>
     <button data-page="monitor" role="tab">监控</button>
   </nav>
 
   <div class="sep"></div>
 
-  <!-- 身份：当前控制的关节（原来在监控页的 .module-badge 里） -->
-  <div class="ident">
+  <!-- 身份：当前控制的关节。可点击 —— 这是开场画面消失后**唯一**能换下位机地址的入口，
+       没有它用户就被困住了（换网段/换板子时无路可走）。 -->
+  <div class="ident" id="safetyIdent" role="button" tabindex="0">
     <div class="n" id="moduleTitle">关节 --</div>
     <div class="m" id="moduleModel">--</div>
   </div>
@@ -61,53 +109,6 @@
 <!-- ============================================================ 页面容器 -->
 <div class="pages" id="pages">
 
-  <!-- ============ 初始页 ============ -->
-  <section class="page" id="page-boot" role="tabpanel" aria-label="初始">
-    <div class="boot">
-      <section class="card boot-card">
-        <div class="card-core">
-
-          <h1>关节模组上位机</h1>
-          <div class="sub">连接下位机（ARM 板）后进入组态或监控</div>
-
-          <div class="row">
-            <label for="inpHost">下位机地址</label>
-            <input type="text" id="inpHost" spellcheck="false" autocomplete="off"
-                   placeholder="192.168.1.10">
-          </div>
-          <div class="row">
-            <label></label>
-            <div class="note-line">
-              端口固定 9002。<b>填一次就会记住</b>，下次打开自动用这个地址。<br>
-              优先级：地址栏 <code>?host=</code> &gt; 上次使用 &gt; 当前主机 &gt; 默认值。
-            </div>
-          </div>
-
-          <div class="actions">
-            <button id="btnConnect" class="btn btn-primary">连接</button>
-          </div>
-
-          <div class="status">
-            <span class="dot" id="bootDot"></span>
-            <span id="bootStatus">未连接下位机</span>
-          </div>
-
-          <div class="scan">
-            <div class="hd">扫描到的从站</div>
-            <ul id="bootSlaves"></ul>
-            <div class="scan-warn" id="bootWarn" hidden></div>
-          </div>
-
-          <div class="actions">
-            <button id="btnGoConfig" class="btn">进入组态</button>
-            <button id="btnGoMonitor" class="btn btn-primary">进入监控</button>
-          </div>
-
-        </div>
-      </section>
-    </div>
-  </section>
-
   <!-- ============ 组态页：系统拓扑 + 参数 ============ -->
   <section class="page" id="page-config" role="tabpanel" aria-label="组态">
     <div class="cfg">
@@ -126,6 +127,9 @@
       <section class="card cfg-params">
         <div class="card-core">
           <h2 class="card-title">[ 关节参数 ]</h2>
+          <!-- 从站列表过期的告警。原来在初始页，但开场画面连上就消失，
+               告警放在那儿等于看不见 —— 挪到这里。 -->
+          <div class="scan-warn" id="bootWarn" hidden></div>
           <div class="p-list" id="paramList"></div>
           <div class="p-note" id="paramNote"></div>
         </div>

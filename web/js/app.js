@@ -51,7 +51,7 @@ const state = {
   // 用于识别"变化"以触发动画（动画只该由变化触发，而不是每次刷新）
   prevDriveState: null, prevHadError: false,
   gfx: Gfx.caps,   // 图形能力（gfx.js 在加载时已探测一次）
-  page: 'boot',    // 当前页面，由 Router 维护
+  page: 'config',  // 当前页面，由 Router 维护（开场画面不在路由里）
   // 负载链状态：组态页的拓扑图要用它判断 RS485 链路是否正常
   load: { state: '', presetNm: 0 },
   // 下位机自报的从站数量。-1 = 还没收到。与本页列表长度对不上 = 列表过期
@@ -188,7 +188,7 @@ function applySlaves(list, activeSlave) {
   renderSlaves();
   Topology.setSlaves(state.slaves);
   renderCommandEnabled();
-  renderBoot();
+  renderSplash();
   renderConfigLive();
 }
 
@@ -276,23 +276,46 @@ function renderTelemetry() {
   state.prevHadError = hadError;
 }
 
-// ============ 初始页 ============
-// 地址变更走"带 ?host= 重载"这条既有机制：ws.js 的 URL 在加载时就定死了，
-// 想换地址只能重载。好处是行为与直接用链接打开完全一致，不会有两套路径。
-function renderBoot() {
-  const inp = $('inpHost');
-  if (inp && document.activeElement !== inp) inp.value = wsHost;
+// ============ 开场画面（启动时一次，连上即进场） ============
+// ★ 它**不是**"未连接状态"的显示：中途断连绝不重新弹出，否则会盖住急停与
+//   整个操作界面 —— 那是安全事故，不是体验问题。只在加载时显示，之后永久移除。
+//
+// 三个时间常量是有意为之：连得快时不能让动画一闪而过；
+// 连不上时又绝不能把人永久挡在开场画面外。
+const SPLASH_MIN_MS  = 1400;   // 最短显示时长，保证开场动画看得完
+const SPLASH_FORM_MS = 4000;   // 连不上这么久，才滑出地址表单
+const SPLASH_MAX_MS  = 7000;   // 兜底：再连不上也放行，让人进组态页看状态
+
+// t0 必须在**脚本求值那一刻**就取好。设成 0 的话，首次 renderSplash() 算出的
+// "已过时间"是个巨大值，会立刻越过 SPLASH_FORM_MS 把地址表单弹出来（踩过）。
+const SPLASH = { t0: performance.now(), gone: false, formShown: false, manual: false, timer: null };
+
+function splashStep(name, cls) {
+  const li = document.querySelector(`#splashSteps li[data-step="${name}"]`);
+  if (li) li.className = cls;
+}
+
+function renderSplash() {
+  if (SPLASH.gone) return;
+
+  const linked  = link.connected;
+  const helloed = !!state.bus;
+  const dev     = !!state.deviceConnected;
+
+  // 三步进度：完成打勾 / 进行中呼吸 / 未开始暗着
+  splashStep('link',   linked ? 'done' : 'doing');
+  splashStep('hello',  helloed ? 'done' : (linked ? 'doing' : ''));
+  splashStep('device', dev ? 'done' : (helloed ? 'doing' : ''));
 
   const dot = $('bootDot');
-  // 带上地址**来源**：地址配错时，"它到底在连哪、这个值是哪来的"必须一眼看出。
+  // 带上地址**来源**：地址配错时，"它到底在连哪、这个值哪来的"必须一眼看出
   const target = `ws://${wsHost}:${WS_PORT}（${wsHostFrom}）`;
   let cls = 'dot', text = '';
-  if (!link.connected) {
-    // ★ 不能只说"未连接"——页面加载时就在自动连了，
-    //   只显示"未连接"会让人以为在等手动点「连接」。
+  if (!linked) {
+    // ★ 不能只说"未连接"——加载时就在自动连了，只说"未连接"会让人以为要手动点
     cls = 'dot warn bounce'; text = `正在连接 ${target} …`;
-  } else if (!state.deviceConnected) {
-    cls = 'dot warn'; text = `已连下位机，但设备未连接 · ${target}`;
+  } else if (!dev) {
+    cls = 'dot warn'; text = `已连下位机，设备未连接 · ${target}`;
   } else if (state.simulated) {
     cls = 'dot warn'; text = `⚠️ 仿真数据（非真机）· ${target}`;
   } else {
@@ -301,26 +324,71 @@ function renderBoot() {
   dot.className = cls;
   $('bootStatus').textContent = text;
 
-  const ul = $('bootSlaves');
-  if (!state.slaves.length) {
-    ul.innerHTML = '<div class="empty">尚未扫到从站</div>';
-  } else {
-    ul.innerHTML = state.slaves.map((s) =>
-      `<li>#${s.slave} ${s.shortName || s.model || '未知'}</li>`).join('');
-  }
+  const inp = $('inpHost');
+  if (inp && document.activeElement !== inp) inp.value = wsHost;
 
-  // 列表过期提示：下位机自报的数量与手上的列表对不上。
-  // 新版下位机会主动推 slaves 消息，这里主要是**对接老版本时的兜底**——
-  // 否则操作员只会看到"无关节"，完全不知道是列表没同步。
-  const warn = $('bootWarn');
-  if (warn) {
-    const stale = state.reportedCount >= 0 && state.reportedCount !== state.slaves.length;
-    warn.hidden = !stale;
-    if (stale) {
-      warn.textContent = `下位机报告 ${state.reportedCount} 个从站，本页只有 ${state.slaves.length} 个`
-                       + ` —— 点上方「连接」重新同步`;
-    }
+  // 连不上够久才滑出表单——开场就被表单占满很丑
+  if (!linked && !SPLASH.formShown && performance.now() - SPLASH.t0 > SPLASH_FORM_MS) {
+    SPLASH.formShown = true;
+    $('splashForm').hidden = false;
+    $('splashHint').hidden = false;
   }
+}
+
+function maybeLeaveSplash() {
+  if (SPLASH.gone || SPLASH.manual) return;   // 手动叫回来的连接界面不自动关
+  const elapsed = performance.now() - SPLASH.t0;
+  if (elapsed < SPLASH_MIN_MS) return;
+  // 连上就走；连不上则等兜底时长
+  if (!link.connected && elapsed < SPLASH_MAX_MS) return;
+  leaveSplash();
+}
+
+function leaveSplash() {
+  if (SPLASH.gone) return;
+  SPLASH.gone = true;
+  SPLASH.manual = false;
+  stopSplashTimer();
+
+  const el = $('splash');
+  el.classList.add('leaving');
+  let fin = false;
+  const done = () => {
+    if (fin) return;
+    fin = true;
+    el.classList.add('gone');                 // 过渡结束才真摘掉：直接 hidden 会跳过动画
+    document.body.classList.add('app-in');    // 主界面入场
+  };
+  el.addEventListener('transitionend', done, { once: true });
+  setTimeout(done, 900);                      // 兜底：过渡事件没来也要摘掉
+
+  Router.go('config');                        // 落到正式界面
+}
+
+/** 手动叫回连接界面（换 IP / 换板子时用）。不会自动关闭。 */
+function reopenSplash() {
+  SPLASH.gone = false;
+  SPLASH.manual = true;
+  SPLASH.formShown = true;
+  const el = $('splash');
+  el.classList.remove('gone', 'leaving');
+  document.body.classList.remove('app-in');
+  $('splashForm').hidden = false;
+  $('splashHint').hidden = false;
+  startSplashTimer();
+  renderSplash();
+}
+
+function startSplashTimer() {
+  if (SPLASH.timer) return;
+  SPLASH.timer = setInterval(() => {
+    if (SPLASH.gone) return stopSplashTimer();
+    renderSplash();
+    maybeLeaveSplash();
+  }, 120);
+}
+function stopSplashTimer() {
+  if (SPLASH.timer) { clearInterval(SPLASH.timer); SPLASH.timer = null; }
 }
 
 // ============ 组态页 ============
@@ -370,12 +438,31 @@ function renderConfigLive() {
                   : state.simulated ? '⚠️ 仿真链路（非真机）'
                   : '链路实时状态';
   }
+
+  // 从站列表过期告警：下位机自报的数量与手上的列表对不上。
+  // 新版下位机会主动推 slaves 消息，这条主要是**对接老版本时的兜底**——
+  // 否则操作员只会看到"无关节/少了一个"，完全不知道是列表没同步。
+  // 放在这里而不是开场画面：开场画面连上就消失，告警放那儿等于看不见。
+  const warn = $('bootWarn');
+  if (warn) {
+    const stale = state.reportedCount >= 0 && state.reportedCount !== state.slaves.length;
+    warn.hidden = !stale;
+    if (stale) {
+      warn.textContent =
+        `下位机报告 ${state.reportedCount} 个从站，本页只有 ${state.slaves.length} 个 —— `
+        + `点顶栏左侧的关节名重新连接，会重新握手取回完整列表。`;
+    }
+  }
 }
 
 // ============ 事件 ============
-link.on('open', () => { renderSafetyBar(); renderBoot(); toast('已连接下位机'); })
-    .on('close', () => { renderSafetyBar(); chart.stop(); motionClear(); renderBoot();
-                         toast('连接已断开，正在重连…'); })
+link.on('open', () => { renderSafetyBar(); renderSplash(); toast('已连接下位机'); })
+    .on('close', () => {
+      renderSafetyBar(); chart.stop(); motionClear(); renderSplash();
+      // 开场画面还没退场时不弹提示：那时很可能**从来没连上过**，
+      // 说"连接已断开"是错的；而且开场画面自己的状态行已经在说"正在连接…"了
+      if (SPLASH.gone) toast('连接已断开，正在重连…');
+    })
     .on('hello', (m) => {
       state.bus = m.bus || '';
       state.simulated = !!m.simulated;
@@ -461,7 +548,7 @@ link.on('open', () => { renderSafetyBar(); renderBoot(); toast('已连接下位�
       const n = Number(m.slaveCount);
       state.reportedCount = Number.isFinite(n) ? n : state.slaves.length;
       renderSafetyBar();
-      renderBoot();
+      renderSplash();
       renderConfigLive();
       toast(m.connected ? `下位机已连接设备（${state.bus}）` : '下位机未连接设备');
     });
@@ -640,18 +727,16 @@ Router.onChange((name, prev) => {
   // 拓扑动画只在组态页可见时跑：rAF 循环不该给隐藏页面白烧 CPU
   Topology.setActive(name === 'config');
   if (name === 'config') renderConfigLive();
-  renderBoot();
+  renderSplash();
 });
 
 // 拓扑图先挂载再 init —— init 会触发 onChange，可能立刻就要 refresh
 Topology.mount(document.getElementById('topo'));
 
-// 默认页：初始页已实现，按设计文档 §3.1 的第二阶段，落这里。
-Router.init('boot');
+// 导航里只剩正式界面。开场画面不是"一页"，连上后被摘掉，不参与路由。
+Router.init('config');
 
-// ============ 初始页的动作 ============
-$('btnGoConfig').onclick  = () => Router.go('config');
-$('btnGoMonitor').onclick = () => Router.go('monitor');
+// ============ 开场画面的动作 ============
 // 换地址只能重载：ws.js 的连接 URL 在加载时就定死了。
 // 走 ?host= 这条既有机制，行为与直接用链接打开完全一致，不会有两套路径。
 $('btnConnect').onclick = () => {
@@ -666,8 +751,13 @@ $('btnConnect').onclick = () => {
   url.searchParams.delete('host');
   location.href = url.toString();
 };
+// 换 IP / 换板子时的入口。没有它，开场画面消失后就再也回不去了。
+$('safetyIdent').onclick = () => reopenSplash();
+$('safetyIdent').title = '点击可更换下位机地址';
 
-renderSafetyBar(); renderCommandEnabled(); renderSlaves(); renderBoot();
+renderSafetyBar(); renderCommandEnabled(); renderSlaves();
+renderSplash();
+startSplashTimer();
 Anim.entrance();
 Anim.bindButtonFeedback();
 link.connect();
