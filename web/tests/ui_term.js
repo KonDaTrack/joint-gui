@@ -146,10 +146,46 @@ async function main() {
     const dir = await page.locator('.term-split').first().getAttribute('class');
     ok('切分方向是 row', /term-split row/.test(dir || ''), dir || '');
 
+    // ★ 第二次切分切的是**第 2 格**，不是根 —— 嵌套切分才是真会出问题的那种。
+    //   切根节点时 `.term-stage > .term-node` 那条 CSS 规则会把尺寸兜住，
+    //   而嵌套时新 split 元素必须由**父节点的比例**重新定位，漏掉就整棵子树变 0 尺寸。
+    await page.locator('.term-leaf').nth(1).click();
     await page.locator('.term-bar button[data-act="split-col"]').click();
-    await sleep(500);
+    await sleep(600);
     leaves = await page.locator('.term-leaf').count();
-    ok('再上下切分 → 窗格 +1（嵌套）', leaves === 3, `实为 ${leaves}`);
+    ok('在非根窗格上再切分 → 窗格 +1（嵌套）', leaves === 3, `实为 ${leaves}`);
+
+    // 光数个数是不够的 —— 曾经就是因为只断言数量，漏掉了"嵌套切分后新窗格是纯黑的"。
+    const boxes = await page.evaluate(() =>
+      [...document.querySelectorAll('.term-leaf')].map((el) => {
+        const r = el.getBoundingClientRect();
+        return [Math.round(r.width), Math.round(r.height)];
+      }));
+    const tiny = boxes.filter(([w, h]) => w < 120 || h < 80);
+    ok('每一格都是正常尺寸（没有 0 尺寸的纯黑格）', tiny.length === 0, JSON.stringify(boxes));
+
+    // ---- 1.5 每格一个**独立**的 shell --------------------------------
+    console.log('\n[1.5] 每格各有自己的 shell');
+    const nLeaf = await page.locator('.term-leaf').count();
+    for (let i = 0; i < nLeaf; i++) {
+      await page.locator('.term-leaf').nth(i).click();
+      await page.keyboard.type(`echo ZZ_${i}_ZZ\n`);
+    }
+    await sleep(1400);
+    const marks = await page.evaluate(() =>
+      [...document.querySelectorAll('.term-leaf')].map((el) => {
+        const rows = el.querySelector('.xterm-rows');
+        const t = rows ? rows.innerText : '';
+        return [...new Set(t.match(/ZZ_\d_ZZ/g) || [])];
+      }));
+    const badMarks = [];
+    for (let i = 0; i < nLeaf; i++) {
+      // 每格只应看到**自己**那个标记。看到别人的 = 共用了同一个 shell
+      if (marks[i].length !== 1 || marks[i][0] !== `ZZ_${i}_ZZ`) {
+        badMarks.push(`#${i}→${JSON.stringify(marks[i])}`);
+      }
+    }
+    ok('每格都是独立 shell（各自只回显自己的标记）', badMarks.length === 0, badMarks.join(' '));
 
     // ---- 2. 拖分隔条 ------------------------------------------------
     console.log('\n[2] 拖分隔条');

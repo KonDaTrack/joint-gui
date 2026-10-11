@@ -102,11 +102,13 @@ def supported():
     return True
 
 
-def spawn(argv, env, cols, rows):
-    # 可执行文件路径**在父进程里**解析好。fork 之后子进程只做 execve 一件事 ——
+def spawn(argv, env, cols, rows, cwd=None):
+    # 可执行文件路径**在父进程里**解析好。fork 之后子进程只做两个系统调用 ——
     # 多线程进程里 fork 出来的子进程越少碰 Python 越好（否则可能撞上别的线程
     # 正持有的锁）。连 PATH 查找都挪到父进程，就是这个道理。
     exe = shutil.which(argv[0]) or argv[0]
+    if cwd and not os.path.isdir(cwd):
+        cwd = None              # 目录不存在就当没给，别让子进程 chdir 失败
 
     with warnings.catch_warnings():
         # Python 3.12 起，多线程进程里调 fork 会报 DeprecationWarning。
@@ -118,6 +120,8 @@ def spawn(argv, env, cols, rows):
     if pid == 0:
         # ── 子进程 ──
         try:
+            if cwd:
+                os.chdir(cwd)
             os.execve(exe, [exe] + list(argv[1:]), env)
         except BaseException:
             os._exit(127)       # 用 _exit：不走 atexit、不冲刷父进程的缓冲

@@ -38,13 +38,26 @@ def supported():
     return hasattr(os, "forkpty")
 
 
-def spawn(argv, env, cols=DEFAULT_COLS, rows=DEFAULT_ROWS):
-    return _unix().spawn(argv, env, cols, rows)
+def spawn(argv, env, cols=DEFAULT_COLS, rows=DEFAULT_ROWS, cwd=None):
+    return _unix().spawn(argv, env, cols, rows, cwd)
 
 
 def default_shell():
     """默认开哪个 shell。"""
     return os.environ.get("SHELL") or "/bin/bash"
+
+
+def default_cwd():
+    """终端从哪个目录开始。
+
+    家目录（板子上就是 /home/cat 之类），**不是 serve.py 所在的 web/** ——
+    否则一开窗格就站在一堆代码里，还得先 cd 出来。取 $HOME 而不是写死路径，
+    这样板子、工控机、开发机上行为都对。
+    """
+    try:
+        return os.path.expanduser("~") or None
+    except Exception:
+        return None
 
 
 def child_env():

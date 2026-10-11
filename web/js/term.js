@@ -156,6 +156,10 @@ const Term = (() => {
     ws.onopen = () => {
       leaf.el.classList.remove('dead');
       fitLeaf(leaf);
+      // ★ fit 之后**显式**再发一次尺寸。因为如果 fit 算出来的行列和之前一样，
+      //   xterm 不会触发 onResize，于是服务端的 pty 就一直停在默认的 100x30，
+      //   而客户端按自己的列数渲染 —— 表现是换行位置全错、光标乱跑。
+      sendResize(leaf);
       try { leaf.term.focus(); } catch (e) {}
     };
     ws.onmessage = (ev) => {
@@ -244,6 +248,22 @@ const Term = (() => {
     }
   }
 
+  /** 把一个节点摆到它该在的位置。
+   *
+   *  根节点吃满舞台；其余由**父节点的比例**决定。
+   *
+   *  ★ 新建一个 split 之后必须调这个 —— 新元素身上没有旧元素的 inline 定位，
+   *    而 `.term-node` 是 `position:absolute` 且没有尺寸，会退化成按内容收缩，
+   *    整棵子树就是 0 尺寸、看着一块纯黑。切根节点时看不出来（`.term-stage > .term-node`
+   *    那条 CSS 规则恰好接住了），**只有嵌套切分才会炸**。 */
+  function place(node) {
+    if (!node.parent) {
+      box(node.el, { left: '0', top: '0', width: '100%', height: '100%' });
+    } else {
+      applyRatio(node.parent);
+    }
+  }
+
   function wireDivider(s) {
     s.div.addEventListener('pointerdown', (e) => {
       if (maxLeaf) return;
@@ -304,7 +324,8 @@ const Term = (() => {
     s.el = el;
     s.div = div;
     wireDivider(s);
-    applyRatio(s);
+    place(s);          // 先摆新 split 自己（否则嵌套时它是 0 尺寸）
+    applyRatio(s);     // 再摆它的两个孩子
 
     startShell(sib);
     setActive(sib);
@@ -328,12 +349,7 @@ const Term = (() => {
     sib.el.remove();
     par.el.replaceWith(sib.el);
 
-    if (gp) {
-      applyRatio(gp);
-    } else {
-      // 顶上来当了根：清掉 inline 定位，让 `.term-stage > .term-node` 那条规则接管
-      box(sib.el, { left: '', top: '', width: '', height: '' });
-    }
+    place(sib);     // 顶掉那个空壳：有祖父就由祖父重新定位，成了根就吃满舞台
 
     disposeLeaf(leaf);
     setActive(sib);

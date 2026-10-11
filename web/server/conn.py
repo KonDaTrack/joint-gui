@@ -34,7 +34,8 @@ def serve_terminal(sock, rfile):
 
     try:
         pty = pty_base.spawn([pty_base.default_shell()], pty_base.child_env(),
-                             pty_base.DEFAULT_COLS, pty_base.DEFAULT_ROWS)
+                             pty_base.DEFAULT_COLS, pty_base.DEFAULT_ROWS,
+                             cwd=pty_base.default_cwd())
     except OSError as e:
         ws.send_text(json.dumps({"t": "error", "message": f"启动终端失败：{e}"},
                                 ensure_ascii=False))

@@ -140,6 +140,17 @@ async function main() {
     ws.close();
     await sleep(300);
 
+    // ---- 3.5 起始目录 = 家目录 ---------------------------------------
+    // 不是 serve.py 所在的 web/ —— 一开窗格就站在代码目录里很别扭。
+    console.log('\n[3.5] 终端从家目录开始');
+    ws = await openTerm();
+    // 用 printf 拼标记：命令行回显里只有 'CWD=%s'，字面量只可能来自输出
+    sendLine(ws, `printf 'CWD=%s\\n' "$PWD"`);
+    await waitFor(ws, `CWD=${home}`, 10000);
+    ok('起始目录是 $HOME', true, home);
+    ws.close();
+    await sleep(300);
+
     // ---- 4. 路径限定 -------------------------------------------------
     console.log('\n[4] 非 /term 的升级请求被拒');
     const raw = await rawUpgrade('/nope');
