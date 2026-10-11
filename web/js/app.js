@@ -44,7 +44,7 @@ const chart = new Chart(document.getElementById('chart'));
 
 const $ = (id) => document.getElementById(id);
 const state = {
-  bus: '', simulated: false, owner: 'local',
+  bus: '', simulated: false,
   deviceConnected: false,   // 下位机是否已连上设备（区别于"已连上下位机"）
   slaves: [], active: 0, telemetry: new Map(), lastTelemetry: null,
   rate: { n: 0, t0: 0, hz: 0 },
@@ -118,7 +118,7 @@ function renderMotionBadge() {
 
 // ============ 渲染 ============
 // 安全条：常驻，所有页面共用同一个 DOM 实例。
-// 它替代了原来监控页顶栏右半部分（总线/控制权/请求按钮）——那段本就该是全局的。
+// 它替代了原来监控页顶栏右半部分（总线/请求控制权按钮那一块）——那段本就该是全局的。
 // 身份（关节型号）也从监控页的 .module-badge 挪到了这里，让读数区腾出高度。
 function renderSafetyBar() {
   // 四种状态必须区分开：只连上下位机 ≠ 下位机连上了设备。
@@ -138,21 +138,13 @@ function renderSafetyBar() {
     badge.textContent = `${state.bus || '总线'} 已连接`;
   }
 
-  const remote = state.owner === 'remote';
-  $('ownerBadge').className = 'badge ' + (remote ? 'badge-remote' : 'badge-local');
-  $('ownerBadge').textContent = remote ? '控制权：上位机（本页）' : '控制权：本机（下位机）';
-  $('btnTakeControl').hidden = remote;
-  $('btnReleaseControl').hidden = !remote;
-  $('btnTakeControl').disabled = !link.connected;
 }
 
-/** 无控制权或未确认安全时，命令类按钮置灰；急停/失能/停止始终可用 */
+/** 未连线或未确认安全时，命令类按钮置灰；急停/失能/停止始终可用 */
 function renderCommandEnabled() {
-  // 注意：owner 的含义在下位机侧与本页**相反**——
-  //   下位机侧 "remote" = 别的端持有 → 本地禁用
-  //   本页     "remote" = 本页自己持有 → 应当启用
-  // 照抄下位机的判断会把本页反锁（踩过）。
-  const mine = state.owner === 'remote';
+  // 控制权仲裁已删除：本页是**唯一**的控制端，不再有"控制权在下位机"这种状态。
+  // 剩下的门禁只有两条：没连上别让点，以及安全确认。
+  const mine = link.connected;
   const ready = $('chkReady').checked;
   $('btnEnable').disabled = !(mine && ready);
   $('btnFaultReset').disabled = !mine;
@@ -163,8 +155,6 @@ function renderCommandEnabled() {
   // 归零/回0 与负载同属"命令类"，无控制权时置灰
   ['btnHome', 'btnZero', 'loadSlider', 'loadValue', 'btnLoadSet', 'btnLoadRelease']
     .forEach((id) => { $(id).disabled = !mine; });
-  // 只保留"为什么点不动"里**安全条上看不到**的那一条。
-  // 「当前控制权在下位机…」已删：安全条上的控制权徽章就写在那儿，是重复。
   $('cmdHint').textContent = (mine && !ready) ? '请先勾选「已确认现场安全」' : '';
 }
 
@@ -737,7 +727,6 @@ link.on('open', () => { renderSafetyBar(); renderSplash(); toast('已连接下�
       state.bus = m.bus || '';
       state.simulated = !!m.simulated;
       state.deviceConnected = !!m.bus;   // 总线名为空 = 下位机还没连上任何设备
-      state.owner = m.owner || 'local';
       // 恢复负载状态：不复位的话重连后滑块归 0，而制动器可能正咬着上一个值，
       // 操作者会拿一个错的值去下发目标。
       if (m.load) {
@@ -758,7 +747,6 @@ link.on('open', () => { renderSafetyBar(); renderSplash(); toast('已连接下�
       }
     })
     .on('telemetry', (m) => {
-      state.owner = m.owner || state.owner;
       (m.slaves || []).forEach((t) => state.telemetry.set(t.slave, t));
 
       // 刷新率统计。dt 为 0 时必须跳过 —— 除零会算出 Infinity Hz 显示出来
@@ -796,14 +784,7 @@ link.on('open', () => { renderSafetyBar(); renderSplash(); toast('已连接下�
 
       renderSlaveWarn();
     })
-    .on('controlOwner', (m) => {
-      const changed = state.owner !== m.owner;
-      state.owner = m.owner;
-      renderSafetyBar(); renderCommandEnabled();
-      // 只在真正变化时脉冲（renderTopbar 会被多处调用，不能都触发动画）
-      if (changed) Anim.ownershipChanged();
-      toast(m.owner === 'remote' ? `控制权已接管：${m.reason}` : `控制权在本机：${m.reason}`);
-    })
+    // 没有 controlOwner 这条消息了：上位机是唯一的控制端，不再有归属变化。
     .on('fault', (m) => toast('下位机异常：' + m.message))
     .on('loadState', (m) => {
       // 下位机如实回报。**绝不乐观显示"已生效"**——写失败时制动器毫无反应，
@@ -838,8 +819,6 @@ link.on('open', () => { renderSafetyBar(); renderSplash(); toast('已连接下�
       toast(m.connected ? `下位机已连接设备（${state.bus}）` : '下位机未连接设备');
     });
 
-$('btnTakeControl').onclick = () => link.requestControl();
-$('btnReleaseControl').onclick = () => link.releaseControl();
 $('chkReady').onchange = renderCommandEnabled;
 
 
@@ -909,7 +888,7 @@ applyModeFields(false);
 
 // ============ 负载控制（磁粉制动器 / 张力控制器） ============
 // 走 RS485 → Modbus → 0-10V，与关节的 EtherCAT 是**两条独立链路**，
-// 所以它不受"控制从站"影响，只受控制权约束。
+// 所以它不受"控制从站"影响。
 // 标定：制动器的 50 N·m ↔ 10V（AO 模块满量程）。模块单位 mV，所以 mV = N·m × 200。
 // 电压换算只用于**显示**——下位机一律用 torqueNm 自己算 mV，不信客户端传的值。
 const LOAD_RATED_NM = 50;    // 额定：只显示，不硬性限制输入

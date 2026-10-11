@@ -65,17 +65,6 @@ const Anim = {
     gsap.from(shown, { opacity: 0, x: -10, duration: 0.5, ease: 'expo.out', stagger: 0.04 });
   },
 
-  /** 控制权变化：顶栏徽章脉冲 */
-  ownershipChanged() {
-    if (!this.ok) return;
-    gsap.fromTo('#ownerBadge',
-      { scale: 1 },
-      { scale: 1.1, duration: 0.26, yoyo: true, repeat: 1, ease: 'back.out(2.2)' });
-    gsap.fromTo('#ownerBadge',
-      { boxShadow: '0 0 0 0 rgba(217,164,65,0.7)' },
-      { boxShadow: '0 0 0 8px rgba(217,164,65,0)', duration: 0.5, ease: 'power2.out' });
-  },
-
   /** 开始记录波形：曲线卡片亮一下边框 */
   chartStarted() {
     if (!this.ok) return;

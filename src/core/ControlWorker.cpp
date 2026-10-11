@@ -260,18 +260,17 @@ void ControlWorker::onCycle()
         faultWarned_ = false;
     }
 
-    // 规则 3：远程心跳超时 → 自动收回控制权。
-    // 不这样做的话，远程持有时网络一断，PC 发不出停止命令、本地界面又是灰的，
-    // 两端都停不了电机，只剩硬件急停。
-    if (owner_ == ControlOwner::Remote) {
-        const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
-        if (lastHeartbeatMs_ > 0 && nowMs - lastHeartbeatMs_ > kRemoteHeartbeatTimeoutMs) {
-            // 带上累计心跳数：0 表示心跳根本没到达 worker（接收链路问题），
-            // >0 表示到达过但中断了（发送侧或节流问题）
-            revokeRemote(QStringLiteral("远程心跳超时（累计收到 %1 次），已自动收回控制权")
-                         .arg(heartbeatCount_));
-            emit faultDetected(QStringLiteral("远程心跳超时，控制权已收回本地"));
-        }
+    // 看门狗：上位机心跳超时 → 失能 + 撤载。
+    // 不这样做的话，网络一断（或网页卡死）没人发得出停止命令，
+    // 而本地已经默认没有界面了 —— 只剩硬件急停。
+    // 判 clientOnline_ 而不是"是否持有控制权"：现在没有归属概念，连着就得发心跳。
+    const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
+    if (clientOnline_ && lastHeartbeatMs_ > 0
+        && nowMs - lastHeartbeatMs_ > kRemoteHeartbeatTimeoutMs) {
+        // 带上累计心跳数：0 表示心跳根本没到达 worker（接收链路问题），
+        // >0 表示到达过但中断了（发送侧或节流问题）
+        dropClient(QStringLiteral("上位机心跳超时（累计收到 %1 次）").arg(heartbeatCount_));
+        emit faultDetected(QStringLiteral("上位机心跳超时，已失能所有轴"));
     }
 
     if (activeOk) {
@@ -292,68 +291,46 @@ void ControlWorker::onCycle()
     }
 }
 
-// ============================ 控制权 ============================
-// 规则（见 docs/host-embedded-architecture.md）：
-//   1. 仲裁权在本地（下位机）；远程只能"请求"，不能夺取
-//   2. 任何控制权切换 → 立即失能所有轴（否则接手方继承一个目标未知的运动轴）
-//   3. 远程心跳超时 → 自动收回（否则断网时两端都停不了电机）
-//   4. 急停不受控制权限制
-
-bool ControlWorker::mayCommand(bool fromRemote) const
-{
-    return fromRemote ? (owner_ == ControlOwner::Remote)
-                      : (owner_ == ControlOwner::Local);
-}
+// ============================ 上位机连接 ============================
+// 现在只有**一个控制端**（上位机的浏览器），所以没有控制权要仲裁了。
+// 保留下来的是"人不在/网断了要自己停"这一条，也就是下面的看门狗。
+//
+// 原来那套（本地/远程归属、请求-授予、切换即失能）随本地界面一起去掉了：
+// 界面上再没有第二个操作者，仲裁也就没有对象。
 
 void ControlWorker::disableAllAxes()
 {
-    // 放在 device_ 判空**之前**：设备已经释放时（比如断连后）控制权切换同样必须撤载。
-    // 这一处覆盖 grantRemote / revokeRemote，而后者又被心跳超时、
-    // setRemoteAllowed(false)、远程主动交还三条路调用——是覆盖面最大的一处。
-    clearLoad(QStringLiteral("控制权切换"));
+    // 放在 device_ 判空**之前**：设备已经释放时（比如断连后）同样必须撤载。
+    clearLoad(QStringLiteral("上位机离线"));
     if (!device_) return;
     for (quint16 s : device_->slaveList()) device_->disable(s);
 }
 
-void ControlWorker::grantRemote(const QString& reason)
+void ControlWorker::setClientOnline(bool online)
 {
-    OpTimer _t("grantRemote");
-    if (owner_ == ControlOwner::Remote) return;
-    owner_ = ControlOwner::Remote;
-    lastHeartbeatMs_ = QDateTime::currentMSecsSinceEpoch();
-    disableAllAxes();   // 规则 2：切换即失能
-    emit controlOwnerChanged(QStringLiteral("remote"), reason);
-}
+    if (online == clientOnline_) return;
 
-void ControlWorker::revokeRemote(const QString& reason)
-{
-    OpTimer _t("revokeRemote");
-    if (owner_ != ControlOwner::Remote) return;
-    owner_ = ControlOwner::Local;
-    disableAllAxes();   // 规则 2：切换即失能
-    emit controlOwnerChanged(QStringLiteral("local"), reason);
-}
-
-void ControlWorker::setRemoteAllowed(bool allowed)
-{
-    remoteAllowed_ = allowed;
-    // 关掉开关时若远程正持有，立即收回（本地优先）
-    if (!allowed) revokeRemote(QStringLiteral("本地已关闭远程控制"));
-}
-
-void ControlWorker::requestRemoteControl()
-{
-    if (!remoteAllowed_) {
-        emit remoteCommandRejected(QStringLiteral("requestControl"),
-                                   QStringLiteral("本地未允许远程控制"));
+    if (online) {
+        clientOnline_ = true;
+        // 接入就把心跳计时归零：不归零的话，新客户端一进来就会拿上一次
+        // 遗留的时间戳去比，可能当场判成"超时"而立刻失能。
+        lastHeartbeatMs_ = QDateTime::currentMSecsSinceEpoch();
+        heartbeatCount_ = 0;
+        emit detectionMessage(QStringLiteral("上位机已接入"));
         return;
     }
-    grantRemote(QStringLiteral("远程客户端已接管"));
+
+    dropClient(QStringLiteral("上位机连接已断开"));
 }
 
-void ControlWorker::releaseRemoteControl()
+void ControlWorker::dropClient(const QString& reason)
 {
-    revokeRemote(QStringLiteral("远程客户端已交还控制"));
+    if (!clientOnline_) return;
+    OpTimer _t("dropClient");
+    clientOnline_ = false;
+    lastHeartbeatMs_ = 0;
+    disableAllAxes();
+    emit detectionMessage(QStringLiteral("%1，已失能所有轴").arg(reason));
 }
 
 void ControlWorker::remoteHeartbeat()
@@ -367,10 +344,6 @@ void ControlWorker::remoteCommand(const QString& name, const QJsonObject& args)
     // 「预设负载」是纯记忆：不碰设备、不调 modbus_ao，所以放在 device_ 判空之前——
     // 设备没连上时也该记住，否则重连后预设就丢了。
     if (name == QLatin1String("setLoad")) {
-        if (!mayCommand(true)) {
-            emit remoteCommandRejected(name, QStringLiteral("当前无控制权"));
-            return;
-        }
         doSetLoadPreset(args.value(QStringLiteral("torqueNm")).toDouble());
         return;
     }
@@ -385,14 +358,10 @@ void ControlWorker::remoteCommand(const QString& name, const QJsonObject& args)
         return;
     }
 
-    if (!mayCommand(true)) {
-        emit remoteCommandRejected(name, QStringLiteral("当前无控制权"));
-        return;
-    }
-
     // 一律调用 do*（**不带权限检查**的实现）。绝不能转交本地的槽——
-    // 那些槽里还有一次 mayCommand(false)，远程调用时必然为 false，
-    // 命令会被静默丢弃（踩过：使能能用但下发目标毫无反应）。
+    // 本地那些槽以前还有个权限检查，远程转过去会被静默丢弃
+    // （踩过：使能能用但下发目标毫无反应）。现在权限检查整体去掉了，
+    // 但"远程走 do*、不走本地槽"这条约定保留 —— 本地槽还兼着别的事。
     if (name == QLatin1String("enable")) {
         doEnable();
     } else if (name == QLatin1String("disable")) {
@@ -664,11 +633,12 @@ void ControlWorker::clearLoad(const QString& reason)
     load_->requestWrite(0.0);
 }
 
-// ============================ 本地命令槽（带权限检查） ============================
+// ============================ 本地命令槽 ============================
+// 只有 `--ui`（本地窗口）会用到。默认的无窗口模式下没有本地界面，
+// 命令全部从上位机经 ControlServer 进来，走 remoteCommand → do*。
 
 void ControlWorker::enableRequested()
 {
-    if (!mayCommand(false)) return;
     doEnable();
 }
 void ControlWorker::disableRequested()
@@ -681,17 +651,14 @@ void ControlWorker::quickStopRequested()
 }
 void ControlWorker::faultResetRequested()
 {
-    if (!mayCommand(false)) return;
     doFaultReset();
 }
 void ControlWorker::setOperateModeRequested(Joint::OperateMode mode)
 {
-    if (!mayCommand(false)) return;
     doSetMode(mode);
 }
 void ControlWorker::setTargetRequested(const Joint::TargetCommand& cmd)
 {
-    if (!mayCommand(false)) return;
     // 用**共享的预设值**（网页与本地 Qt 面板设的是同一个）。
     // 本地界面在监控面板上把这个值显示出来了，操作者按下发目标前能看见，
     // 所以不存在"被网页上设的负载突然咬住"的意外。预设为 0 时整条链跳过。
@@ -699,26 +666,21 @@ void ControlWorker::setTargetRequested(const Joint::TargetCommand& cmd)
 }
 void ControlWorker::stopMotionRequested()
 {
-    if (!mayCommand(false)) return;
     doStopMotion();
 }
 void ControlWorker::setLoadPresetRequested(double torqueNm)
 {
-    if (!mayCommand(false)) return;
     doSetLoadPreset(torqueNm);
 }
 void ControlWorker::releaseLoadRequested()
 {
-    if (!mayCommand(false)) return;
     clearLoad(QStringLiteral("手动松开负载"));
 }
 void ControlWorker::homingRequested()
 {
-    if (!mayCommand(false)) return;
     doHoming();
 }
 void ControlWorker::moveToZeroRequested()
 {
-    if (!mayCommand(false)) return;
     doMoveToZero();
 }

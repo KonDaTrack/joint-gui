@@ -14,8 +14,9 @@
 // 上位机接入端口。P1 固定，后续可做成配置项。
 static const quint16 kRemotePort = 9002;
 
-MainWindow::MainWindow(QWidget* parent)
+MainWindow::MainWindow(bool buildUi, QWidget* parent)
     : QMainWindow(parent)
+    , buildUi_(buildUi)
 {
     setWindowTitle(QStringLiteral("关节模组监控台"));
     resize(1680, 940);   // 适配 1080p 屏摄，保持可缩放
@@ -32,6 +33,94 @@ MainWindow::MainWindow(QWidget* parent)
     QMetaObject::invokeMethod(server_, "startServer", Qt::QueuedConnection,
                               Q_ARG(quint16, kRemotePort));
 
+    // 无窗口模式（默认）下**不建任何面板** —— 现在界面在上位机的浏览器里，
+    // 本地要的只是"把设备跑起来 + 把 9002 服务挂上"。窗口只有 --ui 才建。
+    if (buildUi_) buildInterface();
+
+    connect(worker_, &ControlWorker::connectionChanged, this, &MainWindow::onConnectionChanged);
+    connect(worker_, &ControlWorker::faultDetected, this, &MainWindow::onFaultDetected);
+    connect(worker_, &ControlWorker::detectionMessage, this,
+            [this](const QString& m) { statusBar()->showMessage(m); });
+
+    // ---- 上位机接入 / 控制权 ----
+    // 设备 → 服务（下行）
+    connect(worker_, &ControlWorker::telemetryUpdatedAll, server_, &ControlServer::onTelemetry);
+    connect(worker_, &ControlWorker::connectionChanged, server_, &ControlServer::onConnectionChanged);
+    connect(worker_, &ControlWorker::slavesDetected, server_, &ControlServer::onSlavesDetected);
+    connect(worker_, &ControlWorker::slaveModelsDetected, server_, &ControlServer::onSlaveModels);
+    connect(worker_, &ControlWorker::faultDetected, server_, &ControlServer::onFault);
+    connect(worker_, &ControlWorker::loadStateChanged, server_, &ControlServer::onLoadState);
+    connect(worker_, &ControlWorker::loadStateChanged, this,
+            [this](const QString& state, double, double, double, const QString& note) {
+                // 只让"失败/清零"打断状态栏；applied/writing 由面板常驻显示，
+                // 每次都弹会把状态栏刷成噪音
+                if (state == QLatin1String("failed") || state == QLatin1String("cleared"))
+                    statusBar()->showMessage(QStringLiteral("负载：%1").arg(note), 6000);
+            });
+
+    // ---- 服务 → 设备（上行）----
+    // 心跳保留：它是"上位机还活着"的唯一凭据，看门狗靠它。
+    // 控制权的申请/交还（requestControl / releaseControl）没有了 ——
+    // 上位机是唯一控制端，没有第二个操作者要仲裁。
+    connect(server_, &ControlServer::heartbeatReceived, worker_, &ControlWorker::remoteHeartbeat);
+    connect(server_, &ControlServer::remoteCommandReceived, worker_, &ControlWorker::remoteCommand);
+    // 上位机接入/断开 → 武装或解除看门狗。断开时立刻失能所有轴：
+    // 本地已经没有界面，这是唯一能自己停的机制。
+    connect(server_, &ControlServer::clientOnlineChanged, worker_, &ControlWorker::setClientOnline);
+
+    connect(worker_, &ControlWorker::remoteCommandRejected, this,
+            [this](const QString& name, const QString& reason) {
+                statusBar()->showMessage(QStringLiteral("上位机命令 %1 被拒：%2").arg(name, reason), 5000);
+            });
+    connect(server_, &ControlServer::serverLog, this,
+            [this](const QString& m) { statusBar()->showMessage(m, 5000); });
+
+    connect(worker_, &ControlWorker::homingFinished, this, [this](bool ok) {
+        statusBar()->showMessage(ok ? QStringLiteral("归零完成") : QStringLiteral("归零失败"),
+                                 5000);
+    });
+    connect(worker_, &ControlWorker::limitExceeded, this, [this](const QString& msg) {
+        statusBar()->showMessage(msg, 8000);
+    });
+
+    statusBar()->showMessage(QStringLiteral("未连接"));
+
+    // 无窗口（默认）：直接自动连，不弹任何框 —— 板子可能就在机柜里，没人去点。
+    // 有窗口（--ui）：仍弹连接框，方便现场挑仿真 / 换网卡 / 临时改参数。
+    QTimer::singleShot(0, this, buildUi_ ? &MainWindow::promptConnection
+                                         : &MainWindow::autoConnect);
+}
+
+MainWindow::~MainWindow()
+{
+    if (server_) {
+        // 先关网络：在服务线程内关监听与连接，再退出线程
+        QMetaObject::invokeMethod(server_, "stopServer", Qt::BlockingQueuedConnection);
+        serverThread_.quit();
+        if (!serverThread_.wait(1000)) {
+            qWarning("Server thread did not stop within 1s; terminating");
+            serverThread_.terminate();
+            serverThread_.wait();
+        }
+        delete server_;
+    }
+    if (worker_) {
+        // 在 Worker 线程内安全关闭设备，再退出线程
+        QMetaObject::invokeMethod(worker_, "disconnectDevice", Qt::BlockingQueuedConnection);
+        thread_.quit();
+        if (!thread_.wait(2000)) {
+            // 真实设备 close() 可能阻塞（Task 15/16 接入后），超时则强制终止以免删除活动线程
+            qWarning("Worker thread did not stop within 2s; terminating");
+            thread_.terminate();
+            thread_.wait();
+        }
+        delete worker_;
+    }
+}
+
+// 本地窗口的全部构造。只有 --ui 才走到这里。
+void MainWindow::buildInterface()
+{
     monitor_ = new MonitorPanel(this);
     control_ = new ControlPanel(this);
     curve_ = new CurvePanel(this);
@@ -62,10 +151,6 @@ MainWindow::MainWindow(QWidget* parent)
 
     connect(worker_, &ControlWorker::telemetryUpdatedAll, monitor_, &MonitorPanel::onTelemetry);
     connect(worker_, &ControlWorker::telemetryUpdatedAll, curve_, &CurvePanel::onTelemetry);
-    connect(worker_, &ControlWorker::connectionChanged, this, &MainWindow::onConnectionChanged);
-    connect(worker_, &ControlWorker::faultDetected, this, &MainWindow::onFaultDetected);
-    connect(worker_, &ControlWorker::detectionMessage, this,
-            [this](const QString& m) { statusBar()->showMessage(m); });
     connect(worker_, &ControlWorker::slavesDetected, this,
             [this](const QList<quint16>& slaves, quint16 active) {
                 monitor_->setSlaves(slaves);
@@ -95,14 +180,18 @@ MainWindow::MainWindow(QWidget* parent)
         statusBar()->showMessage(QStringLiteral("控制目标已切换到 %1").arg(label), 5000);
     });
 
-    // ---- 上位机接入 / 控制权 ----
-    // 设备 → 服务（下行）
-    connect(worker_, &ControlWorker::telemetryUpdatedAll, server_, &ControlServer::onTelemetry);
-    connect(worker_, &ControlWorker::connectionChanged, server_, &ControlServer::onConnectionChanged);
-    connect(worker_, &ControlWorker::slavesDetected, server_, &ControlServer::onSlavesDetected);
-    connect(worker_, &ControlWorker::slaveModelsDetected, server_, &ControlServer::onSlaveModels);
-    connect(worker_, &ControlWorker::faultDetected, server_, &ControlServer::onFault);
-    connect(worker_, &ControlWorker::loadStateChanged, server_, &ControlServer::onLoadState);
+    connect(control_, &ControlPanel::enableRequested, worker_, &ControlWorker::enableRequested);
+    connect(control_, &ControlPanel::disableRequested, worker_, &ControlWorker::disableRequested);
+    connect(control_, &ControlPanel::quickStopRequested, worker_, &ControlWorker::quickStopRequested);
+    connect(control_, &ControlPanel::faultResetRequested, worker_, &ControlWorker::faultResetRequested);
+    connect(control_, &ControlPanel::operateModeChanged, worker_, &ControlWorker::setOperateModeRequested);
+    connect(control_, &ControlPanel::targetRequested, worker_, &ControlWorker::setTargetRequested);
+    connect(control_, &ControlPanel::stopMotionRequested, worker_, &ControlWorker::stopMotionRequested);
+    connect(control_, &ControlPanel::homingRequested, worker_, &ControlWorker::homingRequested);
+    connect(control_, &ControlPanel::moveToZeroRequested, worker_, &ControlWorker::moveToZeroRequested);
+    connect(worker_, &ControlWorker::targetCommanded, curve_, &CurvePanel::beginCapture);
+    connect(worker_, &ControlWorker::motionStopped, curve_, &CurvePanel::stopCapture);
+
     // 负载控件在监控面板（刷新率下面），状态回这里。**不能只接 server_**：
     // ControlServer::send() 在没有客户端时静默丢弃，只接它的话本地什么也看不到，
     // 而本地操作者必须知道制动器正咬着。
@@ -111,88 +200,6 @@ MainWindow::MainWindow(QWidget* parent)
             worker_, &ControlWorker::setLoadPresetRequested);
     connect(monitor_, &MonitorPanel::releaseLoadRequested,
             worker_, &ControlWorker::releaseLoadRequested);
-    connect(worker_, &ControlWorker::loadStateChanged, this,
-            [this](const QString& state, double, double, double, const QString& note) {
-                // 只让"失败/清零"打断状态栏；applied/writing 由面板常驻显示，
-                // 每次都弹会把状态栏刷成噪音
-                if (state == QLatin1String("failed") || state == QLatin1String("cleared"))
-                    statusBar()->showMessage(QStringLiteral("负载：%1").arg(note), 6000);
-            });
-    // 服务 → 设备（上行）：控制权与命令
-    connect(server_, &ControlServer::requestControlReceived, worker_, &ControlWorker::requestRemoteControl);
-    connect(server_, &ControlServer::releaseControlReceived, worker_, &ControlWorker::releaseRemoteControl);
-    connect(server_, &ControlServer::heartbeatReceived, worker_, &ControlWorker::remoteHeartbeat);
-    connect(server_, &ControlServer::remoteCommandReceived, worker_, &ControlWorker::remoteCommand);
-    // 控制权状态：本地开关 → 设备；设备结果 → 界面 + 服务
-    connect(control_, &ControlPanel::remoteAllowedChanged, worker_, &ControlWorker::setRemoteAllowed);
-    connect(worker_, &ControlWorker::controlOwnerChanged, this,
-            [this](const QString& owner, const QString& reason) {
-                control_->setControlOwner(owner);
-                statusBar()->showMessage(
-                    owner == QLatin1String("remote")
-                        ? QStringLiteral("控制权已交给上位机：%1").arg(reason)
-                        : QStringLiteral("控制权在本机：%1").arg(reason), 6000);
-            });
-    connect(worker_, &ControlWorker::controlOwnerChanged, server_, &ControlServer::onControlOwnerChanged);
-    connect(worker_, &ControlWorker::remoteCommandRejected, this,
-            [this](const QString& name, const QString& reason) {
-                statusBar()->showMessage(QStringLiteral("上位机命令 %1 被拒：%2").arg(name, reason), 5000);
-            });
-    connect(server_, &ControlServer::serverLog, this,
-            [this](const QString& m) { statusBar()->showMessage(m, 5000); });
-
-    connect(control_, &ControlPanel::enableRequested, worker_, &ControlWorker::enableRequested);
-    connect(control_, &ControlPanel::disableRequested, worker_, &ControlWorker::disableRequested);
-    connect(control_, &ControlPanel::quickStopRequested, worker_, &ControlWorker::quickStopRequested);
-    connect(control_, &ControlPanel::faultResetRequested, worker_, &ControlWorker::faultResetRequested);
-    connect(control_, &ControlPanel::operateModeChanged, worker_, &ControlWorker::setOperateModeRequested);
-    connect(control_, &ControlPanel::targetRequested, worker_, &ControlWorker::setTargetRequested);
-    connect(control_, &ControlPanel::stopMotionRequested, worker_, &ControlWorker::stopMotionRequested);
-    // 波形只在「下发目标」后记录，避免平时一直被噪声刷新。
-    // 触发源放在 worker（而非 ControlPanel）：本地和远程两条命令路径都能覆盖到，
-    // 否则从网页下发目标时 Qt 端曲线不会开始记录。
-    connect(worker_, &ControlWorker::targetCommanded, curve_, &CurvePanel::beginCapture);
-    connect(worker_, &ControlWorker::motionStopped, curve_, &CurvePanel::stopCapture);
-    connect(control_, &ControlPanel::homingRequested, worker_, &ControlWorker::homingRequested);
-    connect(control_, &ControlPanel::moveToZeroRequested, worker_, &ControlWorker::moveToZeroRequested);
-    connect(worker_, &ControlWorker::homingFinished, this, [this](bool ok) {
-        statusBar()->showMessage(ok ? QStringLiteral("归零完成") : QStringLiteral("归零失败"),
-                                 5000);
-    });
-    connect(worker_, &ControlWorker::limitExceeded, this, [this](const QString& msg) {
-        statusBar()->showMessage(msg, 8000);
-    });
-
-    statusBar()->showMessage(QStringLiteral("未连接"));
-
-    QTimer::singleShot(0, this, &MainWindow::promptConnection);
-}
-
-MainWindow::~MainWindow()
-{
-    if (server_) {
-        // 先关网络：在服务线程内关监听与连接，再退出线程
-        QMetaObject::invokeMethod(server_, "stopServer", Qt::BlockingQueuedConnection);
-        serverThread_.quit();
-        if (!serverThread_.wait(1000)) {
-            qWarning("Server thread did not stop within 1s; terminating");
-            serverThread_.terminate();
-            serverThread_.wait();
-        }
-        delete server_;
-    }
-    if (worker_) {
-        // 在 Worker 线程内安全关闭设备，再退出线程
-        QMetaObject::invokeMethod(worker_, "disconnectDevice", Qt::BlockingQueuedConnection);
-        thread_.quit();
-        if (!thread_.wait(2000)) {
-            // 真实设备 close() 可能阻塞（Task 15/16 接入后），超时则强制终止以免删除活动线程
-            qWarning("Worker thread did not stop within 2s; terminating");
-            thread_.terminate();
-            thread_.wait();
-        }
-        delete worker_;
-    }
 }
 
 void MainWindow::promptConnection()
@@ -205,15 +212,31 @@ void MainWindow::promptConnection()
     }
 }
 
+// 无窗口模式下的启动路径：不弹任何框，直接用默认配置自动检测并连上。
+// 以前必须先点一次连接框的「确定」，上位机才扫得到从站 —— 板子摆在机柜里，
+// 每次都去点一下不现实。
+void MainWindow::autoConnect()
+{
+    // AppConfig 的默认值即"自动检测 + 本关节的常规参数"；型号与额定力矩
+    // 连接后由驱动器 0x6076 逐从站识别，配置里的值只是识别失败时的兜底。
+    const AppConfig cfg;
+    QMetaObject::invokeMethod(worker_, "connectDevice",
+                              Qt::QueuedConnection, Q_ARG(AppConfig, cfg));
+}
+
 void MainWindow::onConnectionChanged(bool connected, QString busName,
                                      int slaveCount, QString error)
 {
     if (connected) {
         statusBar()->showMessage(QStringLiteral("%1 已连接，从站数 %2")
                                  .arg(busName).arg(slaveCount));
-        // CANopen 仅支持力矩位置混合，限制模式下拉避免下发零刚度 MIT 帧
-        control_->setBusType(busName == Joint::busTypeName(Joint::BusType::CanOpen)
-                             ? Joint::BusType::CanOpen : Joint::BusType::EtherCat);
+        // CANopen 仅支持力矩位置混合，限制模式下拉避免下发零刚度 MIT 帧。
+        // ★ 必须判 buildUi_：无窗口时 control_ 是 nullptr，而这条路径**一定会走到**
+        //   （连接成功就触发）—— 漏了这个判断就是开机即崩。实测踩过。
+        if (buildUi_) {
+            control_->setBusType(busName == Joint::busTypeName(Joint::BusType::CanOpen)
+                                 ? Joint::BusType::CanOpen : Joint::BusType::EtherCat);
+        }
     } else if (!error.isEmpty()) {
         statusBar()->showMessage(QStringLiteral("连接失败：%1").arg(error));
     } else {
@@ -223,5 +246,12 @@ void MainWindow::onConnectionChanged(bool connected, QString busName,
 
 void MainWindow::onFaultDetected(QString message)
 {
+    // ★ 无窗口时**绝不能**弹模态框：没人能点它，会把整个下位机卡在那里。
+    //   这条路径真的会被走到 —— 心跳超时、遥测超时都会 emit faultDetected。
+    //   改为写日志（journalctl / 终端里能看到）。
+    if (!buildUi_) {
+        qWarning("下位机故障：%s", qUtf8Printable(message));
+        return;
+    }
     QMessageBox::warning(this, tr("连接异常"), message);
 }

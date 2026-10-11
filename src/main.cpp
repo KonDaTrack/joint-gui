@@ -336,6 +336,25 @@ static void applyDarkPalette(QApplication& app)
 
 int main(int argc, char* argv[])
 {
+    // 默认**无窗口**启动：下位机现在只当"设备侧" —— 界面在上位机的浏览器里。
+    // 启动就到岗（设备自动检测、9002 立刻监听），不需要任何人过去点一下。
+    //   --ui        显示本地窗口（调试/现场排查用）
+    //   --headless  显式无窗口（默认值，写出来只是为了让启动脚本能自解释）
+    // 环境变量 JOINT_UI=1 等价于 --ui。
+    bool wantUi = qEnvironmentVariableIsSet("JOINT_UI");
+    for (int i = 1; i < argc; ++i) {
+        const QString a = QString::fromLocal8Bit(argv[i]);
+        if (a == QLatin1String("--ui")) wantUi = true;
+        else if (a == QLatin1String("--headless")) wantUi = false;
+    }
+
+    // 板上多半没有 X/Wayland，而 QApplication 没有显示服务就直接起不来 ——
+    // 哪怕我们一个窗口都不显示。offscreen 平台不需要任何显示服务。
+    if (!wantUi && !qEnvironmentVariableIsSet("DISPLAY")
+                && !qEnvironmentVariableIsSet("WAYLAND_DISPLAY")) {
+        qputenv("QT_QPA_PLATFORM", "offscreen");
+    }
+
     QApplication app(argc, argv);
 
     // Fusion 内建样式 + 深色调色板 + QSS，保证深色主题跨控件渲染一致
@@ -351,7 +370,11 @@ int main(int argc, char* argv[])
     qRegisterMetaType<QList<Joint::Telemetry>>("QList<Joint::Telemetry>");
     qRegisterMetaType<QList<quint16>>("QList<quint16>");
 
-    MainWindow w;
-    w.show();
+    MainWindow w(wantUi);
+    if (wantUi) w.show();
+    if (!wantUi) {
+        qInfo("关节模组下位机已启动（无窗口）。上位机请打开浏览器访问本机的 9002 服务。"
+              "需要本地窗口时用 --ui。");
+    }
     return app.exec();
 }

@@ -9,11 +9,6 @@
 
 class LoadController;   // 前向声明够了：只用作指针成员，实现在 .cpp 里包含
 
-// 控制权归属。上位机（远程）与下位机（本地）都可能发命令，
-// 必须仲裁——否则两边同时往驱动器写目标，电机行为不可预测
-// （与"官方串口工具和 EtherCAT 抢控制权"是同一个坑）。
-enum class ControlOwner { Local, Remote };
-
 // 运行在独立 QThread。SDK 调用全部发生在此线程；与 UI 通过跨线程队列信号交互。
 class ControlWorker : public QObject
 {
@@ -43,12 +38,15 @@ public slots:
     // 没有这个入口操作者就只能靠失能/急停撤载，而那会把关节一起失能。
     void releaseLoadRequested();
 
-    // ---- 控制权 ----
-    // 本地开关：是否允许远程（上位机）接管。关掉时若远程正持有，立即收回。
-    void setRemoteAllowed(bool allowed);
-    void requestRemoteControl();    // 远程客户端请求控制权
-    void releaseRemoteControl();    // 远程客户端主动交还
-    void remoteHeartbeat();         // 远程心跳（持有控制权时周期发送）
+    // ---- 上位机连接状态 ----
+    // 现在**只有上位机一个控制端**（下位机默认无窗口，本地界面不存在），
+    // 所以没有"控制权归属"要仲裁了 —— 谁连上就是谁。
+    //
+    // 但看门狗必须留着：上位机一掉（WS 断开，或网络半开导致心跳停），
+    // 就失能所有轴 + 撤载。否则本地已经没有界面，没人发得出停止命令，
+    // 只剩硬件急停可用。
+    void setClientOnline(bool online);   // WS 客户端接入 / 断开
+    void remoteHeartbeat();              // 上位机心跳（连接期间周期发送）
     // 远程命令统一入口。name: enable/disable/quickStop/faultReset/setMode/
     // setTarget/homing/moveToZero/selectSlave/estop
     void remoteCommand(const QString& name, const QJsonObject& args);
@@ -64,9 +62,7 @@ signals:
     void detectionMessage(QString message);   // 自动检测过程提示（显示在状态栏）
     void homingFinished(bool ok);             // 归航完成（ok=false 表示失败/超时）
     void limitExceeded(QString message);      // 超出行程限位（已自动停止）
-    // 控制权变化。owner: "local"/"remote"；reason 给界面提示用
-    void controlOwnerChanged(QString owner, QString reason);
-    void remoteCommandRejected(QString name, QString reason);   // 远程命令被拒（无控制权等）
+    void remoteCommandRejected(QString name, QString reason);   // 远程命令被拒（未知命令/设备未连等）
     // 波形记录统一由 worker 触发：本地和远程两条路都要覆盖，
     // 否则从网页下发目标时 Qt 端曲线不会开始记录
     void targetCommanded();   // 已下发目标 → 开始记录本次响应
@@ -86,10 +82,6 @@ private:
     bool tryOpen(const AppConfig& c);          // 尝试打开候选设备，成功则接管并启动周期
     void detectAndConnect();                   // Auto：EtherCAT → CANopen → 仿真
 
-    // 命令来源校验。急停不走这里——安全命令不该被权限挡住。
-    // 只在两个入口检查：本地的槽 + remoteCommand；下面的 do* 实现里**绝不**再查，
-    // 否则远程路径会被第二次检查挡掉（踩过：使能可用但下发目标毫无反应）。
-    bool mayCommand(bool fromRemote) const;
     void doSelectSlave(quint16 address);
     void doEnable();
     void doDisable();
@@ -111,8 +103,8 @@ private:
     void clearLoad(const QString& reason);
     // 控制权切换一律先失能所有轴：否则接手方会继承一个"目标未知但仍在运动"的轴
     void disableAllAxes();
-    void grantRemote(const QString& reason);
-    void revokeRemote(const QString& reason);
+    // 上位机不再可用时的统一出口（WS 断开 / 心跳超时）
+    void dropClient(const QString& reason);
 
     std::unique_ptr<JointDevice> device_;
     QTimer cycleTimer_;
@@ -134,9 +126,8 @@ private:
     bool shuttingDown_ = false;        // 关设备中：拒绝一切新的异步写
     bool loadClearFailReported_ = false;   // "清负载失败"告警去抖
 
-    // ---- 控制权 ----
-    ControlOwner owner_ = ControlOwner::Local;   // 默认本地（下位机在设备旁，本地优先）
-    bool remoteAllowed_ = false;                 // 本地是否允许远程接管
-    qint64 lastHeartbeatMs_ = 0;                 // 远程心跳时间戳
+    // ---- 上位机连接 ----
+    bool clientOnline_ = false;                  // WS 客户端是否在线
+    qint64 lastHeartbeatMs_ = 0;                 // 心跳时间戳
     quint64 heartbeatCount_ = 0;                 // 收到的心跳总数（诊断用）
 };

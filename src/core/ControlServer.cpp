@@ -72,10 +72,9 @@ void ControlServer::onNewConnection()
     connect(client_, &QWebSocket::disconnected, this, &ControlServer::onClientDisconnected);
     emit serverLog(QStringLiteral("上位机已接入"));
 
-    // 握手：把当前从站/型号/控制权一次性告知，客户端不必等首帧遥测
+    // 握手：把当前从站/型号一次性告知，客户端不必等首帧遥测
     QJsonObject hello;
     hello[QStringLiteral("type")] = QStringLiteral("hello");
-    hello[QStringLiteral("owner")] = owner_;
     hello[QStringLiteral("slaveCount")] = slaveCount_;
     // 仿真/真机必须让上位机一眼可辨——否则操作者可能把仿真数据当真
     hello[QStringLiteral("bus")] = busName_;
@@ -93,6 +92,9 @@ void ControlServer::onNewConnection()
     // 带上负载状态：否则网页重连后滑块归 0，而制动器可能正咬着上一个值。
     hello[QStringLiteral("load")] = lastLoadState_;
     send(hello);
+
+    // 告诉 ControlWorker 客户端在线 —— 它靠这个把看门狗武装起来
+    emit clientOnlineChanged(true);
 }
 
 void ControlServer::onClientDisconnected()
@@ -102,8 +104,9 @@ void ControlServer::onClientDisconnected()
         client_ = nullptr;
     }
     emit serverLog(QStringLiteral("上位机已断开"));
-    // 客户端断开时若正持有控制权，立刻交还（不等心跳超时，更快更安全）
-    emit releaseControlReceived();
+    // 立刻失能撤载，不等心跳超时 —— 现在本地没有界面，
+    // 上位机一掉就没人能发停止命令了。
+    emit clientOnlineChanged(false);
 }
 
 void ControlServer::onTextMessage(const QString& message)
@@ -117,11 +120,9 @@ void ControlServer::onTextMessage(const QString& message)
     const QJsonObject obj = doc.object();
     const QString type = obj.value(QStringLiteral("type")).toString();
 
-    if (type == QLatin1String("requestControl")) {
-        emit requestControlReceived();
-    } else if (type == QLatin1String("releaseControl")) {
-        emit releaseControlReceived();
-    } else if (type == QLatin1String("heartbeat")) {
+    // 没有 requestControl / releaseControl 了：上位机是唯一的控制端，
+    // 没有控制权要申请。心跳保留 —— 它是"上位机还活着"的唯一凭据。
+    if (type == QLatin1String("heartbeat")) {
         emit heartbeatReceived();
     } else if (type == QLatin1String("command")) {
         emit remoteCommandReceived(obj.value(QStringLiteral("name")).toString(),
@@ -153,7 +154,6 @@ void ControlServer::sendTelemetryThrottled()
     QJsonObject root;
     root[QStringLiteral("type")] = QStringLiteral("telemetry");
     root[QStringLiteral("ts")] = QDateTime::currentMSecsSinceEpoch();
-    root[QStringLiteral("owner")] = owner_;
     root[QStringLiteral("activeSlave")] = activeSlave_;
 
     QJsonArray arr;
@@ -220,16 +220,6 @@ void ControlServer::sendSlaveList()
         arr.append(s);
     }
     o[QStringLiteral("slaves")] = arr;
-    send(o);
-}
-
-void ControlServer::onControlOwnerChanged(const QString& owner, const QString& reason)
-{
-    owner_ = owner;
-    QJsonObject o;
-    o[QStringLiteral("type")] = QStringLiteral("controlOwner");
-    o[QStringLiteral("owner")] = owner;
-    o[QStringLiteral("reason")] = reason;
     send(o);
 }
 

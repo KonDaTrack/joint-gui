@@ -12,7 +12,6 @@ class JointLink {
     this.url = url;
     this.ws = null;
     this.connected = false;
-    this.holding = false;        // 是否已拿到控制权（决定要不要发心跳）
     this.heartbeatTimer = null;
     this.reconnectTimer = null;
     this.handlers = {};          // {type: fn}
@@ -41,19 +40,13 @@ class JointLink {
     this.ws.addEventListener('message', (ev) => {
       let msg;
       try { msg = JSON.parse(ev.data); } catch { return; }
-      // 控制权是否还在自己手上，决定心跳的启停
-      if (msg.type === 'controlOwner') {
-        this.holding = (msg.owner === 'remote');
-        this._syncHeartbeat();
-      }
       this._emit(msg.type, msg);
       this._emit('*', msg);
     });
 
     this.ws.addEventListener('close', () => {
       this.connected = false;
-      this.holding = false;
-      this._syncHeartbeat();
+      this._syncHeartbeat();      // connected 已置 false → 会停掉心跳
       this._emit('close', {});
       this._scheduleReconnect();
     });
@@ -70,9 +63,12 @@ class JointLink {
   _syncHeartbeat() {
     clearInterval(this.heartbeatTimer);
     this.heartbeatTimer = null;
-    // 只在持有控制权时发心跳：下位机超时（1s）会自动收回并失能，
-    // 不发心跳就不会一直占着控制权
-    if (this.holding && this.connected) {
+    // 连着就一直发。心跳是**下位机看门狗唯一的输入**：
+    // 它超时（1s）就失能所有轴 —— 因为下位机现在没有本地界面，
+    // 网断了/这个页面卡死了，没人发得出停止命令。
+    // ★ 所以这里**不能**有条件（以前是"只在持有控制权时才发"）：
+    //   一旦不发，看门狗就永远武装不起来，等于把人不在时自停的保护废掉。
+    if (this.connected) {
       this.heartbeatTimer = setInterval(() => this.send({ type: 'heartbeat' }), HEARTBEAT_MS);
     }
   }
@@ -83,7 +79,5 @@ class JointLink {
     }
   }
 
-  requestControl() { this.send({ type: 'requestControl' }); }
-  releaseControl() { this.send({ type: 'releaseControl' }); }
   command(name, args = {}) { this.send({ type: 'command', name, args }); }
 }

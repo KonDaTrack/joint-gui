@@ -21,9 +21,6 @@ public:
     void setSlaves(const QList<quint16>& slaves);
     void setActiveSlave(quint16 address);                 // 由左侧标签页驱动
     void setSlaveModels(const QStringList& shortNames);   // 下标 i ↔ 从站 i+1
-    // owner: "local"（本机控制）或 "remote"（上位机控制）。
-    // 远程持有时本地操作按钮置灰——不是"点了没反应"，要让人一眼看出为什么点不动
-    void setControlOwner(const QString& owner);
 
 signals:
     // 控制目标变化，供状态栏提示。参数是完整描述如「从站2 · 70mm」
@@ -41,7 +38,6 @@ signals:
     // 放那儿才能同时覆盖本地与远程两条命令路径
     void homingRequested();
     void moveToZeroRequested();
-    void remoteAllowedChanged(bool allowed);   // 本地是否允许上位机接管
 
 private slots:
     void onEnableClicked();
@@ -55,15 +51,15 @@ private:
     Joint::OperateMode currentMode() const;
     QString slaveText(quint16 address) const;   // 「从站N · XXmm」
     void refreshTargetLabel();                  // 按当前从站刷新「控制目标」显示
-    void updateCommandEnabled();                // 按控制权 + 安全确认刷新按钮可用性
+    void updateCommandEnabled();                // 按「已确认现场安全」刷新按钮可用性
 
     // 从站信息（本面板只显示，不提供切换；切换由左侧监控面板标签页驱动）
     QList<quint16> slaves_;
     QStringList shorts_;
     quint16 activeSlave_ = 0;
 
-    // 一律给 nullptr 初值：构造期间若有代码（如 setControlOwner）在控件创建前
-    // 访问这些成员，未初始化的指针是随机值，会直接段错误
+    // 一律给 nullptr 初值：构造期间若有代码在控件创建前访问这些成员，
+    // 未初始化的指针是随机值，会直接段错误
     QCheckBox* readyCheck_ = nullptr;
     QPushButton* estopBtn_ = nullptr;
     QPushButton* enableBtn_ = nullptr;
@@ -72,10 +68,7 @@ private:
     QPushButton* homeBtn_ = nullptr;
     QPushButton* zeroBtn_ = nullptr;
     QLabel* targetLabel_ = nullptr;   // 醒目标注当前控制目标，避免命令发错轴
-    QLabel* ownerLabel_ = nullptr;    // 当前控制权归属（本地/上位机）
     // 负载（磁粉制动器）的设置与状态在**监控面板**（刷新率下面），不在这里重复一份
-    QCheckBox* remoteCheck_ = nullptr;  // 本地开关：允许上位机接管
-    QString owner_ = QStringLiteral("local");   // 当前控制权（"local"/"remote"）
     QComboBox* modeCombo_ = nullptr;
     QLineEdit* posEdit_ = nullptr;
     QLineEdit* velEdit_ = nullptr;

@@ -23,14 +23,6 @@ ControlPanel::ControlPanel(QWidget* parent)
     targetLabel_->setStyleSheet(QStringLiteral("color: #38BDF8; font-weight: bold;"));
     refreshTargetLabel();
 
-    // 控制权显示 + 本地开关。仲裁权在本机：上位机只能"请求"，本地可随时收回
-    ownerLabel_ = new QLabel(this);
-    remoteCheck_ = new QCheckBox(QStringLiteral("允许上位机接管控制"), this);
-    remoteCheck_->setToolTip(QStringLiteral(
-        "勾选后，上位机可以请求接管控制权（接管时全部轴会先失能）。\n"
-        "取消勾选会立即收回控制权，并让所有轴失能。"));
-    connect(remoteCheck_, &QCheckBox::toggled, this, &ControlPanel::remoteAllowedChanged);
-
     // 急停按钮：最显眼（全局 QSS #dangerButton 红色醒目样式）
     estopBtn_ = new QPushButton(QStringLiteral("急停 ESTOP"), this);
     estopBtn_->setObjectName(QStringLiteral("dangerButton"));
@@ -121,8 +113,6 @@ ControlPanel::ControlPanel(QWidget* parent)
     root->setContentsMargins(16, 16, 16, 16);
     root->setSpacing(10);
     root->addWidget(targetLabel_);
-    root->addWidget(ownerLabel_);
-    root->addWidget(remoteCheck_);
     root->addLayout(estopRow);
     root->addLayout(btnRow);
     root->addWidget(targetTitle);
@@ -131,7 +121,7 @@ ControlPanel::ControlPanel(QWidget* parent)
     root->addStretch();
 
     // 放在最后：此时所有控件都已创建，updateCommandEnabled() 才能安全访问它们
-    setControlOwner(QStringLiteral("local"));
+    updateCommandEnabled();
 }
 
 Joint::OperateMode ControlPanel::currentMode() const
@@ -213,44 +203,25 @@ void ControlPanel::setSlaveModels(const QStringList& shortNames)
     refreshTargetLabel();   // 型号变了，显示跟着更新
 }
 
-// 命令类控件的可用性 = 本地持控制权 AND 已勾选安全确认。
-// 使能/归零/回0 两个条件都要满足，所以两处变更都调这里，避免互相覆盖。
+// 命令类控件的可用性 = 已勾选安全确认。
+// （以前这里还有"本地持控制权"这个条件；控制权仲裁删掉后就没有第二个操作者了，
+//  本地窗口只在 --ui 下存在，它自己就是唯一界面。）
 void ControlPanel::updateCommandEnabled()
 {
-    const bool local = (owner_ != QLatin1String("remote"));
     const bool ready = readyCheck_ && readyCheck_->isChecked();
-    const bool en = local && ready;
 
-    if (enableBtn_) enableBtn_->setEnabled(en);
-    if (homeBtn_)   homeBtn_->setEnabled(en);
-    if (zeroBtn_)   zeroBtn_->setEnabled(en);
-    // 故障复位/模式/下发目标：只受控制权约束
-    if (faultResetBtn_) faultResetBtn_->setEnabled(local);
-    if (modeCombo_)     modeCombo_->setEnabled(local);
-    if (sendBtn_)       sendBtn_->setEnabled(local);
+    if (enableBtn_) enableBtn_->setEnabled(ready);
+    if (homeBtn_)   homeBtn_->setEnabled(ready);
+    if (zeroBtn_)   zeroBtn_->setEnabled(ready);
+    // 故障复位/模式/下发目标：不要求安全确认，一直可用
+    if (faultResetBtn_) faultResetBtn_->setEnabled(true);
+    if (modeCombo_)     modeCombo_->setEnabled(true);
+    if (sendBtn_)       sendBtn_->setEnabled(true);
     for (QLineEdit* e : {posEdit_, velEdit_, torEdit_, profVelEdit_,
                          profAccEdit_, profDecEdit_, torSlopeEdit_}) {
-        if (e) e->setEnabled(local);
+        if (e) e->setEnabled(true);
     }
     // 失能/停止运动/急停：安全类，任何时候都可用，不参与置灰
-}
-
-// 远程持有时禁用本地操作按钮。急停不在此列——安全命令任何时候都要能按。
-void ControlPanel::setControlOwner(const QString& owner)
-{
-    owner_ = owner;
-    const bool local = (owner != QLatin1String("remote"));
-    if (ownerLabel_) {
-        // 远程持有时把"为什么按不动"写在脸上：否则用户只会看到按钮变灰却不知缘由，
-        // 也容易误以为失能按钮该一起灰（它属安全类，始终可用）
-        ownerLabel_->setText(local
-            ? tr("▶ 控制权：本机（下位机）")
-            : tr("▶ 控制权：上位机（远程）—— 本地命令已禁用，失能/急停仍可用"));
-        ownerLabel_->setStyleSheet(local
-            ? QStringLiteral("color: #34D399; font-weight: bold;")
-            : QStringLiteral("color: #F59E0B; font-weight: bold;"));
-    }
-    updateCommandEnabled();
 }
 
 
