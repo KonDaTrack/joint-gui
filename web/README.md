@@ -21,7 +21,11 @@ python3 serve.py
 ```
 
 浏览器打开 <http://localhost:8080>。**同一局域网里任何一台机器**都可以打开
-`http://<这台机器的IP>:8080` —— 上位机侧什么都不用装、不用配。
+`http://<这台机器的IP>:8080` —— 上位机侧（Windows / Mac / Linux / 平板）**什么都不用装**，
+只要一个现代浏览器：Chrome/Edge 89+、Firefox 108+、Safari 16.4+。
+
+**推荐把 `serve.py` 起在板子上**（而不是某台 x86 机器上），这样地址推导永远正确，
+而且终端页开出来的就是板子自己的 shell。见 [`../DEPLOY.md`](../DEPLOY.md) §3.5。
 
 > ★ **不要用 sudo 起 `serve.py`**。终端页里开出来的 shell 就是当前用户的 shell，
 > 用 sudo 起等于把 root shell 交出去。Qt 那边要 sudo（EtherCAT 要 raw socket），
@@ -62,9 +66,6 @@ python3 serve.py
 切到别的页 shell **不会死**，回来接着用；关掉窗格或刷新页面才会结束。
 
 > ★ 这条通道就是**机器上的一个 shell，没有鉴权**。别把它暴露到公网。
->
-> Windows 上终端可用，但需要 **Windows 10 1809（build 17763）以上**（走 ConPTY）；
-> 更老的版本终端页会显示"不支持"，监控和历史两页不受影响。
 
 ## 控制权
 
@@ -93,11 +94,10 @@ node test-client.js cmd setTarget '{"positionDeg":30,"profileVelocity":10}'
 web/
 ├── index.html
 ├── serve.py             入口：静态文件 + 终端（同端口）。零 pip 依赖
-├── server/              后端
+├── server/              后端（只用 Unix 的 PTY）
 │   ├── websocket.py       手写 RFC 6455（标准库没有 WebSocket）
-│   ├── pty_base.py        PTY 抽象 + 按平台选实现
+│   ├── pty_base.py        PTY 抽象 + 环境准备
 │   ├── pty_unix.py        os.forkpty()
-│   ├── pty_win.py         ctypes 调 ConPTY（★ 只在 Windows 上跑得到）
 │   └── conn.py            单条连接的生命周期
 ├── css/                 配色与 Qt 端一致（同一套色板）
 ├── js/

@@ -26,7 +26,7 @@ def serve_terminal(sock, rfile):
 
     if not pty_base.supported():
         ws.send_text(json.dumps(
-            {"t": "error", "message": "当前平台不支持终端（Windows 需要 10 1809 及以上）"},
+            {"t": "error", "message": "当前平台没有 PTY，终端不可用（需要 Unix 的 os.forkpty）"},
             ensure_ascii=False))
         ws.close(1011)
         ws.abort()

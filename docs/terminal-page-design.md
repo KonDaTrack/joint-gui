@@ -1,6 +1,6 @@
 # 终端页设计 —— Terminator 式切分
 
-> 2026-10-11 · 状态：待评审
+> 2026-10-11 · 状态：**已实现**（提交 `81e9614`）。§0 末尾记了 Windows 支持被删掉的经过。
 
 ## 0. 由来
 
@@ -11,7 +11,19 @@
 1. **终端由 `serve.py` 提供，跑在哪台机器上是自由的**（推荐直接放在板子上）。下位机（Qt / 9002）一行都不改。
 2. **每个窗格是一个独立 shell**，切一下多开一个。就是 Terminator 的原义。
 3. 窗格里的 shell 用来干什么**不归这个界面管** —— 你可以在里面对任意主机敲 `ssh 用户名@地址`。
-4. **Windows 上也要能用**，走 ConPTY。
+4. **上位机侧什么都不用装**，只需要一个现代浏览器。
+
+### 修订：Windows 支持被删掉了
+
+最早为了让"`serve.py` 万一跑在 Windows 上"也能用，写了第二条 PTY 实现
+（`pty_win.py`，用 ctypes 调 ConPTY，约 250 行）。
+
+后来部署形态定死了：**`serve.py` 跑在 ARM 板（Linux）上，Windows 那边只开浏览器**。
+ConPTY 于是没有任何部署路径，而那段代码在开发机上根本跑不到、也就无从验证 ——
+留着一块"看着能用、没人验过"的代码比删掉更危险。所以连同它的手测清单一起删了，
+`pty_base` 也收敛成只有一条 Unix 实现。
+
+**真要恢复，git 里有**（提交 `81e9614`）。
 
 ## 1. 架构
 
@@ -23,9 +35,7 @@
    ▼
 板子 · serve.py     ← 它取代 python3 -m http.server
    ├─ :8080/      静态文件（行为与 http.server 一致）
-   └─ :8080/term  PTY 桥：每条连接 fork/spawn 一个 shell
-                    Unix    → os.openpty() + fork
-                    Windows → ctypes 调 ConPTY
+   └─ :8080/term  PTY 桥：每条连接 os.forkpty() 一个 shell
 ```
 
 ### 两个"零"
@@ -48,21 +58,22 @@
 **Python 3.12 纯标准库，零 pip 依赖。** 试验台是离线环境，装不了包，所以：
 
 - 静态服务：`http.server.ThreadingHTTPServer`，行为对齐 `python3 -m http.server`
-- PTY：自己抽象一层，平台各一条实现（见 2.4）
+- PTY：`os.forkpty()`（见 2.4）
 - WebSocket：**手写 RFC 6455**（标准库没有 WS）
 
 ### 2.1 目录
 
 ```
 web/serve.py                入口：起静态服务 + 终端服务
-web/server/pty_base.py      PTY 接口定义 + 按平台选实现
-web/server/pty_unix.py      os.openpty() + fork
-web/server/pty_win.py       ctypes 调 ConPTY
+web/server/pty_base.py      PTY 接口 + 环境准备（TERM 等）
+web/server/pty_unix.py      os.forkpty()
 web/server/websocket.py     RFC 6455 握手 + 帧编解码
 web/server/conn.py          单条连接的生命周期
 ```
 
-把平台分叉关在 `pty_unix.py` / `pty_win.py` 两个文件里，**接口完全一样**。这样 Windows 那段即使要来回调几轮，也只动一个文件。
+`pty_unix` 是**延迟 import** 的（`pty_base._unix()`）：它依赖 `fcntl` / `termios`（Unix 独有），
+放模块顶层会让 `serve.py` 在没有这些模块的平台上**直接起不来** ——
+而终端不可用的时候，静态服务本来应该照常提供（见 4.4）。
 
 ### 2.2 启动
 
@@ -77,45 +88,41 @@ python3 serve.py --port 8080 --bind 0.0.0.0
 
 ### 2.3 PTY 层接口
 
-两个实现必须满足同一套语义：
-
 ```python
-class Pty:
-    @staticmethod
-    def spawn(argv: list[str], env: dict, cols: int, rows: int) -> "Pty"
-    def read(self, max_bytes: int) -> bytes   # 阻塞；返回 b"" 表示 EOF
-    def write(self, data: bytes) -> None
-    def resize(self, cols: int, rows: int) -> None
-    def close(self) -> None                   # 幂等
-    @staticmethod
-    def supported() -> bool                   # 平台是否支持
+def spawn(argv, env, cols, rows) -> Pty
+def supported() -> bool
+
+# Pty 实例：
+def read(n) -> bytes        # 阻塞；b"" 表示对端结束
+def write(data)
+def resize(cols, rows)
+def close()                 # 幂等，且必须把子进程收干净
 ```
 
-**刻意不暴露 `fileno()`。** 因为 Windows 上 ConPTY 给的是管道，而 Windows 的 `select()` 只认 socket，暴露 fd 会诱导出"在 Windows 上 select 管道"这种写不通的代码。所有实现都用阻塞读配合线程（见 2.5）。
+**刻意不暴露 `fileno()`。** 唯一的使用方式是"阻塞读 + 每条连接两条线程"（见 2.5）。
+不暴露 fd，就没人能在实现里悄悄引入 `select` —— 那是给未来的自己留的坑。
 
-### 2.4 两条实现
+### 2.4 实现：`os.forkpty()`
 
-**`pty_unix.py`**
-
-- `os.openpty()` 拿 master/slave
-- `os.fork()`；子进程里 `os.setsid()` → `fcntl.ioctl(slave, TIOCSCTTY, 0)` → `os.dup2` ×3 → `os.execvpe()`
-- `env` 里设 `TERM=xterm-256color`、`COLORTERM=truecolor`
+- `os.forkpty()` 一次把 pty、fork、`setsid`、`TIOCSCTTY`、`dup2` 全做了，
+  交给父进程一个 master fd
+- ⚠️ **不用 `pty.spawn()`**：它会把整个进程接管掉（自己进阻塞循环直到子进程退出），
+  我们要的是把 master fd 交回来自己管
+- ⚠️ **不用 `openpty` + `subprocess`**：少了 `TIOCSCTTY` 就没有控制终端，
+  Ctrl+C / Ctrl+Z 这些作业控制会失效；而 subprocess 没法在子进程里做 ioctl
+  （除非 `preexec_fn`，那个更不安全）
+- 子进程里**只做 `execve` 一件事**，可执行文件路径在父进程用 `shutil.which` 解析好 ——
+  fork 出在多线程进程里，子进程越少碰 Python 越好
+- `env` 里设 `TERM=xterm-256color`、`COLORTERM=truecolor`；**删掉 `LINES`/`COLUMNS`**
+  （它们是"上一次的尺寸"，留着会让 shell 用陈旧值）
 - `resize` → `fcntl.ioctl(master, TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))`
-- `close` → `os.killpg(pgid, SIGHUP)`，然后 `waitpid` 收尸
+- `close` → 顺序是 **先 `SIGHUP` 整个进程组，等它退出，再关 fd**。
+  反过来会让阻塞在 `read` 上的线程醒不过来。
+  杀**进程组**而不是单个 pid：shell 里可能还挂着 ssh、top 之类它自己开的子进程
 
-**`pty_win.py`**
-
-用 `ctypes` 调 Win32，没有封装，全是原始 API：
-
-- `CreatePipe` × 2：一条给 ConPTY 喂输入，一条读它的输出
-- `CreatePseudoConsole(COORD{cols, rows}, hIn, hOut, 0, &hPC)`
-- `InitializeProcThreadAttributeList` + `UpdateProcThreadAttribute(PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE, hPC)`，塞进 `STARTUPINFOEXW`
-- `CreateProcessW(..., EXTENDED_STARTUPINFO_PRESENT, ...)`
-- 父进程关掉不需要的那几端句柄
-- `resize` → `ResizePseudoConsole(hPC, COORD)`
-- `close` → `TerminateProcess` + 关句柄
-
-**ConPTY 需要 Windows 10 1809（build 17763）以上。** 更老的版本 `supported()` 返回 `False`，走 4.4 的降级。
+> 顺带一提：Python 3.12 起，多线程进程里调 fork 会报 `DeprecationWarning`。
+> 那个告警针对的是"fork 完还在子进程里跑 Python"的用法；我们 fork 完立刻 `execve`，
+> 正是 forkpty 被设计出来干的使用方式，所以代码里显式忽略了这个告警。
 
 ### 2.5 线程模型
 
@@ -235,8 +242,13 @@ DOM：一个 split 节点渲染成一个 flex 容器，顺序是 `[前子][分�
 
 ### 4.4 平台降级
 
-- **Windows 10 1809 以下**：`Pty.supported()` 为 `False`。`serve.py` 静态服务照常，`/term` 回一条 `{"t":"error","message":"当前平台不支持终端"}`，前端在终端页显示一行说明。监控页、历史数据页不受影响
-- **平台不支持时**，`serve.py` 启动时打一行警告，但**照常提供服务** —— 不能因为终端不可用就让整个界面起不来
+- **非 Unix 平台**（没有 `os.forkpty`）：`pty_base.supported()` 为 `False`。
+  `serve.py` 静态服务照常，`/term` 回一条 `{"t":"error","message":"当前平台没有 PTY…"}`，
+  前端在终端页显示一行说明 —— 监控页、历史数据页完全不受影响
+- `serve.py` 启动时打一行警告，但**照常提供服务** —— 不能因为终端不可用就让整个界面起不来
+
+> 这个分支在推荐部署下**永远走不到**（`serve.py` 跑在板子/Linux 上）。
+> 留着它是为了让"有人把 serve.py 起在别处"时有一个体面的失败，而不是整个界面打不开。
 
 ### 4.5 xterm 加载失败
 
@@ -260,18 +272,17 @@ DOM：一个 split 节点渲染成一个 flex 容器，顺序是 `[前子][分�
 
 ```
 新增  web/serve.py
-新增  web/server/pty_base.py, pty_unix.py, pty_win.py, websocket.py, conn.py
+新增  web/server/pty_base.py, pty_unix.py, websocket.py, conn.py
 新增  web/js/term.js
 新增  web/css/terminal.css
-新增  web/lib/xterm/…                 （vendor）
-新增  web/lib/xterm/…                 （vendor）
+新增  web/lib/xterm/…                 （vendor：xterm.js + addon-fit + css）
 新增  web/tests/term_client.js        （Node 原生 WebSocket 对拍脚本，自己起 serve.py）
 新增  web/tests/ui_term.js            （playwright + 系统 Chrome 的无头验证）
-新增  web/tests/win_smoke.md          （Windows 手测步骤）
 修改  web/index.html                  导航 + 第三页 + 引入
 修改  web/js/router.js                PAGES 加 'terminal'
-修改  web/README.md                   启动方式
-修改  DEPLOY.md                       启动方式 + Windows 说明
+修改  web/README.md                   启动方式 + 终端页说明
+修改  DEPLOY.md                       §3.5 浏览器界面部署
+修改  .gitignore                      __pycache__ / 测试截图
 不动  src/**                          下位机零改动
 ```
 
@@ -295,41 +306,60 @@ cd web && python3 serve.py   # ② 界面服务（普通用户，终端里就是
 
 ### 6.1 后端（自动，本机可跑）
 
-`web/tests/term_client.js`，用 Node 24 的原生 WebSocket（仓库里 `test-client.js` 已有先例），断言：
+```bash
+cd joint-gui/web && node tests/term_client.js      # 7 条，全过
+```
 
-1. 连 `/term`，发 `echo HELLO\n`，回显里含 `HELLO`
-2. 先发 `{"t":"resize","cols":100,"rows":30}`，再发 `stty size\n`，回显是 `30 100`
-3. **大输出 / 分片**：`head -c 200000 /dev/urandom | base64` → 字节数对得上，不丢不炸（这是手写 WS 最容易翻车的地方）
-4. 带 `Upgrade: websocket` 但路径不是 `/term` 的连接被拒绝（普通 GET 不是 `Upgrade`，走静态文件，不受影响）
+用 Node 24 的原生 WebSocket（仓库里 `test-client.js` 已有先例），脚本自己起一个
+临时端口 + 临时 `$HOME` 的 `serve.py`，跑完自己收。断言：
+
+1. 连 `/term`，发 `echo`，回显正确
+2. 先发 `{"t":"resize",...}`，再发 `stty size`，尺寸真的变了 —— 验 `TIOCSWINSZ` 通了
+3. **大输出 / 分片**：200000 字节可打印字符，**一字不差**（这是手写 WS 最容易翻车的地方）
+4. 带 `Upgrade: websocket` 但路径不是 `/term` 的连接被拒绝
 5. 关连接后 `pgrep` 数不到残留 bash（与基线对比）—— 验 2.7 的收尸
 
-### 6.2 前端（自动，headless Chrome）
+> 写这个脚本时踩到的坑记一笔：**标记字面量不能出现在命令回显里**。
+> 一开始用 `printf '__WE__'` 当结束标记，而 shell 会回显命令行 —— 于是
+> `waitFor` 一看到回显就返回了，那时真正的输出还没开始。改成输出时才拼出来的
+> `printf '__W%s__' E` 才对。
 
-用我们已经跑通的那套：
+### 6.2 前端（自动，playwright + 系统 Chrome）
 
-1. 点右键菜单"左右切分" → `.term-pane` 数量 +1
-2. 拖分隔条 → 两个子容器的 `flex-basis` 真的变了
-3. 切到监控页再切回来 → 窗格内 `echo $$` 前后一致（shell 没被重建、没被 fit 成 0 列）
-4. 只剩一格时，关闭项消失
+```bash
+cd joint-gui/web
+NODE_PATH=<装 playwright 的 node_modules> node tests/ui_term.js    # 18 条，全过
+```
 
-> headless 的坑照旧：注入 `*{transition:none !important}`（虚拟时间下 CSS 过渡不推进）、`--enable-unsafe-swiftshader`。
+1. 工具栏/右键「左右切分」→ 窗格 +1；再「上下切分」→ 嵌套 +1
+2. 拖分隔条 → 两侧宽度**真的变了**
+3. **切到监控页再切回来 → 窗格内 `echo $$` 前后一致**（shell 没被重建），
+   且没有哪一格被 fit 成 0 列 —— 这一条同时验了 3.5 那个坑
+4. 只剩一格时，右键菜单的「关闭窗格」是禁用的，工具栏点了也无效
+5. 最大化吃满舞台宽，再点还原
 
-### 6.3 Windows ConPTY（人工，只有你能做）
+> headless 的坑：`--enable-unsafe-swiftshader`（WebGL）；
+> 判断界面状态要用 `waitForFunction` 等条件成立，**别用固定 sleep** ——
+> cross-slide 切页时新旧两页会同时在场，固定 sleep 会读到假阴性。
+> 控制台报错要按 `msg.location().url` 过滤（`/favicon.ico` 的 404 是浏览器自己来要的）。
 
-`web/tests/win_smoke.md` 列手测步骤：起 `serve.py` → 打开终端页 → 出现提示符 → `dir` 有输出 → 拖大窗格后 `mode con` 跟着变 → `exit` 后窗格显示已退出 → 关窗格后任务管理器里没有残留进程。
+### 6.3 没有 Windows 测试
 
-**这段代码我在这台 Linux 上写得了、测不了**，只能靠你在 Windows 上跑几轮反馈。
+曾经有过一份 `win_smoke.md`（ConPTY 手测清单），随 Windows 实现一起删了（见 §0 修订）。
 
 ## 7. 不做的（YAGNI）
 
-布局保存与恢复 · 标签页 · 广播输入（Terminator 有，用不上）· 终端鉴权（按你的要求不做）· 内建 SSH 客户端（shell 里自己敲）· 多用户/多会话隔离 · Windows 10 1809 以下的 ConPTY 兼容
+布局保存与恢复 · 标签页 · 广播输入（Terminator 有，用不上）· 终端鉴权（不做）·
+内建 SSH 客户端（shell 里自己敲）· 多用户/多会话隔离 · 非 Unix 平台的 PTY
 
 ## 8. 已知风险
 
 | # | 风险 | 应对 |
 |---|---|---|
-| 1 | **Windows ConPTY 那段无法在本机验证** | 接口隔离在 `pty_win.py` 一个文件；出问题只动它；给你一份手测清单 |
-| 2 | 手写 WebSocket 的边界（分片 / 掩码 / >64KB 帧 / 控制帧交错） | 6.1 的第 3 条专门撞它 |
+| 1 | 手写 WebSocket 的边界（分片 / 掩码 / >64KB 帧 / 控制帧交错） | 6.1 的第 3 条专门撞它 |
+| 2 | 隐藏页把终端 fit 成 0 列 | 尺寸为 0 时直接 return；`Router.onChange` 统一重测（同 chart.js 那个坑） |
+| 3 | `Ctrl+Shift+*` 在终端里有歧义（`Ctrl+Shift+E` 在 bash 里另有含义） | 在**捕获阶段**挂 document keydown，命中我们的就 `stopPropagation`，按键根本到不了 shell |
+| 4 | 板子上多一个常驻进程，对 EtherCAT 实时性的影响 | 只多几个百分点 CPU；试验台场景不敏感 |
 | 3 | 隐藏页把终端 fit 成 0 列 | 尺寸为 0 时直接 return；`Router.onChange` 统一重测（chart.js 同源坑） |
 | 4 | `Ctrl+Shift+*` 在终端里有歧义 | `attachCustomKeyEventHandler` 明确拦截我们的，其余放行 |
 | 5 | ConPTY 需要 Win10 1809+ | `supported()` 检测版本，更老的走 4.4 降级 |
