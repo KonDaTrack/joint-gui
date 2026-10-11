@@ -8,6 +8,10 @@
 <link rel="stylesheet" href="css/shell.css">
 <link rel="stylesheet" href="css/monitor.css">
 <link rel="stylesheet" href="css/history.css">
+<link rel="stylesheet" href="css/terminal.css">
+<!-- xterm 自带的样式：终端页要用。它自己那套滚动条是浅灰的，
+     在暗面板上很跳，terminal.css 里已经覆盖掉了。 -->
+<link rel="stylesheet" href="lib/xterm/xterm.css">
 <!-- three.js 走本地副本（试验台多为离线环境）。import map 只有模块脚本能用，
      所以 joint3d.js 是 type="module"；它是 deferred 的，会在 app.js 之后执行。 -->
 <script type="importmap">
@@ -90,6 +94,7 @@
   <nav class="nav" id="nav" role="tablist" aria-label="页面切换">
     <button data-page="monitor" role="tab">监控</button>
     <button data-page="history" role="tab">历史数据</button>
+    <button data-page="terminal" role="tab">终端</button>
   </nav>
 
   <div class="sep"></div>
@@ -348,6 +353,28 @@
     </div>
   </section>
 
+  <!-- ============ 终端页 ============
+       Terminator 式切分。每格是一条**独立**的 shell，跑在 serve.py 那台机器上
+       （见 docs/terminal-page-design.md）。终端地址是同源的，不写死主机名。
+
+       懒初始化：**没进过这一页就不开 shell**（term.js 的 Router.onChange）。
+       进了之后 shell 一直活着 —— 切到监控页再回来，还是同一个。 -->
+  <section class="page" id="page-terminal" role="tabpanel" aria-label="终端" hidden>
+    <div class="term">
+      <div class="term-bar">
+        <button class="btn" type="button" data-act="split-row">左右切分</button>
+        <button class="btn" type="button" data-act="split-col">上下切分</button>
+        <button class="btn" type="button" data-act="max">最大化</button>
+        <button class="btn" type="button" data-act="close">关闭窗格</button>
+        <span class="spacer"></span>
+        <span class="term-hint">
+          右键窗格也有菜单 · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd>/<kbd>E</kbd>/<kbd>W</kbd>/<kbd>X</kbd>
+        </span>
+      </div>
+      <div class="term-root" id="termRoot"></div>
+    </div>
+  </section>
+
 </div>
 
 <!-- 消息条：连接/控制权/故障等一次性提示 -->
@@ -356,6 +383,11 @@
 <!-- GSAP 用本地副本，不走 CDN：试验台多为离线环境，CDN 挂了界面就废了。
      加载失败也不影响功能——anim.js 内部全程判空降级。 -->
 <script src="lib/gsap.min.js"></script>
+<!-- 终端：xterm 是 UMD 经典脚本，不进 import map。
+     term.js 必须在 app.js **之前** —— 它靠 Router.onChange 挂懒初始化，
+     而 app.js 会立刻调 Router.init()，晚一步就错过第一次 onChange 了。 -->
+<script src="lib/xterm/xterm.js"></script>
+<script src="lib/xterm/addon-fit.js"></script>
 <script src="js/ws.js"></script>
 <script src="js/chart.js"></script>
 <script src="js/anim.js"></script>
@@ -363,6 +395,7 @@
 <script src="js/gfx.js"></script>
 <script src="js/history.js"></script>
 <script src="js/compare.js"></script>
+<script src="js/term.js"></script>
 <script src="js/app.js"></script>
 <!-- 三维关节：ES 模块（three 是 ESM 包）。deferred，跑在 app.js 之后，
      自己初始化，只对外暴露 window.Joint3D 供 app.js"事后"取用。 -->

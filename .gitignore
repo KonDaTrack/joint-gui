@@ -19,4 +19,11 @@ CMakeFiles/
 .directory
 .DS_Store
 
+# 无头验证产生的截图（tests/ui_term.js 每次跑都会重写）
+web/tests/*.png
+
+# Python（web/serve.py 是零依赖的，跑起来会生成这些）
+__pycache__/
+*.pyc
+
 # 说明：SDK（eyou_*_sdk_*）不在此仓库，需单独放到本目录的上一级（../eyou_*_sdk_*_linux_gnu_*/）

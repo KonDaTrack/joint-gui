@@ -1,0 +1,206 @@
+/* 终端页 —— Terminator 式切分
+ *
+ * 布局模型是**二叉树**（见 term.js）：每个节点要么是一片叶子，要么是一个
+ * 「横向/纵向切分 + 两个子节点 + 一个比例」。为什么不用 grid：
+ * Terminator 的手感是"在任意一个已有的格子上再切一刀"，而且切完两边可以不等分，
+ * grid 表达不了这种嵌套不等分。
+ *
+ * 定位用**绝对定位 + 百分比**，不用 flex：flex 下"两个子项 + 一根固定宽度的分隔条"
+ * 加起来会超过 100%，得靠 calc 到处补；绝对定位把每一块的 left/top/宽/高
+ * 一次算清楚，读起来和树结构一一对应。
+ *
+ * 视觉沿用 app.css 的语汇：浅灰边框板 + 内嵌深色面板、中性灰、青色只给"当前窗格"。
+ */
+
+.term {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+}
+
+/* ---- 顶部工具条 ----
+   设计里只写了右键菜单和快捷键，但菜单要"先想到去右键"才发现得了。
+   加一条极窄的工具条把三个动作摊开，右键菜单和快捷键照旧。 */
+.term-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: linear-gradient(180deg, #202126, #1A1B1E 62%, #17181B);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+.term-bar .btn { padding: 6px 13px 8px; font-size: 12.5px; }
+.term-bar .spacer { flex: 1 1 auto; }
+.term-hint {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  color: var(--dimmer);
+  white-space: nowrap;
+}
+.term-hint kbd {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--dim);
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 4px;
+  padding: 1px 4px;
+  margin: 0 1px;
+}
+
+/* ---- 舞台：边框板 + 内嵌深色面板（同 .card 的双层描边） ---- */
+.term-root {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 5px;
+  border-radius: 18px;
+  border: 1px solid var(--edge);
+  background: linear-gradient(180deg, var(--bezel-plate), var(--bezel-plate-lo));
+  box-shadow: 0 22px 46px -32px rgba(0, 0, 0, 1);
+}
+.term-stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 13px;
+  border: 1px solid var(--bevel);
+  background: var(--sunken);
+}
+
+/* ============ 树的节点 ============
+   两种节点都靠 JS 设的 inline left/top/width/height 定位，这里只给共性。 */
+.term-node {
+  position: absolute;
+  overflow: hidden;
+  min-width: 0;
+  min-height: 0;
+}
+.term-stage > .term-node { left: 0; top: 0; width: 100%; height: 100%; }
+
+/* 叶子：xterm 挂进 .term-mount。
+   ★ 内边距加在 mount 上（不是 xterm 元素本身）——FitAddon 量的是**父元素**的
+     computed width/height，而 computed width 是内容盒宽度（不含 padding），
+     所以 padding 放父元素上量出来的列数是准的。 */
+.term-leaf { background: var(--sunken); }
+.term-mount { position: absolute; inset: 0; padding: 7px 5px 6px 9px; }
+
+/* 当前窗格：只描一圈青线。青色在这套界面里只表示"你正在操作的这一块" */
+.term-leaf.active { box-shadow: inset 0 0 0 1px rgba(120, 214, 238, 0.42); }
+
+/* ---- 分隔条 ---- */
+.term-div { position: absolute; z-index: 3; background: transparent; touch-action: none; }
+.term-div::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.055);
+  transition: background .18s var(--ease);
+}
+.term-div:hover::after,
+.term-div.dragging::after { background: rgba(120, 214, 238, 0.55); }
+.term-split.row > .term-div { cursor: col-resize; }
+.term-split.col > .term-div { cursor: row-resize; }
+
+/* ============ 断开 / 退出的遮罩 ============ */
+.term-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: rgba(13, 13, 15, 0.86);
+  backdrop-filter: blur(3px);
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.05em;
+  color: var(--dim);
+  text-align: center;
+  padding: 16px;
+}
+.term-leaf.dead .term-overlay { display: flex; }
+.term-overlay .why { color: var(--dimmer); font-size: 11px; }
+.term-overlay .btn { padding: 7px 18px; font-size: 12.5px; }
+
+/* ============ 最大化 ============
+   **不重建 DOM**，只沿"根 → 目标叶子"这条路打标记：
+   路上每个 split 标 .max-path，它的旁支兄弟标 .max-hidden。
+   旁支 display:none 之后，路上那个节点自然吃满，不需要重算尺寸。 */
+.term-stage.maximized .max-hidden { display: none !important; }
+/* 路上那条分隔条也要收掉：它由 applyRatio 定位，留着会在中间凭空画一道线 */
+.term-stage.maximized .max-path > .term-div { display: none !important; }
+.term-stage.maximized .max-path > .term-node { left: 0 !important; top: 0 !important;
+                                               width: 100% !important; height: 100% !important; }
+
+/* ============ 右键菜单 ============ */
+.term-menu {
+  position: fixed;
+  z-index: 400;
+  min-width: 168px;
+  padding: 5px;
+  border-radius: 11px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: linear-gradient(180deg, rgba(32, 34, 39, 0.99), rgba(23, 24, 28, 0.99));
+  box-shadow: 0 22px 48px -24px #000, inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  animation: term-menu-in .15s var(--ease) both;
+}
+@keyframes term-menu-in {
+  from { opacity: 0; transform: translateY(-5px); }
+  to   { opacity: 1; transform: none; }
+}
+.term-menu button {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 18px;
+  width: 100%;
+  text-align: left;
+  appearance: none;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--dim);
+  font-family: var(--sans);
+  font-size: 12.5px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background .2s var(--ease), color .2s var(--ease);
+}
+.term-menu button:hover { background: rgba(255, 255, 255, 0.06); color: var(--fg); }
+.term-menu button .k {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--dimmer);
+}
+.term-menu .sep { height: 1px; background: var(--hair); margin: 4px; }
+.term-menu button:disabled { color: var(--dimmer); cursor: not-allowed; }
+.term-menu button:disabled:hover { background: transparent; color: var(--dimmer); }
+
+/* ============ xterm 的深色化 ============
+   xterm.css 自带的那套滚动条是浅灰的，在暗面板上非常跳（同 .card-core 的处理）。 */
+.term-mount .xterm { height: 100%; padding: 0; }
+.term-mount .xterm .xterm-viewport {
+  background: transparent !important;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.13) transparent;
+}
+.term-mount .xterm .xterm-viewport::-webkit-scrollbar { width: 7px; }
+.term-mount .xterm .xterm-viewport::-webkit-scrollbar-track { background: transparent; }
+.term-mount .xterm .xterm-viewport::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.11);
+  border-radius: 999px;
+}
+.term-mount .xterm .xterm-viewport::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+.term-mount .xterm-screen canvas { display: block; }

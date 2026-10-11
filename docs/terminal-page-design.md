@@ -179,6 +179,9 @@ DOM：一个 split 节点渲染成一个 flex 容器，顺序是 `[前子][分�
 
 ### 3.3 交互
 
+- **顶部工具条**：左右切分 / 上下切分 / 最大化 / 关闭窗格，作用于**当前窗格**
+  （设计时只写了右键菜单，实现时补了这条 —— 菜单得"先想到去右键"才发现得了，
+  工具条把动作摊开，右键菜单和快捷键照旧都在）
 - **右键窗格** → 菜单：左右切分 / 上下切分 / 关闭 / 最大化
 - **快捷键**（对齐 Terminator）
 
@@ -261,7 +264,9 @@ DOM：一个 split 节点渲染成一个 flex 容器，顺序是 `[前子][分�
 新增  web/js/term.js
 新增  web/css/terminal.css
 新增  web/lib/xterm/…                 （vendor）
-新增  web/tests/term_client.js        （Node 原生 WebSocket 对拍脚本）
+新增  web/lib/xterm/…                 （vendor）
+新增  web/tests/term_client.js        （Node 原生 WebSocket 对拍脚本，自己起 serve.py）
+新增  web/tests/ui_term.js            （playwright + 系统 Chrome 的无头验证）
 新增  web/tests/win_smoke.md          （Windows 手测步骤）
 修改  web/index.html                  导航 + 第三页 + 引入
 修改  web/js/router.js                PAGES 加 'terminal'

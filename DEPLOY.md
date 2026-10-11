@@ -86,6 +86,46 @@ sudo ./run.sh      # 直接 root 启动（EtherCAT 需 raw socket 权限，最�
   ls /dev/ttyACM* /dev/can* 2>/dev/null   # Canable/SocketCAN 类设备
   ```
 
+### 3.5 浏览器界面（web/）
+
+`web/` 是一套**纯静态**的浏览器界面（监控 / 历史数据 / 终端三页），另加一个
+零依赖的 Python 小服务 `serve.py` 负责发文件和终端。
+
+**推荐直接跑在目标机上**，这样：
+
+- 上位机（任何一台有浏览器的机器）**什么都不用装、不用配**，打开网址即可
+- 地址推导永远正确（页面从哪来就连哪），不用填下位机地址
+- 终端页开出来的 shell 就是**目标机自己的 shell**（`dmesg`、改配置，不用 ssh）
+- 目标机上 Qt 界面和网页界面并存，靠控制权仲裁分工
+
+```bash
+cd /opt/joint-gui/web        # 或仓库里的 joint-gui/web
+python3 serve.py             # 0.0.0.0:8080，静态文件 + 终端
+```
+
+★ **不要用 sudo 起 `serve.py`**。终端页里的 shell 就是当前用户的 shell，
+用 sudo 起等于把 root shell 交出去。Qt 那边要 sudo，两个进程分开起。
+
+然后在**任何一台同网段的机器**上打开：
+
+```
+http://<目标机IP>:8080
+```
+
+**前置条件**：
+
+| 项 | 要求 |
+|---|---|
+| Python | 3.9+（Ubuntu/Debian 自带）。**无 pip 依赖**，离线可用 |
+| 浏览器 | Chrome/Edge 89+、Firefox 108+、Safari 16.4+（要 import map 和 WebGL2） |
+| 端口 | 只用 **8080**（静态和终端同端口）。别和 Qt 的 9002 撞 |
+| Windows 终端 | 需要 Win10 1809（build 17763）以上；更老的版本终端页显示不支持，另两页正常 |
+
+**自检**：打开网址应看到开场画面 → 扫描到从站 → 点「进入」；
+切到「终端」页应出现提示符（说明 PTY 通了）。
+
+> 终端是**没有鉴权**的 shell 通道。别把 8080 暴露到公网。
+
 ## 4. 快速自检
 1. 启动程序 → 选"自动检测" → 连接
 2. 若接的是 EtherCAT：状态栏应显示"EtherCAT 已连接，从站数 1"
@@ -101,3 +141,7 @@ sudo ./run.sh      # 直接 root 启动（EtherCAT 需 raw socket 权限，最�
 | 用 sudo 启动后找不到 SDK .so | 用 `sudo ./run.sh`（run.sh 内部会设置 LD_LIBRARY_PATH，见 3.3） |
 | CANopen 无设备 | 确认适配器插入且节点 ID 与界面从站 ID 一致；Canable/SocketCAN 接口可用 `candump can0` 看报文 |
 | 使能后不动 | 检查操作模式是否支持；MIT 模式下目标范围需在 SDK 读到的限制内（±12.5 rad 量级） |
+| 网页打不开 / 三维关节不出来 | 确认 `python3 serve.py` 在跑；浏览器版本够新（要 import map + WebGL2，见 3.5） |
+| 网页能开但连不上从站 | 网页连的是**发页面的那台机器**的 9002。页面放在 A 机、下位机在 B 机时，得用 `http://B:8080` 打开，或用 `?host=B` |
+| 终端页提示"不支持" | 平台没有 PTY：Linux/macOS 恒有；Windows 需要 10 1809 以上（ConPTY） |
+| 终端页没反应 | 确认 `serve.py` 是**普通用户**起的、且 8080 端口放通；看 `serve.py` 的控制台有没有 `[term]` 那两行 |
