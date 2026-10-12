@@ -119,7 +119,7 @@ int main(int argc, char **argv)
     snprintf(cmd, sizeof(cmd), "ip -br link show %s 2>&1", ifname);
     if (system(cmd) != 0) { /* ip 的返回码不用管，输出在上面 */ }
     snprintf(cmd, sizeof(cmd), "ethtool %s 2>&1 | grep -E 'Link detected|Speed|Duplex'", ifname);
-    system(cmd);
+    if (system(cmd) != 0) { /* grep 没匹配到会返回 1，不是错误 */ }
 
     if (skip_id > 0) {
         int ids[1] = {skip_id};
