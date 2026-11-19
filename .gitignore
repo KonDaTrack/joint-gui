@@ -26,4 +26,8 @@ web/tests/*.png
 __pycache__/
 *.pyc
 
+# 手工编译的诊断工具二进制（源码在 tools/，CMake 不构建它们）
+/eth_probe
+/odtorque
+
 # 说明：SDK（eyou_*_sdk_*）不在此仓库，需单独放到本目录的上一级（../eyou_*_sdk_*_linux_gnu_*/）

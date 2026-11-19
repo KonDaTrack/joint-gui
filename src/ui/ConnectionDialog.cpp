@@ -37,7 +37,7 @@ ConnectionDialog::ConnectionDialog(QWidget* parent)
     modelCombo_->addItem(QStringLiteral("PHU-25H-110-F-B（额定 84）"), 84.0);
     modelCombo_->addItem(QStringLiteral("自定义"), 0.0);
 
-    ifEdit_ = new QLineEdit(QStringLiteral("enx00e0bc4915ec"), this);
+    ifEdit_ = new QLineEdit(QStringLiteral("enx00e04c3a41c0"), this);
     slaveEdit_ = new QLineEdit(QStringLiteral("1"), this);
     cycleEdit_ = new QLineEdit(QStringLiteral("2"), this);
     pulsesEdit_ = new QLineEdit(QStringLiteral("524288"), this);

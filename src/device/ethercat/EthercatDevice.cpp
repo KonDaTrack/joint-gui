@@ -182,6 +182,15 @@ bool EthercatDevice::open(const AppConfig& cfg)
 
     int slaveCnt = 0;
     if (eth_initDLL(cfg.ethInterface.toUtf8().constData(), cycleMs_, &slaveCnt) != ETH_SUCCESS) {
+        // ★ 失败也必须释放 SDK。eth_initDLL 非成功返回时内部可能已经打开了网卡
+        // （比如"网卡开得了但没有 EtherCAT 从站"→ 返回 FAILED_CHECKSTATE），
+        // 此时若直接返回，inited_ 是 false，close() 不会调 eth_freeDLL()，
+        // 残留状态会让**下一次** eth_initDLL 连网卡都打不开（ec_init failed）。
+        //
+        // 后果正是自动检测全挂：它要逐个试活动网卡（enp5s0 / wlan / … / enx…），
+        // 试第一块就把 SDK 弄脏，后面连真正那块 EtherCAT 网卡也打不开 ——
+        // 表现为一串 ec_init failed，而单独跑探针却正常。
+        eth_freeDLL();
         inited_ = false;
         return false;
     }

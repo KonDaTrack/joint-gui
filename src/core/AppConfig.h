@@ -7,7 +7,7 @@ struct AppConfig {
     quint16 slaveId = 1;
 
     // EtherCAT
-    QString ethInterface;       // 网卡名，如 enx00e0bc4915ec
+    QString ethInterface;       // 网卡名，如 enx00e04c3a41c0
     int ethCycleMs = 2;         // 周期 1~5ms
 
     // CANopen
