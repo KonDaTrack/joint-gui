@@ -1,13 +1,73 @@
-# 关节模组监控台 (joint_gui)
+# 关节模组试验台
 
-面向职业教育的关节模组 Qt 监控控制界面。支持 EtherCAT / CANopen 双总线与仿真模式。
+面向**职业教育**的关节模组（谐波减速关节）试验台软件。
 
-## 依赖
-- Qt5 Widgets 开发包（`qtbase5-dev`）
-- CMake ≥ 3.16、g++（C++17）
-- 两套 SDK（EtherCAT / CANopen，x86_64 或 aarch64）
+下位机跑 EtherCAT 主站、直接驱动关节；界面全部在浏览器里 —— **下位机开机即用，不需要任何本地窗口或点击**。
 
-> **git clone 注意**：SDK 不在本仓库内。clone 后需把对应架构的 SDK 目录放到 `joint-gui` 的**上一级**（CMake 用 `../eyou_*_sdk_*_linux_gnu_*/` 查找），即：
+![监控页](docs/screenshots/monitor.png)
+
+## 三页界面
+
+| | |
+|---|---|
+| **监控** — 三维关节、位置/速度/力矩大读数、遥测、急停与使能、模式与目标下发、实时波形 | **历史数据** — 按「关节 + 模式」筛选历次运行，叠加对比 |
+| ![监控](docs/screenshots/monitor.png) | ![历史数据](docs/screenshots/history.png) |
+| **终端** — Terminator 式切分，每格一个独立 shell（板子上的），用来排查现场问题 | **开场** — 连接 / 握手 / 扫描从站，逐行滚动 |
+| ![终端](docs/screenshots/terminal.png) | ![开场](docs/screenshots/splash.png) |
+
+## 功能
+
+- **双总线 + 仿真**：EtherCAT / CANopen 自动检测；没有硬件时回退仿真模式，界面照常可演示
+- **三种轮廓模式**：PP 轮廓位置 / PV 轮廓速度 / PT 轮廓力矩（对齐官方例程）
+- **多从站**：扫到几个关节就出几个，型号按驱动器自动识别（额定力矩/编码器分辨率/减速比随之确定）
+- **安全**：
+  - ±170° 行程限位（保护中空轴里的力矩传感器线束，禁止连续旋转）
+  - 遥测看门狗：500ms 读不到数据即判定断连
+  - **上位机离线即失能**：WS 断开、或心跳超 1s 没到 → 失能所有轴 + 撤负载
+  - 急停任何时候都能发
+- **波形**：点「下发目标」才开始记录本次响应，三窗格（位置/速度/力矩）各自自适应量程
+- **历史对比**：存在浏览器本地 IndexedDB，跑完一次**必须明确选择保存或丢弃**；对比时「运行 = 颜色，轨迹 = 线型」
+- **磁粉制动器负载**：RS485 → Modbus → 0-10V，与关节的 EtherCAT 是两条独立链路
+
+## 架构
+
+```
+板子 / 工控机（Linux）                    任何一台机器
+├─ Qt 下位机    EtherCAT 主站 + WS :9002   ┌──────────────┐
+│   （无窗口，开机自动连上）                │   一个浏览器   │
+└─ web/serve.py  静态 + 终端 :8080         └──────────────┘
+                        ↑────── ws :8080/term ──────┘
+```
+
+**上位机侧什么都不用装** —— Windows / macOS / Linux / 平板都行，只要浏览器够新
+（Chrome/Edge 89+、Firefox 108+、Safari 16.4+，需要 import map 和 WebGL2）。
+
+推荐把 `web/serve.py` 也起在板子上：这样地址推导永远正确，而且终端页开出来的就是
+**板子自己的 shell**。详见 [`DEPLOY.md`](DEPLOY.md) §3.5。
+
+## 快速开始
+
+```bash
+# ① 构建（SDK 需放在本仓库的上一级，见下）
+./build.sh
+
+# ② 起下位机 —— 无窗口，自动检测总线并连上
+sudo ./run.sh
+
+# ③ 另开一个终端，起网页（普通用户，别用 sudo）
+cd web && python3 serve.py
+```
+
+浏览器打开 <http://localhost:8080>。同网段任何一台机器也可以打开 `http://<本机IP>:8080`。
+
+需要本地窗口（现场排查、挑仿真、换网卡）时：`sudo ./run.sh --ui`。
+
+## 构建
+
+**依赖**：Qt5 Widgets + Qt5 WebSockets 开发包、CMake ≥ 3.16、g++（C++17）。
+
+> **SDK 不在本仓库内。** clone 后要把对应架构的 SDK 目录放到 `joint-gui` 的**上一级**
+> （CMake 按 `../eyou_*_sdk_*_linux_gnu_*/` 查找）：
 > ```
 > <父目录>/
 > ├── joint-gui/
@@ -15,68 +75,64 @@
 > └── eyou_canopen_sdk_PHU_<arch>_linux_gnu_20260710/
 > ```
 
-## x86 本机构建
-```
-sudo apt install qtbase5-dev cmake g++
-./build.sh
-./run.sh                     # 运行（自动设置 SDK 库的 LD_LIBRARY_PATH）
-```
-> SDK 库自身带厂商构建机路径的 DT_RUNPATH，直接运行 `./build/joint_gui` 会找不到
-> 传递依赖（`libsoem.so`/`libcyhcs_log.so` 等）。用 `./run.sh` 或
-> `LD_LIBRARY_PATH=../eyou_*_sdk_*_linux_gnu_*/lib ./build/joint_gui` 均可。
-
-## ARM 交叉构建（在 x86 上产出 aarch64 可执行文件）
-```
-sudo dpkg --add-architecture arm64
-sudo apt update
-sudo apt install cmake gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
-                 qtbase5-dev-tools qtbase5-dev:arm64 \
-                 libqt5websockets5-dev:arm64
-./build.sh arm
-# 产出 build-arm/joint_gui（aarch64 原生二进制）
-```
-
-## ARM 板上本地构建（备选）
-```
+```bash
 sudo apt install qtbase5-dev cmake g++ pkg-config
-./build.sh
+./build.sh              # x86 本机构建
+./build.sh arm          # x86 上交叉编译出 aarch64（多架构工具链见 DEPLOY.md）
 ```
 
-## 部署到 ARM 板
-板上仅需 Qt 运行库，无需开发环境：
-```
+> SDK 库自带厂商构建机路径的 `DT_RUNPATH`，直接跑 `./build/joint_gui` 会找不到传递依赖
+> （`libsoem.so` 等）。用 `./run.sh`，它会自动聚合 `LD_LIBRARY_PATH`。
+
+## 部署
+
+```bash
 sudo apt install libqt5widgets5 libqt5gui5 libqt5core5a libqt5network5 libqt5websockets5
+sudo ./run.sh           # EtherCAT 要 raw socket，所以 sudo
 ```
-将 `build-arm/joint_gui` 与所需 SDK `.so` 一并拷贝到板上，然后设置
-`LD_LIBRARY_PATH` 指向 SDK 的 `lib/` 目录再运行：
+
+完整步骤（交叉编译、SDK 拷贝、setcap 免 sudo、浏览器界面部署、FAQ）见
+[`DEPLOY.md`](DEPLOY.md)。
+
+## 测试
+
+```bash
+ctest --test-dir build --output-on-failure      # C++ 单元测试
+
+cd web
+node tests/term_client.js                       # 终端后端（自己起 serve.py）
+NODE_PATH=<playwright 的 node_modules> node tests/ui_term.js   # 终端页无头验证
+NODE_PATH=<playwright 的 node_modules> node tests/ui_live.js   # 下位机 + 浏览器联调
 ```
-export LD_LIBRARY_PATH=/path/to/sdk/lib:$LD_LIBRARY_PATH
-./joint_gui
+
+## 目录
+
 ```
-所需 `.so`：
-- EtherCAT: `libeu_ethercat.so` `libsoem.so` `libcyhcs_log.so`
-- CANopen: 建议直接拷贝整个 `lib/` 目录（`libeu_canopen.so` `libeu_eds.so` `libeu_candrv.so` `libeu_log.so` `libeu_resources.so` 及 `libcontrolcan.so` `libeu_canable.so` `libusbcanfd.so`，驱动库在运行时按需加载）
-
-## 权限
-EtherCAT（SOEM 主站）需 root 或 `CAP_NET_RAW` 访问网卡——**x86 和 ARM 都一样**（SOEM 要开 `AF_PACKET` raw socket，与网卡类型无关）。用 `sudo ./run.sh` 启动即可（run.sh 会自动设置 SDK 库路径，不再需要手动 `LD_LIBRARY_PATH`）。跑仿真模式则不需要 root。
-CANopen USB-CAN 适配器需对应驱动与权限。
-
-## 单元测试
+joint-gui/
+├── src/                    下位机（Qt）
+│   ├── core/               ControlWorker / ControlServer / LoadController
+│   ├── device/             EtherCAT / CANopen / 仿真 三种实现
+│   └── ui/                 本地窗口（只有 --ui 才构建）
+├── web/                    上位机（纯静态 + 零依赖 Python 服务）
+│   ├── serve.py            静态文件 + 终端，同端口
+│   ├── server/             PTY 桥（手写 RFC 6455 WebSocket）
+│   ├── js/ css/            监控 / 历史 / 终端三页
+│   └── tests/              三套自动测试
+├── tools/                  诊断工具（eth_probe / read_joint_params / watch_torque）
+└── docs/                   架构设计、终端页设计、参数读取
 ```
-ctest --test-dir build --output-on-failure
-```
-覆盖：单位换算、仿真关节模型、CANopen MIT 帧编解码、从站参数有效性（DeviceParams）。
 
-## 使用
-1. 启动 → 选总线（仿真/EtherCAT/CANopen）→ 填参数 → 连接；检测到多个从站后，用"控制从站"下拉选择要控制的从站（监控面板每从站一个标签页）
-2. 勾选"已确认现场安全"→ 使能
-3. 选模式（PP 轮廓位置 / PV 轮廓速度 / PT 轮廓力矩）→ 填目标值 → 下发目标
-4. 急停/故障复位按需
+## 文档
 
-> EtherCAT 连接后自动读取从站参数（编码器分辨率/减速比/额定力矩）用于单位换算；读不到时回退到连接对话框中手动填写的值。
+| 文档 | 内容 |
+|---|---|
+| [`USAGE.md`](USAGE.md) | 界面使用说明、操作模式、安全功能 |
+| [`DEPLOY.md`](DEPLOY.md) | 构建、部署、权限、常见问题 |
+| [`docs/host-embedded-architecture.md`](docs/host-embedded-architecture.md) | 上下位机分工、协议、看门狗 |
+| [`docs/terminal-page-design.md`](docs/terminal-page-design.md) | 终端页设计（Terminator 式切分） |
+| [`web/README.md`](web/README.md) | 网页端：启动、终端页、控制逻辑 |
+| [`docs/joint-param-reading.md`](docs/joint-param-reading.md) | 关节参数读取与 CiA402 OD 要点 |
 
-## 使用说明
-界面布局、操作流程、操作模式与安全功能的使用文档见 [`USAGE.md`](USAGE.md)。
+## 许可
 
-## 部署教程
-完整的分步部署教程见 [`DEPLOY.md`](DEPLOY.md)：本机构建、ARM 交叉编译、目标板部署、权限与常见问题。
+[Apache License 2.0](LICENSE)。

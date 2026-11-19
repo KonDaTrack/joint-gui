@@ -165,6 +165,10 @@ const Compare = (() => {
       ctx.setLineDash(m.dash);
       ctx.beginPath(); ctx.moveTo(xL + 4, top + 8); ctx.lineTo(xL + 26, top + 8); ctx.stroke();
       ctx.setLineDash([]);
+      // ★ fillStyle 必须显式设：上面只设了 strokeStyle，而 fillText 用的是**上一次的**
+      //   fillStyle —— 那是画窗格底时留下的 rgba(0,0,0,0.30)，等于用近黑色在深底上写字，
+      //   标题会整片"消失"（只剩左边那道线型示意）。这个 bug 是截图时看出来的。
+      ctx.fillStyle = '#9BA1A9';
       const f = (v) => (Math.abs(v) < 10 ? v.toFixed(2) : v.toFixed(1));
       ctx.fillText(`${m.label}  ${f(lo)}~${f(lo + span)}`, xL + 33, top + 12);
     });
